@@ -84,6 +84,21 @@ if not exist "node_modules\electron\dist\electron.exe" (
     echo.
 )
 
+REM --- 檢查 / 修復 better-sqlite3 原生模組 (Electron 版本變動會導致 ABI 不符) ---
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0check-sqlite.ps1"
+if errorlevel 1 (
+    echo [修復] better-sqlite3 與目前 Electron 版本不符，執行重新編譯 ^(npm run rebuild^)...
+    call npm run rebuild
+    if errorlevel 1 (
+        echo.
+        echo [警告] better-sqlite3 重新編譯失敗，將退回記憶體快取 ^(功能正常，僅快取不持久^)。
+    ) else (
+        powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0check-sqlite.ps1" -Mark
+        echo [完成] better-sqlite3 重新編譯完成。
+    )
+    echo.
+)
+
 REM --- 觸發程式執行 (Vite dev server + Electron, 含 HMR) ---
 echo [啟動] 開始執行程式 (DEV MODE)...
 echo.

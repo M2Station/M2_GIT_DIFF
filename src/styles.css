@@ -1159,6 +1159,18 @@ mark.cd-hl {
   color: var(--muted);
   opacity: 0.5;
 }
+.stage-empty-logo {
+  width: 192px;
+  height: 192px;
+  margin-bottom: 6px;
+  opacity: 0.85;
+  filter: drop-shadow(0 4px 18px color-mix(in srgb, var(--accent, #36d6ff) 30%, transparent));
+  animation: stage-logo-in 0.5s ease;
+}
+@keyframes stage-logo-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.96); }
+  to { opacity: 0.85; transform: translateY(0) scale(1); }
+}
 .stage-empty-title {
   font-size: 15px;
   font-weight: 600;
@@ -1168,6 +1180,59 @@ mark.cd-hl {
   font-size: 12.5px;
   color: var(--muted);
   max-width: 360px;
+}
+/* Homepage author credit — styled as a label / sticker pill. */
+.stage-empty-badge {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 13px 5px 11px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  letter-spacing: 0.3px;
+  color: var(--text, #c9d4e0);
+  text-decoration: none;
+  pointer-events: auto;
+  cursor: pointer;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent, #36d6ff) 16%, transparent),
+    color-mix(in srgb, var(--accent, #36d6ff) 7%, transparent)
+  );
+  border: 1px solid color-mix(in srgb, var(--accent, #36d6ff) 40%, transparent);
+  box-shadow:
+    0 2px 10px color-mix(in srgb, var(--accent, #36d6ff) 22%, transparent),
+    inset 0 1px 0 color-mix(in srgb, #ffffff 12%, transparent);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  animation: stage-badge-in 0.5s ease 0.1s both;
+}
+.stage-empty-badge:hover {
+  transform: translateX(-50%) translateY(-1px);
+  border-color: color-mix(in srgb, var(--accent, #36d6ff) 70%, transparent);
+  box-shadow:
+    0 4px 16px color-mix(in srgb, var(--accent, #36d6ff) 35%, transparent),
+    inset 0 1px 0 color-mix(in srgb, #ffffff 18%, transparent);
+}
+.stage-empty-badge b {
+  font-weight: 700;
+  color: var(--accent, #36d6ff);
+}
+.stage-empty-badge .seb-spark {
+  color: var(--accent, #36d6ff);
+  font-size: 12px;
+  line-height: 1;
+}
+.stage-empty-badge .seb-gh {
+  font-size: 11px;
+  opacity: 0.6;
+}
+@keyframes stage-badge-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(6px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 .stage-spinner {
   width: 30px;
@@ -1646,6 +1711,33 @@ mark {
 .legend .hint {
   color: var(--muted);
 }
+.legend .legend-credit {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 14px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  color: var(--muted);
+  text-decoration: none;
+  white-space: nowrap;
+  border: 1px solid color-mix(in srgb, var(--accent, #36d6ff) 28%, transparent);
+  background: color-mix(in srgb, var(--accent, #36d6ff) 8%, transparent);
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.legend .legend-credit:hover {
+  color: var(--text, #c9d4e0);
+  border-color: color-mix(in srgb, var(--accent, #36d6ff) 60%, transparent);
+  background: color-mix(in srgb, var(--accent, #36d6ff) 16%, transparent);
+}
+.legend .legend-credit b {
+  font-weight: 700;
+  color: var(--accent, #36d6ff);
+}
+.legend .legend-credit .lc-gh {
+  font-size: 10px;
+  opacity: 0.7;
+}
 
 /* ---------------- Git terminal popup (Fetch / Pull result) ---------------- */
 .git-term-backdrop {
@@ -1826,4 +1918,130 @@ mark {
   padding: 10px 14px;
   border-top: 1px solid var(--line);
   background: var(--bg-soft);
+}
+
+/* ---------------- Help / keyboard-shortcuts modal ---------------- */
+.help-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 140;
+  background: rgba(4, 8, 14, 0.55);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.help-popup {
+  width: 460px;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--accent);
+  border-radius: 10px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  animation: help-pop-in 0.18s ease both;
+}
+@keyframes help-pop-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.help-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--bg-soft);
+  border-bottom: 1px solid var(--line);
+}
+.help-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.help-spacer {
+  flex: 1;
+}
+.help-x {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1;
+}
+.help-x:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+}
+.help-body {
+  padding: 12px 14px;
+  overflow: auto;
+}
+.help-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.help-table td {
+  padding: 6px 4px;
+  vertical-align: middle;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+}
+.help-table tr:last-child td {
+  border-bottom: none;
+}
+.help-keys {
+  white-space: nowrap;
+  width: 1%;
+  padding-right: 14px !important;
+}
+.help-kbd {
+  display: inline-block;
+  min-width: 18px;
+  text-align: center;
+  padding: 2px 7px;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 11px;
+  color: var(--text);
+  background: var(--bg-soft);
+  border: 1px solid var(--accent-dim);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 8%, transparent);
+}
+.help-plus {
+  margin: 0 4px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.help-desc {
+  font-size: 12.5px;
+  color: var(--text);
+}
+.help-foot {
+  display: flex;
+  justify-content: center;
+  padding: 12px;
+  border-top: 1px solid var(--line);
+  background: var(--bg-soft);
+}
+/* Reuse the home badge look, but anchor it in flow (not absolute). */
+.help-credit.stage-empty-badge {
+  position: static;
+  left: auto;
+  bottom: auto;
+  transform: none;
+  animation: none;
+}
+.help-credit.stage-empty-badge:hover {
+  transform: translateY(-1px);
+}
+
+.btn.help-btn {
+  border-color: var(--accent-dim);
 }

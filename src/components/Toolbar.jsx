@@ -63,7 +63,8 @@ export default function Toolbar({
   onToggleFuzzy,
   onSetFuzzyThreshold,
   onExport,
-  canExport
+  canExport,
+  onOpenHelp
 }) {
   return (
     <div className="toolbar">
@@ -176,6 +177,14 @@ export default function Toolbar({
           title="匯出對齊後的差異到 Excel（含 NOTE 提示、強制顏色、手動連結）"
         >
           ⬇ Export Excel
+        </button>
+        <button
+          className="btn help-btn"
+          onClick={onOpenHelp}
+          title="快捷鍵說明 (Help)"
+          aria-label="Help"
+        >
+          ❓ Help
         </button>
       </div>
     </div>

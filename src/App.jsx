@@ -9,6 +9,8 @@ import RowMenu from './components/RowMenu.jsx';
 import CommitDetail from './components/CommitDetail.jsx';
 import GitTerminalPopup from './components/GitTerminalPopup.jsx';
 import ExportPrompt from './components/ExportPrompt.jsx';
+import HelpPopup from './components/HelpPopup.jsx';
+import logoUrl from './assets/logo.svg';
 import { computeDiff, applyFuzzy, matchesQuery, alignLayout } from './lib/diff.js';
 import { ROW_HEIGHT, GUTTER_WIDTH, DEFAULT_LIMIT } from './lib/constants.js';
 
@@ -96,6 +98,8 @@ export default function App() {
 
   // Floating search panel: open/closed + which commit fields to search.
   const [searchOpen, setSearchOpen] = useState(false);
+  // Help / keyboard-shortcuts modal.
+  const [helpOpen, setHelpOpen] = useState(false);
   // Single-repo mode: null = dual compare; 'L' or 'R' = show only that repo,
   // full width. Toggled from the toolbar.
   const [single, setSingle] = useState(null);
@@ -1179,6 +1183,7 @@ export default function App() {
         if (searchOpen) {
           closeSearch();
         }
+        setHelpOpen(false);
         setSelectedMatch(null);
         setPendingNode(null);
         setNotePopup(null);
@@ -1259,6 +1264,7 @@ export default function App() {
         onSetFuzzyThreshold={setFuzzyThreshold}
         onExport={openExportPrompt}
         canExport={canExport}
+        onOpenHelp={() => setHelpOpen(true)}
       />
 
       {searchOpen && (
@@ -1361,6 +1367,8 @@ export default function App() {
         />
       )}
 
+      {helpOpen && <HelpPopup onClose={() => setHelpOpen(false)} />}
+
       <div className="git-bars">
         {single !== 'R' && (
           <RepoGitBar side="L" repo={left} loading={loading.L} onGitOp={runGitOp} onReload={reload} />
@@ -1394,11 +1402,21 @@ export default function App() {
               </>
             ) : noRepos ? (
               <>
-                <div className="stage-empty-icon">⌥</div>
+                <img className="stage-empty-logo" src={logoUrl} alt="M2_GIT_DIFF" draggable="false" />
                 <div className="stage-empty-title">尚未選擇 repository</div>
                 <div className="stage-empty-sub">
                   從上方工具列選擇左右兩個 Git 資料夾，開始比對 commit 歷史
                 </div>
+                <a
+                  className="stage-empty-badge"
+                  href="https://github.com/oahsiao"
+                  onClick={(e) => { e.preventDefault(); window.api?.openExternal?.('https://github.com/oahsiao'); }}
+                  title="開啟作者 GitHub · github.com/oahsiao"
+                >
+                  <span className="seb-spark">✦</span>
+                  <span className="seb-text">Powered by <b>OA Hsiao</b></span>
+                  <span className="seb-gh">↗</span>
+                </a>
               </>
             ) : (
               <>
@@ -1492,6 +1510,15 @@ export default function App() {
             ? 'Pick a node on the other side to link · Esc to cancel'
             : 'Click a row node ◗ to link two commits · Del removes a selected manual link'}
         </span>
+        <a
+          className="legend-credit"
+          href="https://github.com/oahsiao"
+          onClick={(e) => { e.preventDefault(); window.api?.openExternal?.('https://github.com/oahsiao'); }}
+          title="開啟作者 GitHub · github.com/oahsiao"
+        >
+          Powered by <b>OA Hsiao</b>
+          <span className="lc-gh">↗</span>
+        </a>
       </div>
     </div>
   );

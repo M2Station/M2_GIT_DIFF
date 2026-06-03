@@ -84,8 +84,32 @@ if not exist "node_modules\electron\dist\electron.exe" (
     echo.
 )
 
-REM --- 建置前端 (production，輸出 dist/) ---
-echo [建置] 執行 production 建置 (npm run build)...
+REM --- 檢查 / 修復 better-sqlite3 原生模組 (Electron 版本變動會導致 ABI 不符) ---
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0check-sqlite.ps1"
+if errorlevel 1 (
+    echo [修復] better-sqlite3 與目前 Electron 版本不符，執行重新編譯 ^(npm run rebuild^)...
+    call npm run rebuild
+    if errorlevel 1 (
+        echo.
+        echo [警告] better-sqlite3 重新編譯失敗，將退回記憶體快取 ^(功能正常，僅快取不持久^)。
+    ) else (
+        powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0check-sqlite.ps1" -Mark
+        echo [完成] better-sqlite3 重新編譯完成。
+    )
+    echo.
+)
+
+REM --- 建置前端 (production，僅在原始碼有變更時才重建 dist/) ---
+REM 比較 dist\index.html 與所有來源檔的最後修改時間；來源較新或 dist 不存在才重建。
+set "NEED_BUILD=1"
+if not exist "dist\index.html" goto do_build
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0check-build.ps1"
+if not errorlevel 1 set "NEED_BUILD=0"
+
+if "%NEED_BUILD%"=="0" goto skip_build
+
+:do_build
+echo [建置] 偵測到原始碼變更，執行 production 建置 (npm run build)...
 call npm run build
 if errorlevel 1 (
     echo.
@@ -94,6 +118,12 @@ if errorlevel 1 (
     exit /b 1
 )
 echo [完成] 建置完成。
+goto build_done
+
+:skip_build
+echo [資訊] dist/ 已是最新，略過建置 (快速啟動)。
+
+:build_done
 echo.
 
 REM --- 觸發程式執行 (production，載入 dist/index.html，無 Vite dev server) ---
