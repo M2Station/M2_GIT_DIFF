@@ -28,11 +28,25 @@ export function normalizeSubject(s = '') {
 // the pair links even though TOT changed more.
 const FUZZY_MIN_LINES = 3; // ignore tiny diffs to avoid spurious matches
 
+// Per-document cache of sha -> changed-line Set. Keyed on the diffTexts
+// container itself (object/Map identity), so dragging the fuzzy threshold —
+// which reruns applyFuzzy with the SAME diffTexts — reuses every Set instead of
+// rebuilding them. A new fetch replaces diffTexts with a fresh object, which
+// naturally gets a fresh cache entry (old one is GC'd via the WeakMap).
+const lineSetCache = new WeakMap();
+
 function diffLineSet(diffTexts, sha) {
   if (!diffTexts) return null;
+  let perDoc = lineSetCache.get(diffTexts);
+  if (!perDoc) {
+    perDoc = new Map();
+    lineSetCache.set(diffTexts, perDoc);
+  }
+  if (perDoc.has(sha)) return perDoc.get(sha);
   const arr = typeof diffTexts.get === 'function' ? diffTexts.get(sha) : diffTexts[sha];
-  if (!arr || !arr.length) return null;
-  return new Set(arr);
+  const set = !arr || !arr.length ? null : new Set(arr);
+  perDoc.set(sha, set);
+  return set;
 }
 
 function containment(aSet, bSet) {
