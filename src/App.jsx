@@ -1230,6 +1230,8 @@ export default function App() {
               width={GUTTER_WIDTH}
               selectedMatch={selectedMatch}
               onSelect={handleSelect}
+              scrollTop={scrollTop}
+              viewportHeight={viewportHeight}
             />
           </div>
           )}

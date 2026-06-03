@@ -1,5 +1,5 @@
 import React from 'react';
-import { ROW_HEIGHT } from '../lib/constants.js';
+import { ROW_HEIGHT, OVERSCAN } from '../lib/constants.js';
 
 // Draws connecting lines in the central gutter between matched rows.
 // Routing is orthogonal (right-angle elbows) with lightly rounded corners for
@@ -29,7 +29,7 @@ function buildPath(y1, y2, width) {
   ].join(' ');
 }
 
-export default function ConnectionLines({ links, height, width, selectedMatch, onSelect }) {
+export default function ConnectionLines({ links, height, width, selectedMatch, onSelect, scrollTop = 0, viewportHeight = 0 }) {
   const yOf = (index) => index * ROW_HEIGHT + ROW_HEIGHT / 2;
 
   const handleClick = (id) => (e) => {
@@ -37,11 +37,22 @@ export default function ConnectionLines({ links, height, width, selectedMatch, o
     onSelect?.(selectedMatch === id ? null : id);
   };
 
+  // Virtualization: only draw links whose vertical span overlaps the viewport
+  // (plus an overscan margin). When the viewport height is unknown (0) we fall
+  // back to rendering everything so nothing silently disappears.
+  const margin = OVERSCAN * ROW_HEIGHT;
+  const visTop = scrollTop - margin;
+  const visBottom = scrollTop + (viewportHeight || height) + margin;
+
   return (
     <svg className="links-svg" width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
       {links.map((link) => {
         const y1 = yOf(link.leftIndex);
         const y2 = yOf(link.rightIndex);
+        // Skip links fully outside the visible band.
+        if (viewportHeight && (Math.max(y1, y2) < visTop || Math.min(y1, y2) > visBottom)) {
+          return null;
+        }
         const d = buildPath(y1, y2, width);
         const isSel = selectedMatch != null && selectedMatch === link.id;
         const cls = [
