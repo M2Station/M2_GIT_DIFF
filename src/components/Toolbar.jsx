@@ -56,7 +56,8 @@ export default function Toolbar({
   colorCount,
   onClearColors,
   single,
-  onSetSingle
+  onSetSingle,
+  onSwapSides
 }) {
   return (
     <div className="toolbar">
@@ -66,6 +67,15 @@ export default function Toolbar({
       </div>
 
       <RepoSlot side="L" repo={left} loading={loading.L} onPick={onPick} onReload={onReload} stats={leftStats} />
+      <button
+        className="btn swap-sides"
+        onClick={onSwapSides}
+        disabled={!left.path && !right.path}
+        title="交換左右兩側 (L ⇄ R)"
+        aria-label="Swap left and right"
+      >
+        ⇆ Swap
+      </button>
       <RepoSlot side="R" repo={right} loading={loading.R} onPick={onPick} onReload={onReload} stats={rightStats} />
 
       <div className="mode-block" role="group" aria-label="View mode">

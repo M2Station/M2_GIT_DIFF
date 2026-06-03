@@ -171,6 +171,64 @@ export default function App() {
     [left, right, patchIds, manualLinks]
   );
 
+  // Swap the LEFT and RIGHT sides. Repos plus every side-keyed piece of state
+  // (manual links, notes, colors, single-repo mode, open detail windows, the
+  // pending link node) are mirrored. Persisted annotations are keyed by the
+  // ordered repo-pair path, so we pre-write the swapped data under the new key
+  // before flipping the repos; the hydration effect then restores it mirrored.
+  const swapSides = useCallback(() => {
+    if (!left.path && !right.path) return;
+
+    const newKey = left.path && right.path ? `${right.path}|${left.path}` : null;
+    if (newKey) {
+      const swappedLinks = manualLinks.map((l) => ({
+        leftSha: l.rightSha,
+        rightSha: l.leftSha
+      }));
+      const swapPrefix = (obj) => {
+        const out = {};
+        for (const [id, v] of Object.entries(obj)) {
+          const sep = id.indexOf(':');
+          const side = id.slice(0, sep);
+          const sha = id.slice(sep + 1);
+          out[(side === 'L' ? 'R' : 'L') + ':' + sha] = v;
+        }
+        return out;
+      };
+      try {
+        localStorage.setItem('mlink:' + newKey, JSON.stringify(swappedLinks));
+        localStorage.setItem('note:' + newKey, JSON.stringify(swapPrefix(notes)));
+        localStorage.setItem('color:' + newKey, JSON.stringify(swapPrefix(colors)));
+      } catch {
+        /* storage unavailable -> swap lives for this session only */
+      }
+    }
+
+    setLeft(right);
+    setRight(left);
+    setLoading((s) => ({ L: s.R, R: s.L }));
+    setSingle((s) => (s === 'L' ? 'R' : s === 'R' ? 'L' : null));
+    setDetails((ds) => ds.map((d) => ({ ...d, side: d.side === 'L' ? 'R' : 'L' })));
+    setPendingNode((p) => (p ? { ...p, side: p.side === 'L' ? 'R' : 'L' } : null));
+    setNotePopup(null);
+    setRowMenu(null);
+
+    // Mirror in-memory annotations too. When a persistence key exists the
+    // hydration effect re-reads the (pre-swapped) storage to the same result;
+    // when only one side is loaded (no key) this is the only swap that runs.
+    const flipPrefix = (obj) => {
+      const out = {};
+      for (const [id, v] of Object.entries(obj)) {
+        const sep = id.indexOf(':');
+        out[(id.slice(0, sep) === 'L' ? 'R' : 'L') + ':' + id.slice(sep + 1)] = v;
+      }
+      return out;
+    };
+    setManualLinks((ls) => ls.map((l) => ({ leftSha: l.rightSha, rightSha: l.leftSha })));
+    setNotes((n) => flipPrefix(n));
+    setColors((c) => flipPrefix(c));
+  }, [left, right, manualLinks, notes, colors]);
+
   // ---- Manual links: persistence (resume the same repro pair) ----
   const linkKey = left.path && right.path ? `${left.path}|${right.path}` : null;
 
@@ -741,6 +799,7 @@ export default function App() {
         onClearColors={clearColors}
         single={single}
         onSetSingle={setSingle}
+        onSwapSides={swapSides}
       />
 
       {searchOpen && (

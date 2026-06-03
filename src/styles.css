@@ -225,6 +225,16 @@ body {
   box-shadow: 0 0 6px rgba(235, 70, 80, 0.4);
 }
 
+.btn.swap-sides {
+  align-self: center;
+  font-weight: 600;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.btn.swap-sides:hover:not(:disabled) {
+  box-shadow: 0 0 6px rgba(54, 214, 255, 0.4);
+}
+
 .search-block {
   margin-left: auto;
   display: flex;
