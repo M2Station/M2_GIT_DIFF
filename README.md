@@ -1,8 +1,8 @@
 
 
-# Git Repro Diff（雙倉庫 Git 紀錄並排比對工具）
+# M2_GIT_DIFF（雙倉庫 Git 紀錄並排比對工具）
 
-一個專門用來**比較兩個本機 Git 倉庫（local repro）提交歷史**的桌面工具，採用類似 GitLens / GenLen 的 HUD 深色風格。左右並排顯示兩個倉庫的 commit，並用顏色與連接線標示差異。
+一個專門用來**比較兩個本機 Git 倉庫（local repro）提交歷史**的桌面工具，採用類似 GitLens / GenLen 的 HUD 深色風格。左右並排顯示兩個倉庫的 commit，並用顏色與連接線標示差異。應用程式名稱與 LOGO 為 **M2_GIT_DIFF**，顯示於工具列、視窗標題與工作列圖示。
 
 > 原始需求摘要：左右並排顯示兩個 local repo 的 git 紀錄與 branch；兩邊相同的 commit 用灰色背景，獨有的用紅色背景，標題相同疑似 cherry-pick 的用黃色背景並用線左右對齊連結；可搜尋標題 / 內文 / SHA / 日期。
 
@@ -15,13 +15,24 @@
 | 並排雙欄 | 左右各開一個本機 repo，分別顯示其 branch 與 commit 列表 | — |
 | 相同 commit | 兩邊 **SHA 完全相同** | 灰色背景 |
 | 各自獨有 | 只存在於單一邊的 commit | 紅色背景 |
-| Cherry-pick | **標題相同但 SHA 不同**（可能是 cherry-pick），並用線左右對齊連接. 且左右排列 對齊 | 黃色背景＋黃色虛線 |
+| Cherry-pick | **標題相同但 SHA 不同**（可能是 cherry-pick），並用線左右對齊連接 | 黃色背景＋黃色虛線 |
+| **左右對齊版面** | 配對成功的列（灰＋黃）會被排到**同一個顯示列**，連接線變成水平直線；無法配對者填補空檔 | — |
 | 搜尋 | 可搜尋 標題 / 內文 / SHA / 作者 / 日期，命中高亮、其餘變暗，顯示命中數量 | — |
 | Filter 模式 | 開啟後只保留命中的 commit（壓縮排列），關閉則只是變暗 | — |
 | 虛擬化 | 只渲染視窗內的列，支援大型倉庫（數千 commit）順暢捲動 | — |
 | 快取 | 解析結果以 HEAD SHA 為版本快取，重開同 repo 免重新解析 | — |
+| LOGO / 品牌 | 工具列左上角 LOGO ＋ `M2_GIT_DIFF` 名稱；視窗標題與 favicon 同步 | — |
 
-點擊任一有連線的列（灰/黃），會高亮其對應的連接線。
+點擊任一有連線的列（灰/黃），會高亮其對應的連接線、其餘連線變淡。
+
+### 左右對齊（align）如何運作
+
+配對線本身可能彼此交叉（非單調），若全部硬對齊會造成連線打結。因此 `alignLayout()` 會：
+
+1. 把所有配對（common＋cherry）依左欄位置排序。
+2. 取右欄位置的**最長遞增子序列（LIS）**作為「錨點」——只有這組單調的配對會被排到同一列，連線水平。
+3. 其餘非單調的配對仍保留連線，但維持斜線。
+4. 錨點之間的空檔，用兩邊各自未配對的 commit 依序填補（盡量共用同一列以縮短總高度）。
 
 ---
 
@@ -38,14 +49,17 @@ Renderer (React + Vite)
 ├─ src/main.jsx                 React 入口
 ├─ src/App.jsx                  狀態管理、diff 計算、虛擬化捲動、過濾邏輯
 ├─ src/styles.css               HUD 深色主題樣式
-├─ src/lib/diff.js              核心比對演算法（灰/紅/黃分類、連線、搜尋）
+├─ src/lib/diff.js              核心比對演算法（灰/紅/黃分類、連線、搜尋、左右對齊 alignLayout）
 ├─ src/lib/constants.js         版面常數（列高、gutter 寬、overscan…）
+├─ src/assets/logo.svg          工具列 LOGO（青色 M2 字標）
 └─ src/components/
-   ├─ Toolbar.jsx          上方工具列：開啟 repo、branch 徽章、統計、搜尋、Filter
+   ├─ Toolbar.jsx          上方工具列：LOGO＋名稱、開啟 repo、branch 徽章、統計、搜尋、Filter
    ├─ RepoColumn.jsx       單欄虛擬化渲染（只畫視窗內的列）
    ├─ CommitRow.jsx        單一 commit 列（絕對定位 + 高亮）
-   └─ ConnectionLines.jsx  中央 gutter 的 SVG 連接線
+   └─ ConnectionLines.jsx  中央 gutter 的 SVG 連接線（端點同列時退化為水平線）
 ```
+
+另有 `public/icon.svg`（圓角深底圖示，作為 favicon 與 Electron 視窗 / 工作列圖示）。
 
 **技術選型**：Electron + React + Vite + better-sqlite3（快取，選用）。
 
@@ -85,6 +99,14 @@ Renderer (React + Vite)
 
 `matchesQuery(commit, query)`：在 subject / body / sha / short / author / authorDate 做不分大小寫子字串比對。
 
+### 左右對齊版面（`alignLayout`）
+
+`alignLayout(Lrows, Rrows, links)` 負責把配對列排到同一個顯示列：
+
+- `longestIncreasingByPr()`：對「依左欄位置排序的配對」取右欄位置的 LIS（二分搜尋 + 前驅回溯），得到單調錨點集合。
+- 逐段在錨點之間填入兩邊未配對列（`Math.max(gapL, gapR)` 列高，盡量共用），錨點本身落在共用列上 → 連線水平。
+- 回傳 `{ L, R, links, totalRows }`，其中每列帶 `displayIndex`，連線座標已重映射到顯示列。
+
 > 預留強化點：`getPatchIds()` 已實作（用 `git patch-id --stable`），未來可改用 patch-id 比對 cherry-pick，即使標題被改寫也能配對。
 
 ---
@@ -95,12 +117,20 @@ Renderer (React + Vite)
 - 每列帶 `displayIndex`，以 `position: absolute; top = displayIndex * ROW_HEIGHT` 定位，左右欄與連線完全對齊。
 - `RepoColumn` 只渲染 `scrollTop ~ scrollTop + viewportHeight` 範圍（加 `OVERSCAN = 8` 列）內的列。
 - 捲動容器為 `.diff-body`，`App.jsx` 透過 `onScroll` 與 `resize` 監聽更新 `scrollTop / viewportHeight`。
+- 顯示列由 `alignLayout` 產生（見 §4）：配對列共用同一 `displayIndex`，故連線在 `ConnectionLines.jsx` 中退化為水平直線。
+
+### 左右欄位排版（重要修正）
+
+兩欄的 DOM 子元素順序固定為 `sha → date → subject → author`。右欄為了鏡像顯示（`author | subject | date | sha`）使用 CSS Grid `130px 1fr 92px 78px`。
+
+- **問題**：`1fr` 會落在 DOM 第二個子元素（date）上，導致日期欄被撐很寬，把標題與後續欄位擠到看不見。
+- **修正**：右欄對四個子元素加上 `order: 1~4`（author→subject→date→sha），讓彈性的 `1fr` 正確落在 subject 上，date 回到固定 92px。
 
 ### Filter 模式與連線重映射
 
-- **未開 Filter**：`displayIndex === 原始 index`，全部顯示；不命中者變暗（`dimmed`）。
-- **開啟 Filter（且有搜尋字）**：移除不命中列並壓縮（`displayIndex` 重新由 0 連號）。
-- 連線會依 `origToDisplay` 重新映射座標；任一端被隱藏的連線會被丟棄。
+- **未開 Filter**：保留全部 commit，送入 `alignLayout` 後依配對結果決定 `displayIndex`；不命中者變暗（`dimmed`）。
+- **開啟 Filter（且有搜尋字）**：先移除不命中列，再送入 `alignLayout` 重新對齊與連號。
+- `alignLayout` 內部以左右欄位置建表，任一端被隱藏（過濾掉）的連線會被丟棄，其餘連線座標一律重映射到 `displayIndex`。
 
 ---
 
@@ -160,12 +190,15 @@ npm run rebuild      # 為當前 Electron ABI 重編 better-sqlite3
 
 | 我想改… | 去這裡 |
 | --- | --- |
-| 顏色 / 分類規則 | `src/lib/diff.js` |
+| 顏色 / 分類規則 | `src/lib/diff.js`（`computeDiff`） |
+| 左右對齊邏輯 | `src/lib/diff.js`（`alignLayout` / `longestIncreasingByPr`） |
 | 顏色數值 / 主題 | `src/styles.css`（`:root` 變數） |
 | 列高 / overscan / 預設筆數 | `src/lib/constants.js` |
 | 工具列 / 搜尋 / Filter 按鈕 | `src/components/Toolbar.jsx` |
+| LOGO 圖樣 | `src/assets/logo.svg`、`public/icon.svg` |
+| 左右欄欄位排版（order） | `src/styles.css`（`.repo-column[data-side='R']`） |
 | 連接線畫法 | `src/components/ConnectionLines.jsx` |
 | 虛擬化渲染 | `src/components/RepoColumn.jsx` |
 | git log 解析欄位 | `electron/git.js` |
 | 快取邏輯 | `electron/db.js` |
-| 視窗 / IPC | `electron/main.js` |
+| 視窗 / IPC / App 名稱與圖示 | `electron/main.js` |
