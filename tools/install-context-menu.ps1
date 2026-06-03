@@ -20,9 +20,11 @@ if (-not (Test-Path -LiteralPath $launcher)) {
     exit 1
 }
 
-# Use the system icon from imageres.dll as a neutral folder-compare glyph; if the
-# project has a packaged exe later, point DefaultIcon at it instead.
+# Use the project icon (public/icon.ico) for the menu entries; fall back to the
+# PowerShell exe icon if the .ico is missing.
 $psExe = (Get-Command powershell.exe).Source
+$iconFile = Join-Path (Split-Path -Parent $PSScriptRoot) 'public\icon.ico'
+$menuIcon = if (Test-Path -LiteralPath $iconFile) { $iconFile } else { "$psExe,0" }
 
 function New-Verb {
     param(
@@ -35,7 +37,7 @@ function New-Verb {
     $verbKey = Join-Path $ShellRoot $Key
     New-Item -Path $verbKey -Force | Out-Null
     Set-ItemProperty -Path $verbKey -Name '(default)' -Value $Label
-    Set-ItemProperty -Path $verbKey -Name 'Icon' -Value "$psExe,0"
+    Set-ItemProperty -Path $verbKey -Name 'Icon' -Value $menuIcon
     # Make Explorer invoke the verb once per selected folder so a multi-selection
     # (two folders -> Compare) reaches the launcher, which collects both paths.
     Set-ItemProperty -Path $verbKey -Name 'MultiSelectModel' -Value 'Document'

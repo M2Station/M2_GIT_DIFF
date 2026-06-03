@@ -910,6 +910,65 @@ mark.cd-hl {
   font-size: 12px;
 }
 
+/* ---------------- Per-repo Git toolbar ---------------- */
+.git-bars {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--border, #2a2f3a);
+  background: var(--panel, #161a22);
+}
+.git-bars-gutter {
+  flex: 0 0 auto;
+}
+.git-bar {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 10px;
+}
+.git-bar[data-side='R'] {
+  flex-direction: row-reverse;
+}
+.git-bar-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+}
+.git-bar-side {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.git-bar-name {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.git-bar-name.muted {
+  color: var(--muted);
+  font-weight: 400;
+}
+.git-bar-branch {
+  font-size: 12px;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.git-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn.git-op {
+  padding: 3px 9px;
+  font-size: 12px;
+}
+
 /* ---------------- Diff body ---------------- */
 .diff-body {
   flex: 1;

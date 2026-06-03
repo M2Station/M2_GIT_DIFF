@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import Toolbar from './components/Toolbar.jsx';
 import RepoColumn from './components/RepoColumn.jsx';
+import RepoGitBar from './components/RepoGitBar.jsx';
 import ConnectionLines from './components/ConnectionLines.jsx';
 import SearchPanel from './components/SearchPanel.jsx';
 import NotePopup from './components/NotePopup.jsx';
@@ -161,6 +162,25 @@ export default function App() {
       else setRight(fresh);
     } catch (e) {
       setError(String(e?.message || e));
+    } finally {
+      setLoading((s) => ({ ...s, [side]: false }));
+    }
+  }, [left, right]);
+
+  // Run a whitelisted git operation (fetch/pull/push) on one side, then reload
+  // that repo so the commit graph reflects the result.
+  const runGitOp = useCallback(async (side, op) => {
+    const repo = side === 'L' ? left : right;
+    if (!repo.path) return;
+    setError('');
+    setLoading((s) => ({ ...s, [side]: true }));
+    try {
+      await window.api.gitOp({ repoPath: repo.path, op });
+      const fresh = await window.api.loadRepo({ repoPath: repo.path, limit: DEFAULT_LIMIT });
+      if (side === 'L') setLeft(fresh);
+      else setRight(fresh);
+    } catch (e) {
+      setError(`git ${op} 失敗：${String(e?.message || e)}`);
     } finally {
       setLoading((s) => ({ ...s, [side]: false }));
     }
@@ -882,6 +902,16 @@ export default function App() {
       })}
 
       {error && <div className="error-bar">⚠ {error}</div>}
+
+      <div className="git-bars">
+        {single !== 'R' && (
+          <RepoGitBar side="L" repo={left} loading={loading.L} onGitOp={runGitOp} onReload={reload} />
+        )}
+        {!single && <div className="git-bars-gutter" style={{ width: GUTTER_WIDTH }} />}
+        {single !== 'L' && (
+          <RepoGitBar side="R" repo={right} loading={loading.R} onGitOp={runGitOp} onReload={reload} />
+        )}
+      </div>
 
       <div
         className={'diff-body' + (pendingNode ? ' linking' : '')}

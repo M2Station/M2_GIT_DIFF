@@ -134,6 +134,12 @@ ipcMain.handle('repo:patchIds', async (_evt, payload) => {
   return Object.fromEntries(map);
 });
 
+ipcMain.handle('repo:gitOp', async (_evt, payload) => {
+  const { repoPath, op } = payload || {};
+  if (!repoPath) throw new Error('repoPath is required');
+  return git.gitOp(repoPath, op);
+});
+
 async function safeHead(repoPath) {
   try {
     const { execFileSync } = require('node:child_process');

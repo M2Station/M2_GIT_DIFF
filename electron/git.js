@@ -149,10 +149,32 @@ async function loadRepo(cwd, opts = {}) {
   };
 }
 
+// Whitelisted git operations the per-repo toolbar can trigger. Each maps to a
+// fixed argument list so the renderer can never inject arbitrary git commands.
+const GIT_OPS = {
+  fetch: ['fetch', '--all', '--prune'],
+  pull: ['pull', '--ff-only']
+};
+
+/**
+ * Run a whitelisted git operation in a repo.
+ * @param {string} cwd repo path
+ * @param {keyof typeof GIT_OPS} op
+ * @returns {Promise<{ok:boolean, output:string}>}
+ */
+async function gitOp(cwd, op) {
+  const args = GIT_OPS[op];
+  if (!args) throw new Error(`Unsupported git operation: ${op}`);
+  if (!isGitRepo(cwd)) throw new Error(`Not a git repository: ${cwd}`);
+  const out = await run(args, cwd);
+  return { ok: true, output: out.trim() };
+}
+
 module.exports = {
   isGitRepo,
   getCurrentBranch,
   getCommits,
   getPatchIds,
-  loadRepo
+  loadRepo,
+  gitOp
 };
