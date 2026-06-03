@@ -1,0 +1,417 @@
+:root {
+  --bg: #0a0e14;
+  --bg-soft: #0f1622;
+  --panel: #121a28;
+  --line: #1e2a3a;
+  --text: #cfe3f2;
+  --muted: #6b8199;
+  --accent: #36d6ff;
+  --accent-dim: #1c6e85;
+
+  /* status colors */
+  --common-bg: rgba(120, 134, 150, 0.16);
+  --common-bd: #5b6b7d;
+  --cherry-bg: rgba(240, 200, 60, 0.16);
+  --cherry-bd: #f0c83c;
+  --unique-bg: rgba(235, 70, 80, 0.16);
+  --unique-bd: #eb4650;
+
+  --row-h: 36px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Cascadia Code', 'JetBrains Mono', Consolas, 'Courier New', monospace;
+  font-size: 12.5px;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* ---------------- Toolbar ---------------- */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 14px;
+  background: linear-gradient(180deg, #0d141f, #0a0e14);
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+
+.title-block {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.title-block .app-logo {
+  width: 26px;
+  height: 26px;
+  filter: drop-shadow(0 0 6px rgba(54, 214, 255, 0.55));
+}
+.title-block .app-title {
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--accent);
+  text-shadow: 0 0 8px rgba(54, 214, 255, 0.5);
+}
+
+.repo-slot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.slot-label {
+  color: var(--accent-dim);
+  font-weight: 700;
+  letter-spacing: 1px;
+  font-size: 10px;
+}
+
+.repo-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 180px;
+}
+
+.repo-name {
+  color: var(--text);
+  font-weight: 600;
+}
+.repo-name.muted,
+.muted {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.branch {
+  color: var(--accent);
+  background: rgba(54, 214, 255, 0.08);
+  border: 1px solid var(--accent-dim);
+  border-radius: 10px;
+  padding: 1px 8px;
+  font-size: 11px;
+}
+
+.count {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.stat-badges {
+  display: inline-flex;
+  gap: 4px;
+}
+.stat-badges .b {
+  min-width: 22px;
+  text-align: center;
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 11px;
+  border: 1px solid transparent;
+}
+.stat-badges .b.common {
+  background: var(--common-bg);
+  border-color: var(--common-bd);
+  color: #cdd6e0;
+}
+.stat-badges .b.cherry {
+  background: var(--cherry-bg);
+  border-color: var(--cherry-bd);
+  color: #f3dd8a;
+}
+.stat-badges .b.unique {
+  background: var(--unique-bg);
+  border-color: var(--unique-bd);
+  color: #f3a0a6;
+}
+
+.btn {
+  background: var(--bg-soft);
+  color: var(--text);
+  border: 1px solid var(--accent-dim);
+  border-radius: 5px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 11.5px;
+}
+.btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  box-shadow: 0 0 6px rgba(54, 214, 255, 0.35);
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.btn.ghost {
+  border-color: var(--line);
+  padding: 4px 8px;
+}
+
+.btn.toggle {
+  border-color: var(--line);
+}
+.btn.toggle.on {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 6px rgba(54, 214, 255, 0.35);
+}
+
+.search-block {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.search {
+  width: 320px;
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--text);
+  padding: 6px 10px;
+  font-family: inherit;
+  font-size: 12px;
+}
+.search:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 6px rgba(54, 214, 255, 0.35);
+}
+.match-count {
+  color: var(--accent);
+  font-size: 11px;
+}
+
+.error-bar {
+  background: rgba(235, 70, 80, 0.15);
+  border-bottom: 1px solid var(--unique-bd);
+  color: #f3a0a6;
+  padding: 6px 14px;
+  font-size: 12px;
+}
+
+/* ---------------- Diff body ---------------- */
+.diff-body {
+  flex: 1;
+  overflow: auto;
+  background: var(--bg);
+}
+
+.diff-scroll {
+  display: flex;
+  align-items: flex-start;
+  min-height: 100%;
+}
+
+.repo-column {
+  flex: 1 1 0;
+  min-width: 0;
+  position: relative;
+}
+
+.empty-col {
+  color: var(--muted);
+  padding: 30px;
+  text-align: center;
+}
+
+.gutter {
+  position: relative;
+  flex: 0 0 auto;
+  background: repeating-linear-gradient(
+    180deg,
+    transparent 0,
+    transparent calc(var(--row-h) - 1px),
+    rgba(255, 255, 255, 0.02) var(--row-h)
+  );
+}
+.links-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+/* connection lines */
+.link {
+  stroke-width: 1.4;
+}
+.link.common {
+  stroke: var(--common-bd);
+  stroke-opacity: 0.55;
+}
+.link.cherry {
+  stroke: var(--cherry-bd);
+  stroke-opacity: 0.85;
+  stroke-dasharray: 4 3;
+}
+.link.selected {
+  stroke-width: 2.4;
+  stroke-opacity: 1;
+  filter: drop-shadow(0 0 4px currentColor);
+}
+.link.faded {
+  stroke-opacity: 0.12;
+}
+
+/* ---------------- Commit row ---------------- */
+.commit-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: grid;
+  grid-template-columns: 78px 92px 1fr 130px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  border-left: 3px solid transparent;
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: default;
+}
+.repo-column[data-side='R'] .commit-row {
+  grid-template-columns: 130px 1fr 92px 78px;
+}
+/* DOM order is always sha, date, subject, author. On the right side we mirror
+   the visual order (author | subject | date | sha) so the flexible 1fr column
+   lands on the subject instead of the date. */
+.repo-column[data-side='R'] .commit-row .author {
+  order: 1;
+}
+.repo-column[data-side='R'] .commit-row .subject {
+  order: 2;
+}
+.repo-column[data-side='R'] .commit-row .date {
+  order: 3;
+}
+.repo-column[data-side='R'] .commit-row .sha {
+  order: 4;
+}
+
+.commit-row.common {
+  background: var(--common-bg);
+  border-left-color: var(--common-bd);
+}
+.commit-row.cherry {
+  background: var(--cherry-bg);
+  border-left-color: var(--cherry-bd);
+}
+.commit-row.unique {
+  background: var(--unique-bg);
+  border-left-color: var(--unique-bd);
+}
+.repo-column[data-side='R'] .commit-row {
+  border-left: none;
+  border-right: 3px solid transparent;
+}
+.repo-column[data-side='R'] .commit-row.common {
+  border-right-color: var(--common-bd);
+}
+.repo-column[data-side='R'] .commit-row.cherry {
+  border-right-color: var(--cherry-bd);
+}
+.repo-column[data-side='R'] .commit-row.unique {
+  border-right-color: var(--unique-bd);
+}
+
+.commit-row.linkable {
+  cursor: pointer;
+}
+.commit-row.linkable:hover {
+  filter: brightness(1.25);
+}
+.commit-row.selected {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+  box-shadow: inset 0 0 12px rgba(54, 214, 255, 0.25);
+}
+.commit-row.dimmed {
+  opacity: 0.28;
+}
+.commit-row.hit {
+  box-shadow: inset 0 0 0 1px rgba(54, 214, 255, 0.35);
+}
+
+.commit-row .sha {
+  color: var(--accent);
+  font-size: 11.5px;
+}
+.commit-row .date {
+  color: var(--muted);
+  font-size: 11px;
+}
+.commit-row .subject {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.repo-column[data-side='R'] .commit-row .subject {
+  text-align: right;
+}
+.commit-row .author {
+  color: var(--muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.repo-column[data-side='R'] .commit-row .author {
+  text-align: left;
+}
+
+mark {
+  background: rgba(54, 214, 255, 0.35);
+  color: #fff;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+/* ---------------- Legend ---------------- */
+.legend {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 6px 14px;
+  border-top: 1px solid var(--line);
+  background: var(--bg-soft);
+  font-size: 11px;
+}
+.legend .chip.common {
+  color: var(--common-bd);
+}
+.legend .chip.cherry {
+  color: var(--cherry-bd);
+}
+.legend .chip.unique {
+  color: var(--unique-bd);
+}
+.legend .spacer {
+  flex: 1;
+}
+.legend .hint {
+  color: var(--muted);
+}
