@@ -19,7 +19,9 @@ export default function RepoColumn({
   manualShas,
   pendingNode,
   onNode,
-  activeHit
+  activeHit,
+  noteShas,
+  onNoteOpen
 }) {
   const bodyHeight = totalRows * ROW_HEIGHT;
 
@@ -58,6 +60,8 @@ export default function RepoColumn({
               pending={!!pendingNode && pendingNode.side === side && pendingNode.sha === c.sha}
               onNode={onNode}
               activeHit={activeHit === rowKey}
+              hasNote={!!noteShas && noteShas.has(c.sha)}
+              onNoteOpen={onNoteOpen}
             />
           );
         })

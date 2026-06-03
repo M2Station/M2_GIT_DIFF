@@ -50,7 +50,9 @@ export default function Toolbar({
   rightStats,
   onOpenSearch,
   manualCount,
-  onClearManualLinks
+  onClearManualLinks,
+  noteCount,
+  onClearNotes
 }) {
   return (
     <div className="toolbar">
@@ -73,6 +75,14 @@ export default function Toolbar({
           title="刪除所有手動連結並清除暫存"
         >
           ◗ Clear manual links{manualCount ? ` (${manualCount})` : ''}
+        </button>
+        <button
+          className="btn clear-notes"
+          onClick={onClearNotes}
+          disabled={!noteCount}
+          title="刪除所有註記並清除暫存"
+        >
+          📝 Clear notes{noteCount ? ` (${noteCount})` : ''}
         </button>
       </div>
     </div>

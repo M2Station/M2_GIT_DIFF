@@ -3,6 +3,7 @@ import Toolbar from './components/Toolbar.jsx';
 import RepoColumn from './components/RepoColumn.jsx';
 import ConnectionLines from './components/ConnectionLines.jsx';
 import SearchPanel from './components/SearchPanel.jsx';
+import NotePopup from './components/NotePopup.jsx';
 import { computeDiff, matchesQuery, alignLayout } from './lib/diff.js';
 import { ROW_HEIGHT, GUTTER_WIDTH, DEFAULT_LIMIT } from './lib/constants.js';
 
@@ -29,6 +30,14 @@ export default function App() {
   const [pendingNode, setPendingNode] = useState(null); // { side, sha } | null
   const hydratedKeyRef = useRef(null);
   const skipSaveRef = useRef(false);
+
+  // Per-commit notes: { [`${side}:${sha}`]: text }. Persisted alongside manual
+  // links (same repo-pair key) in localStorage. `notePopup` drives the floating
+  // editor/viewer: { side, sha, x, y } | null.
+  const [notes, setNotes] = useState({});
+  const [notePopup, setNotePopup] = useState(null);
+  const notesHydratedRef = useRef(null);
+  const notesSkipSaveRef = useRef(false);
 
   // Virtualization scroll state
   const scrollRef = useRef(null);
@@ -230,6 +239,94 @@ export default function App() {
     }
   }, [linkKey]);
 
+  // ---- Per-commit notes: persistence (same repo-pair key) ----
+  // Load saved notes whenever the repo pair changes.
+  useEffect(() => {
+    if (!linkKey) return;
+    let parsed = {};
+    try {
+      const raw = localStorage.getItem('note:' + linkKey);
+      if (raw) parsed = JSON.parse(raw);
+    } catch {
+      parsed = {};
+    }
+    notesSkipSaveRef.current = true;
+    notesHydratedRef.current = linkKey;
+    setNotes(parsed && typeof parsed === 'object' ? parsed : {});
+    setNotePopup(null);
+  }, [linkKey]);
+
+  // Persist notes after any user change (skips the post-hydration pass).
+  useEffect(() => {
+    if (!linkKey || notesHydratedRef.current !== linkKey) return;
+    if (notesSkipSaveRef.current) {
+      notesSkipSaveRef.current = false;
+      return;
+    }
+    try {
+      localStorage.setItem('note:' + linkKey, JSON.stringify(notes));
+    } catch {
+      /* storage unavailable -> notes live for this session only */
+    }
+  }, [notes, linkKey]);
+
+  const noteIdOf = (side, sha) => `${side}:${sha}`;
+
+  // Open the floating note editor/viewer at the click position.
+  const openNote = useCallback((side, sha, x, y) => {
+    setNotePopup({ side, sha, x, y });
+  }, []);
+
+  // Save (or clear when empty) the note for one commit.
+  const saveNote = useCallback((side, sha, text) => {
+    const id = `${side}:${sha}`;
+    setNotes((prev) => {
+      const next = { ...prev };
+      const trimmed = (text || '').trim();
+      if (trimmed) next[id] = trimmed;
+      else delete next[id];
+      return next;
+    });
+  }, []);
+
+  // Delete the note for one commit and close the popup.
+  const deleteNote = useCallback((side, sha) => {
+    const id = `${side}:${sha}`;
+    setNotes((prev) => {
+      if (!(id in prev)) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    setNotePopup(null);
+  }, []);
+
+  // Wipe every note for the current repo pair and remove its persisted entry.
+  const clearNotes = useCallback(() => {
+    setNotes({});
+    setNotePopup(null);
+    if (linkKey) {
+      try {
+        localStorage.removeItem('note:' + linkKey);
+      } catch {
+        /* storage unavailable -> nothing persisted to remove */
+      }
+    }
+  }, [linkKey]);
+
+  // Per-side sets of SHAs that carry a note (for the row indicator icon).
+  const noteShas = useMemo(() => {
+    const L = new Set();
+    const R = new Set();
+    Object.keys(notes).forEach((id) => {
+      const sep = id.indexOf(':');
+      const side = id.slice(0, sep);
+      const sha = id.slice(sep + 1);
+      (side === 'L' ? L : R).add(sha);
+    });
+    return { L, R };
+  }, [notes]);
+
   // Fallback pass: for commits still `unique` after SHA + title matching, fetch
   // their git patch-id (content fingerprint) and retry matching by content so
   // cherry-picks with edited titles still pair up. Best-effort; runs once per
@@ -382,6 +479,7 @@ export default function App() {
       if (e.key === 'Escape') {
         setSelectedMatch(null);
         setPendingNode(null);
+        setNotePopup(null);
       } else if (
         (e.key === 'Delete' || e.key === 'Backspace') &&
         typeof selectedMatch === 'string' &&
@@ -437,6 +535,8 @@ export default function App() {
         onOpenSearch={openSearch}
         manualCount={manualLinks.length}
         onClearManualLinks={clearManualLinks}
+        noteCount={Object.keys(notes).length}
+        onClearNotes={clearNotes}
       />
 
       {searchOpen && (
@@ -455,6 +555,26 @@ export default function App() {
           onInputKeyDown={onSearchKeyDown}
         />
       )}
+
+      {notePopup && (() => {
+        const arr = notePopup.side === 'L' ? left.commits : right.commits;
+        const c = arr.find((x) => x.sha === notePopup.sha);
+        return (
+          <NotePopup
+            key={notePopup.side + ':' + notePopup.sha}
+            side={notePopup.side}
+            sha={notePopup.sha}
+            short={c?.short || notePopup.sha.slice(0, 7)}
+            subject={c?.subject || ''}
+            x={notePopup.x}
+            y={notePopup.y}
+            value={notes[noteIdOf(notePopup.side, notePopup.sha)] || ''}
+            onSave={saveNote}
+            onDelete={deleteNote}
+            onClose={() => setNotePopup(null)}
+          />
+        );
+      })()}
 
       {error && <div className="error-bar">⚠ {error}</div>}
 
@@ -480,6 +600,8 @@ export default function App() {
             pendingNode={pendingNode}
             onNode={onNode}
             activeHit={activeHit}
+            noteShas={noteShas.L}
+            onNoteOpen={openNote}
           />
 
           <div className="gutter" style={{ width: GUTTER_WIDTH, minHeight: bodyHeight }}>
@@ -506,6 +628,8 @@ export default function App() {
             pendingNode={pendingNode}
             onNode={onNode}
             activeHit={activeHit}
+            noteShas={noteShas.R}
+            onNoteOpen={openNote}
           />
         </div>
       </div>

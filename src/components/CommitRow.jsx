@@ -19,7 +19,7 @@ function shortDate(iso) {
   return iso.slice(0, 10);
 }
 
-export default function CommitRow({ commit, side, query, dimmed, isHit, selected, height, top, onSelect, manualLinked, pending, onNode, activeHit }) {
+export default function CommitRow({ commit, side, query, dimmed, isHit, selected, height, top, onSelect, manualLinked, pending, onNode, activeHit, hasNote, onNoteOpen }) {
   const cls = [
     'commit-row',
     commit.status, // common | cherry | unique
@@ -28,7 +28,8 @@ export default function CommitRow({ commit, side, query, dimmed, isHit, selected
     activeHit ? 'active-hit' : '',
     selected ? 'selected' : '',
     commit.matchId ? 'linkable' : '',
-    manualLinked ? 'manual' : ''
+    manualLinked ? 'manual' : '',
+    hasNote ? 'has-note' : ''
   ]
     .filter(Boolean)
     .join(' ');
@@ -36,6 +37,20 @@ export default function CommitRow({ commit, side, query, dimmed, isHit, selected
   const handleClick = (e) => {
     e.stopPropagation();
     if (commit.matchId) onSelect(selected ? null : commit.matchId);
+  };
+
+  // Right-click anywhere on the row opens the note editor at the cursor.
+  const handleContextMenu = (e) => {
+    if (typeof onNoteOpen !== 'function') return;
+    e.preventDefault();
+    e.stopPropagation();
+    onNoteOpen(side, commit.sha, e.clientX, e.clientY);
+  };
+
+  // Click the note icon to view/edit the existing note.
+  const handleNoteIcon = (e) => {
+    e.stopPropagation();
+    onNoteOpen(side, commit.sha, e.clientX, e.clientY);
   };
 
   // Only unmatched commits expose a node to draw a manual link from/to.
@@ -61,11 +76,29 @@ export default function CommitRow({ commit, side, query, dimmed, isHit, selected
   const title = `${commit.short}  ${commit.subject}\n${commit.author} · ${commit.authorDate}\n${commit.body || ''}`;
 
   return (
-    <div className={cls} style={{ height, top }} onClick={handleClick} title={title} data-side={side}>
+    <div
+      className={cls}
+      style={{ height, top }}
+      onClick={handleClick}
+      onContextMenu={handleContextMenu}
+      title={title}
+      data-side={side}
+    >
       <span className="sha">{highlight(commit.short, query)}</span>
       <span className="date">{shortDate(commit.authorDate)}</span>
       <span className="subject">{highlight(commit.subject, query)}</span>
       <span className="author">{commit.author}</span>
+      {hasNote && (
+        <button
+          type="button"
+          className="note-icon"
+          onClick={handleNoteIcon}
+          title="檢視 / 編輯註記"
+          aria-label="View note"
+        >
+          📝
+        </button>
+      )}
       {showNode && (
         <button type="button" className={nodeCls} onClick={handleNode} title={nodeTitle} aria-label={nodeTitle} />
       )}

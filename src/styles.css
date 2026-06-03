@@ -193,6 +193,29 @@ body {
   border-color: var(--manual-bd);
   box-shadow: 0 0 6px rgba(163, 113, 255, 0.45);
 }
+/* note action buttons */
+.btn.clear-notes {
+  border-color: #e0a44a;
+  color: #e0a44a;
+}
+.btn.clear-notes:hover:not(:disabled) {
+  border-color: #e0a44a;
+  box-shadow: 0 0 6px rgba(224, 164, 74, 0.45);
+}
+.btn.primary {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.btn.primary:hover:not(:disabled) {
+  box-shadow: 0 0 6px rgba(54, 214, 255, 0.4);
+}
+.btn.danger {
+  border-color: var(--unique-bd);
+  color: #f3a0a6;
+}
+.btn.danger:hover:not(:disabled) {
+  box-shadow: 0 0 6px rgba(235, 70, 80, 0.4);
+}
 
 .search-block {
   margin-left: auto;
@@ -299,6 +322,88 @@ body {
 }
 .sp-actions .match-count {
   min-width: 48px;
+}
+
+/* ---------------- Note popup ---------------- */
+.note-popup {
+  position: fixed;
+  z-index: 60;
+  width: 300px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.np-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  background: var(--bg-soft);
+  border-bottom: 1px solid var(--line);
+  cursor: grab;
+  user-select: none;
+}
+.np-header:active {
+  cursor: grabbing;
+}
+.np-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+.np-ref {
+  font-family: var(--mono, monospace);
+  font-size: 11px;
+  color: #e0a44a;
+}
+.np-spacer {
+  flex: 1;
+}
+.np-close {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 4px;
+}
+.np-close:hover {
+  color: var(--text);
+}
+.np-body {
+  padding: 10px;
+}
+.np-area {
+  width: 100%;
+  min-height: 110px;
+  resize: vertical;
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 12.5px;
+  line-height: 1.5;
+  padding: 8px;
+  box-sizing: border-box;
+  font-family: inherit;
+}
+.np-area:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.np-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px 10px;
+}
+.np-footer .np-spacer {
+  flex: 1;
 }
 
 .error-bar {
@@ -418,7 +523,9 @@ body {
   grid-template-columns: 78px 92px 1fr 130px;
   align-items: center;
   gap: 8px;
-  padding: 0 10px;
+  /* extra left/right padding reserves gutters: outer edge for the note icon,
+     inner edge for the manual-link node, so neither covers the SHA or name. */
+  padding: 0 26px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.03);
   border-left: 3px solid transparent;
   white-space: nowrap;
@@ -502,10 +609,10 @@ body {
     background-color 0.12s ease, box-shadow 0.12s ease, transform 0.12s ease;
 }
 .node-handle.node-L {
-  right: 3px;
+  right: 7px;
 }
 .node-handle.node-R {
-  left: 3px;
+  left: 7px;
 }
 /* reveal on row hover, or keep visible while active */
 .commit-row:hover .node-handle,
@@ -529,6 +636,37 @@ body {
 /* whole body hints that we're mid-link */
 .diff-body.linking .node-handle {
   opacity: 1;
+}
+
+/* ---- note indicator icon on a commit row ---- */
+.note-icon {
+  position: absolute;
+  top: 50%;
+  margin-top: -9px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 18px;
+  text-align: center;
+  filter: drop-shadow(0 0 4px rgba(224, 164, 74, 0.6));
+  opacity: 0.9;
+  transition: transform 0.12s ease, opacity 0.12s ease;
+}
+.note-icon:hover {
+  transform: scale(1.2);
+  opacity: 1;
+}
+/* the note icon lives in the outer gutter (away from the center gap) so it
+   never overlaps the SHA column: left side -> left edge, right side -> right edge. */
+.commit-row[data-side='L'] .note-icon {
+  left: 4px;
+}
+.commit-row[data-side='R'] .note-icon {
+  right: 4px;
 }
 .commit-row.selected {
   outline: 1px solid var(--accent);
