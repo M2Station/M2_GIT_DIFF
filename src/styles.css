@@ -1183,6 +1183,45 @@ mark.cd-hl {
   }
 }
 
+/* Floating "fuzzy matching in progress" pill while the idle pass computes. */
+.fuzzy-pending {
+  position: sticky;
+  top: 8px;
+  z-index: 5;
+  width: max-content;
+  margin: 8px auto 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fuzzy-bd, #ff79c6);
+  background: color-mix(in srgb, var(--panel, #11161d) 88%, var(--fuzzy-bd) 12%);
+  border: 1px solid color-mix(in srgb, var(--fuzzy-bd) 55%, transparent);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+.fuzzy-pending-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--fuzzy-bd, #ff79c6);
+  animation: fuzzy-pulse 0.9s ease-in-out infinite;
+}
+@keyframes fuzzy-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
 .diff-scroll {
   display: flex;
   align-items: flex-start;

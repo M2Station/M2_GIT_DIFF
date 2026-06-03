@@ -258,17 +258,52 @@ export default function App() {
     [left, right, patchIds, manualLinks]
   );
 
-  // Fuzzy pass layered on top of the cached exact result. Only this (cheaper)
-  // pass reruns as `diffTexts` fills in or the threshold changes.
-  const diff = useMemo(
-    () =>
-      applyFuzzy(baseDiff, {
-        enabled: fuzzyEnabled,
+  // Fuzzy pass layered on top of the cached exact result. The fuzzy matching is
+  // the heaviest part of the pipeline (line-set overlap over many commits), so
+  // we run it off the critical path inside requestIdleCallback instead of
+  // synchronously during render. While a result for the current inputs isn't
+  // ready yet we fall back to the exact-only `baseDiff` and surface a "比對中…"
+  // indicator. `fuzzyResult` caches the computed output keyed by its inputs.
+  const [fuzzyResult, setFuzzyResult] = useState(null);
+
+  useEffect(() => {
+    if (!fuzzyEnabled) {
+      setFuzzyResult(null);
+      return undefined;
+    }
+    let cancelled = false;
+    const run = () => {
+      if (cancelled) return;
+      const out = applyFuzzy(baseDiff, {
+        enabled: true,
         threshold: fuzzyThreshold / 100,
         diffTexts
-      }),
-    [baseDiff, fuzzyEnabled, fuzzyThreshold, diffTexts]
-  );
+      });
+      if (cancelled) return;
+      setFuzzyResult({ base: baseDiff, threshold: fuzzyThreshold, diffTexts, diff: out });
+    };
+    const ric =
+      window.requestIdleCallback || ((fn) => window.setTimeout(() => fn(), 1));
+    const cic = window.cancelIdleCallback || window.clearTimeout;
+    const handle = ric(run, { timeout: 300 });
+    return () => {
+      cancelled = true;
+      cic(handle);
+    };
+  }, [fuzzyEnabled, baseDiff, fuzzyThreshold, diffTexts]);
+
+  // True only when the cached fuzzy result was computed for exactly the current
+  // inputs; otherwise the idle pass is still pending (or stale).
+  const fuzzyReady =
+    !!fuzzyResult &&
+    fuzzyResult.base === baseDiff &&
+    fuzzyResult.threshold === fuzzyThreshold &&
+    fuzzyResult.diffTexts === diffTexts;
+
+  // Final classified diff. References an already-built object (baseDiff or the
+  // cached fuzzy output), so downstream memos keyed on `diff` stay stable.
+  const diff = fuzzyEnabled && fuzzyReady ? fuzzyResult.diff : baseDiff;
+  const fuzzyPending = fuzzyEnabled && !fuzzyReady;
 
   // Swap the LEFT and RIGHT sides. Repos plus every side-keyed piece of state
   // (manual links, notes, colors, single-repo mode, open detail windows, the
@@ -1343,6 +1378,12 @@ export default function App() {
         onClick={onBodyClick}
         tabIndex={-1}
       >
+        {fuzzyPending && !loadingEmpty && !noRepos && (
+          <div className="fuzzy-pending">
+            <span className="fuzzy-pending-dot" />
+            模糊比對中…
+          </div>
+        )}
         {(noRepos || loadingEmpty || stageEmpty) && (
           <div className="stage-empty">
             {loadingEmpty ? (
