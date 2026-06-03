@@ -32,6 +32,16 @@ export default function App() {
   const [patchIds, setPatchIds] = useState({});
   const requestedShas = useRef(new Set());
 
+  // Fuzzy (approximate content) matching: opt-in pass that pairs still-unmatched
+  // commits by how much their CHANGED LINES overlap. `fuzzyThreshold` is a 0-100
+  // percent (default 70%); computeDiff receives it as a 0-1 ratio. `diffTexts`
+  // caches each commit's changed-line list (sha -> string[]), fetched lazily
+  // from the main process only while fuzzy matching is enabled.
+  const [fuzzyEnabled, setFuzzyEnabled] = useState(false);
+  const [fuzzyThreshold, setFuzzyThreshold] = useState(80);
+  const [diffTexts, setDiffTexts] = useState({});
+  const requestedDiffShas = useRef(new Set());
+
   // Manual links: user-drawn connections between two unmatched commits, stored
   // as { leftSha, rightSha } and persisted per repo-pair so reopening the same
   // repros resumes them. `pendingNode` holds the first endpoint while linking.
@@ -227,8 +237,13 @@ export default function App() {
   }, [left, right]);
 
   const diff = useMemo(
-    () => computeDiff(left, right, patchIds, manualLinks),
-    [left, right, patchIds, manualLinks]
+    () =>
+      computeDiff(left, right, patchIds, manualLinks, {
+        enabled: fuzzyEnabled,
+        threshold: fuzzyThreshold / 100,
+        diffTexts
+      }),
+    [left, right, patchIds, manualLinks, fuzzyEnabled, fuzzyThreshold, diffTexts]
   );
 
   // Swap the LEFT and RIGHT sides. Repos plus every side-keyed piece of state
@@ -643,6 +658,54 @@ export default function App() {
     };
   }, [diff, left.path, right.path]);
 
+  // Fuzzy pass data: while Fuzzy Match is enabled, fetch the changed-line
+  // content of every still-`unique` commit so computeDiff can score how much two
+  // commits' edits overlap. Best-effort and cached per sha via
+  // `requestedDiffShas`, so toggling fuzzy on/off never refetches.
+  useEffect(() => {
+    if (!fuzzyEnabled || !left.path || !right.path) return;
+
+    const pending = (rows, side) =>
+      rows
+        .filter(
+          (r) =>
+            r.status === 'unique' &&
+            !requestedDiffShas.current.has(side + ':' + r.sha)
+        )
+        .map((r) => r.sha);
+
+    const lNeed = pending(diff.leftRows, 'L');
+    const rNeed = pending(diff.rightRows, 'R');
+    if (lNeed.length === 0 && rNeed.length === 0) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const [lMap, rMap] = await Promise.all([
+          lNeed.length
+            ? window.api.getDiffTexts({ repoPath: left.path, shas: lNeed })
+            : {},
+          rNeed.length
+            ? window.api.getDiffTexts({ repoPath: right.path, shas: rNeed })
+            : {}
+        ]);
+        lNeed.forEach((s) => requestedDiffShas.current.add('L:' + s));
+        rNeed.forEach((s) => requestedDiffShas.current.add('R:' + s));
+        if (cancelled) return;
+        const merged = { ...lMap, ...rMap };
+        if (Object.keys(merged).length) {
+          setDiffTexts((prev) => ({ ...prev, ...merged }));
+        }
+      } catch {
+        /* best-effort: fuzzy matching simply finds nothing */
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fuzzyEnabled, diff, left.path, right.path]);
+
   const filterActive = filterOnly && !!query;
 
   // Build per-side display rows. Matched pairs (common + cherry-pick) are
@@ -1009,6 +1072,10 @@ export default function App() {
         single={single}
         onSetSingle={setSingle}
         onSwapSides={swapSides}
+        fuzzyEnabled={fuzzyEnabled}
+        fuzzyThreshold={fuzzyThreshold}
+        onToggleFuzzy={() => setFuzzyEnabled((v) => !v)}
+        onSetFuzzyThreshold={setFuzzyThreshold}
         onExport={openExportPrompt}
         canExport={canExport}
       />
@@ -1198,6 +1265,7 @@ export default function App() {
         <span className="chip cherry">■ Cherry-pick (same title)</span>
         <span className="chip unique">■ Unique (one side only)</span>
         <span className="chip manual">■ Manual link</span>
+        <span className="chip fuzzy">■ Fuzzy match (similar content)</span>
         <span className="spacer" />
         <span className="hint">
           {pendingNode

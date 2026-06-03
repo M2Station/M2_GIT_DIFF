@@ -154,6 +154,55 @@ async function getPatchIds(cwd, shas) {
   return map;
 }
 
+/**
+ * Fetch the changed-line content of each commit's diff so the renderer can do
+ * content-similarity ("fuzzy") matching. Returns a Map<sha, string[]> where the
+ * array holds the deduped, normalized added/removed lines (the actual edits,
+ * not diff metadata). Best-effort: returns an empty map on failure.
+ *
+ * Implementation: a single `git show` over all requested shas, using a NUL
+ * separator format so each commit's diff block is delimited unambiguously,
+ * keeping the whole request to one git invocation.
+ */
+async function getDiffTexts(cwd, shas) {
+  const map = new Map();
+  if (!shas || shas.length === 0) return map;
+  try {
+    // tformat:%x00%H%x00 prints  NUL <sha> NUL  before each commit's diff.
+    const out = await run(
+      ['show', '--no-color', '--format=tformat:%x00%H%x00', ...shas],
+      cwd
+    );
+    // Split on NUL -> ['', sha1, diff1, sha2, diff2, ...].
+    const parts = out.split('\0');
+    for (let i = 1; i + 1 < parts.length; i += 2) {
+      const sha = parts[i].trim();
+      const body = parts[i + 1] || '';
+      if (!sha) continue;
+      const seen = new Set();
+      const lines = [];
+      for (const raw of body.split('\n')) {
+        // Keep only added/removed content lines; skip the +++/--- file headers.
+        if (raw.length < 2) continue;
+        const c = raw[0];
+        if (c !== '+' && c !== '-') continue;
+        if (raw.startsWith('+++') || raw.startsWith('---')) continue;
+        const text = raw.slice(1).trim();
+        if (text.length < 2) continue; // ignore lone braces / trivial lines
+        const key = c + text; // keep +/- sign so an add vs delete differ
+        if (seen.has(key)) continue;
+        seen.add(key);
+        lines.push(key);
+        if (lines.length >= 4000) break; // cap payload for huge commits
+      }
+      if (lines.length) map.set(sha, lines);
+    }
+  } catch {
+    return new Map();
+  }
+  return map;
+}
+
 async function loadRepo(cwd, opts = {}) {
   const [branch, head, commits, remoteUrl] = await Promise.all([
     getCurrentBranch(cwd),
@@ -217,6 +266,7 @@ module.exports = {
   getCurrentBranch,
   getCommits,
   getPatchIds,
+  getDiffTexts,
   loadRepo,
   gitOp
 };

@@ -24,7 +24,8 @@
 | 各自獨有 | 只存在於單一邊的 commit | 紅色背景 |
 | Cherry-pick（標題） | **標題相同但 SHA 不同**，並用線左右對齊連接 | 黃色背景＋黃色虛線 |
 | Cherry-pick（內容 / patch-id） | 標題**不同**但 `git patch-id`（實際變更內容指紋）相同 → 標題被改寫的 cherry-pick 也能配對 | 黃色背景＋黃色點線 |
-| **左右對齊版面** | 配對成功的列（灰＋黃）會被排到**同一個顯示列**，連接線變成水平直線；無法配對者填補空檔 | — |
+| **Fuzzy Match（內容相似度）** | 工具列可開關的模糊配對：當 SHA / 標題 / patch-id **都比對不上**時，比較兩個 commit **實際變更的程式碼行**，相似度（包含率）≥ 門檻（預設 **80%**，可調 0–100%）即配對。適合「TOT 把多個專案一起改、personal branch 只改其中一個專案」這種**子集**情境 | 粉紅色背景＋粉紅色粗虛線 |
+| **左右對齊版面** | 配對成功的列（灰＋黃＋粉）會被排到**同一個顯示列**，連接線變成水平直線；無法配對者填補空檔 | — |
 | 搜尋 | 可搜尋 標題 / 內文 / SHA / 作者 / 日期，命中高亮、其餘變暗，顯示命中數量 | — |
 | Filter 模式 | 開啟後只保留命中的 commit（壓縮排列），關閉則只是變暗 | — |
 | **命令列自動開啟** | 啟動時帶 `-L <path> -R <path>` 可自動載入左右兩側 repro | — |
@@ -37,12 +38,15 @@
 | **匯出 Excel（.xlsx）** | 工具列右上 **⬇ Export Excel**：把左右對齊後的 commit、強制顏色、註記與手動連結一併輸出成 styled `.xlsx`（ExcelJS）。儲存格底色對應強制顏色、註記以 cell 註解（像 tip）呈現、配對 commit 以空白 cell 對齊；另含一張 **Manual Links** 工作表列出所有手動連結 | 與畫面同色 |
 | **匯出筆數確認** | 按下匯出前先跳出對話框詢問要輸出多少筆（預設 **全部 ALL**，或指定前 N 筆），資料量大時提醒，避免一次輸出過多造成卡頓 | — |
 | **Commit 詳情浮窗** | `Ctrl`+左鍵點 commit → 浮動視窗顯示 SHA / 作者 / 日期（清楚標示）＋ Markdown 渲染的 commit 內文；配對的 **Related item** 特別凸顯；右上 **HL** 輸入格可即時高亮符合文字（開啟時自動帶入目前搜尋字）；可**移動、拖拉縮放**、依內容自動調整寬度；可**同時開多個**（重複點同一個不重開） | — |
+| **可點擊的 commit 連結** | Commit 詳情浮窗在 SHA 旁顯示 **🌐 Web** 連結，以系統預設瀏覽器開啟該 commit 的遠端頁面（自動辨識 GitHub / GitLab / Gitea / ADO / Bitbucket）；Excel 匯出時 SHA 儲存格也會超連結到同一遠端 URL | — |
 | **VS Code Chat 整合** | Commit 詳情浮窗的 **💬 Chat** 按鈕，呼叫本機安裝的 VS Code（`code chat`）並以該 repo 為工作區開啟 Copilot Chat（agent 模式），自動帶入該 commit 的英文說明 prompt（可在 chat 內執行 `git show <sha>` 看完整 diff）；未安裝 VS Code 時於浮窗顯示提示 | — |
 | 虛擬化 | 只渲染視窗內的列，支援大型倉庫（數千 commit）順暢捲動 | — |
 | 快取 | 解析結果以 HEAD SHA 為版本快取，重開同 repo 免重新解析 | — |
 | LOGO / 品牌 | 工具列左上角 LOGO ＋ `M2_GIT_DIFF` 名稱；視窗標題與 favicon 同步 | — |
 
-點擊任一有連線的列（灰/黃），或**直接點擊連接線**，會高亮其對應的連接線、其餘連線變淡。連接線採**直角轉折（orthogonal）**走線，並有 hover 變粗、selected 加粗發光的效果。選取後焦點移到比對區，**按 `Esc` 或點擊空白處**即可取消選取。
+點擊任一有連線的列（灰/黃/粉），或**直接點擊連接線**，會高亮其對應的連接線、其餘連線變淡。連接線採**直角轉折（orthogonal）**走線，並有 hover 變粗、selected 加粗發光的效果。選取後焦點移到比對區，**按 `Esc` 或點擊空白處**即可取消選取。
+
+**Fuzzy Match（內容相似度模糊配對）**：工具列 Swap 左側的 **≈ Fuzzy Match** 按鈕（關閉時灰階、開啟時亮粉紅）可切換模糊配對，旁邊的數字框是相似度門檻（0–100%，**預設 80%**）。開啟後，對於 SHA / 標題 / patch-id 都配不上的 commit，會透過 IPC 抓取兩側 commit 的**實際變更行**（diff 的 `+`/`-` 內容，去除檔頭、去重），以**包含率** $\frac{|A\cap B|}{\min(|A|,|B|)}$ 計分；分數 ≥ 門檻即以**粉紅色粗虛線**配對，每個 commit 最多配一次（取分數高者優先）。用 min 當分母代表**子集也能高分**：例如 TOT 的某次提交同時改了兩個專案，而 personal branch 只改其中一個專案，共同專案的變更行被完全包含 → 接近 100%，仍會連起來。為避免極小 diff 誤判，少於 3 行變更的 commit 不參與。
 
 **手動連結**：把滑鼠移到未配對（紅）的 commit 上，靠中央側會出現一個圓形節點 ◗；先點左邊一個、再點右邊一個即建立紫色手動連線。再次點擊已連結的節點可斷開，或選取該連線後按 `Delete` / `Backspace` 移除。手動連結以兩側 repo 路徑為 key 存進 `localStorage`，**打開一模一樣的 repro 會自動 RESUME 還原**（以 SHA 記錄，新增 commit 後仍可還原）。
 
@@ -71,8 +75,8 @@
 Electron (主行程)
 ├─ electron/main.js      視窗建立、IPC handler、資料夾選擇對話框、Excel 匯出存檔對話框
 ├─ electron/preload.js   contextBridge 安全橋接，暴露 window.api（含 exportExcel）
-├─ electron/git.js       呼叫系統 git，解析 git log → 結構化 commit；gitOp 回傳完整 stdout/stderr 與 exit code
-├─ electron/excel.js     ExcelJS 產生 styled .xlsx（顏色填滿、註記 cell 註解、Manual Links 工作表）
+├─ electron/git.js       呼叫系統 git，解析 git log → 結構化 commit；getPatchIds / getDiffTexts（Fuzzy 變更行）；gitOp 回傳完整 stdout/stderr 與 exit code
+├─ electron/excel.js     ExcelJS 產生 styled .xlsx（顏色填滿、註記 cell 註解、SHA 超連結到遠端 commit URL、Manual Links 工作表）
 └─ electron/db.js        better-sqlite3 快取層（缺少時自動退回記憶體快取）
 
 Renderer (React + Vite)
@@ -83,7 +87,7 @@ Renderer (React + Vite)
 ├─ src/lib/constants.js         版面常數（列高、gutter 寬、overscan…）
 ├─ src/assets/logo.svg          工具列 LOGO（青色 M2 字標）
 └─ src/components/
-   ├─ Toolbar.jsx          上方工具列：LOGO＋名稱、開啟 repo、branch 徽章、統計、View 模式切換、搜尋、Clear manual/notes/colors、Export Excel
+   ├─ Toolbar.jsx          上方工具列：LOGO＋名稱、開啟 repo、branch 徽章、統計、Fuzzy Match 開關＋門檻、View 模式切換、搜尋、Clear manual/notes/colors、Export Excel
    ├─ RepoColumn.jsx       單欄虛擬化渲染（只畫視窗內的列）
    ├─ CommitRow.jsx        單一 commit 列（絕對定位 + 高亮 + 註記圖示 + 右鍵選單 + Ctrl點詳情）
    ├─ ConnectionLines.jsx  中央 gutter 的 SVG 連接線（端點同列時退化為水平線）
@@ -93,7 +97,7 @@ Renderer (React + Vite)
    ├─ RepoGitBar.jsx       每側 Git 操作列（pull / fetch…）
    ├─ GitTerminalPopup.jsx Git 操作結果浮窗（可拖曳，顯示指令/輸出/exit code，成功綠框失敗紅框）
    ├─ ExportPrompt.jsx     匯出前的筆數確認對話框（預設 ALL，或前 N 筆）
-   └─ CommitDetail.jsx     Commit 詳情浮窗（Markdown 渲染、Related item、可移動縮放、可多開、💬 Chat 開 VS Code）
+   └─ CommitDetail.jsx     Commit 詳情浮窗（Markdown 渲染、Related item、SHA 旁 🌐 Web 連結開遠端頁面、可移動縮放、可多開、💬 Chat 開 VS Code）
 ```
 
 另有 `public/icon.svg`（透明背景、漸層 M 字標圖示，作為 favicon 與 Electron 視窗 / 工作列圖示）。執行 `node scripts/make-icon.mjs` 會由它產生多尺寸的 `public/icon.ico`，供 Windows 檔案總管右鍵選單與打包後的應用程式圖示使用。
@@ -128,14 +132,16 @@ Renderer (React + Vite)
 
 ## 4. 比對演算法（src/lib/diff.js）
 
-`computeDiff(left, right, patchIds)` 三階段：
+`computeDiff(left, right, patchIds, manualLinks, fuzzy)` 多階段：
 
 1. **相同 commit（灰）**：以 SHA 建集合，兩邊都有同一 SHA → `status = 'common'`，建立 `type: 'common'` 連線。
 2. **Cherry-pick — 標題（黃，虛線）**：把尚未被 SHA 配對的 commit 依「正規化標題」（`normalizeSubject`：去頭尾、小寫、空白壓縮）分組，左右同標題者依序配對 → `status = 'cherry'`，建立 `type: 'cherry'` 連線。
 3. **Cherry-pick — 內容 / patch-id（黃，點線）**：對前兩步仍為 unique 的 commit，依 `git patch-id`（實際 diff 內容指紋）分組配對 → `status = 'cherry'`，建立 `type: 'patch'` 連線。即使標題被改寫，內容相同的 cherry-pick 也能配上。
-4. **獨有（紅）**：其餘維持 `status = 'unique'`。
+4. **手動連結（紫）**：套用使用者建立的 `manualLinks`（見 §1），建立 `type: 'manual'` 連線。
+5. **Fuzzy Match — 內容相似度（粉，粗虛線）**：僅在 `fuzzy.enabled` 時執行。對仍為 unique 的 commit，用 `fuzzy.diffTexts`（每個 sha 的變更行集合）兩兩計算**包含率** `inter / min(|A|,|B|)`，分數 ≥ `fuzzy.threshold` 即配對 → `status = 'fuzzy'`，建立 `type: 'fuzzy'` 連線；分數高者優先、每個 commit 最多配一次、少於 3 行者略過。
+6. **獨有（紅）**：其餘維持 `status = 'unique'`。
 
-回傳：`leftRows / rightRows`（每列含 `status`、`matchId`、`index`）、`links`、以及各邊統計 `{ common, cherry, unique }`。
+回傳：`leftRows / rightRows`（每列含 `status`、`matchId`、`index`）、`links`、以及各邊統計 `{ common, cherry, unique, fuzzy }`。
 
 `matchesQuery(commit, query)`：在 subject / body / sha / short / author / authorDate 做不分大小寫子字串比對。
 
@@ -144,6 +150,12 @@ Renderer (React + Vite)
 - `App.jsx` 第一輪 `computeDiff` 完成 SHA + 標題比對後，收集兩邊仍為 `unique` 的 commit，透過 IPC `repo:patchIds` 向主行程要 `git patch-id`。
 - `electron/git.js` 的 `getPatchIds()` 採**批次**：整批 `git show` 一次 pipe 給 `git patch-id --stable`，總共僅兩次 git 呼叫（非每個 commit 兩次）。
 - 取回的 `sha → patchId` 對應表回填後重算 `computeDiff`，把內容相同者補成黃色配對。全程 best-effort，失敗則退回標題比對。每個 sha 只查一次。
+
+### Fuzzy Match（內容相似度）資料流
+
+- 只有在工具列開啟 **≈ Fuzzy Match** 時才啟動。`App.jsx` 收集兩側仍為 `unique` 的 commit，透過 IPC `repo:diffTexts` 向主行程要各 commit 的變更行。
+- `electron/git.js` 的 `getDiffTexts()` 以**單次** `git show`（NUL 分隔格式）抓回所有指定 sha 的 diff，僅保留 `+`/`-` 的內容行（排除 `+++`/`---` 檔頭），去重、保留正負號、每個 commit 最多 4000 行，回傳 `sha → string[]`。
+- 取回的變更行快取在 `diffTexts`（per-sha，門檻調整不需重抓），連同門檻傳入 `computeDiff` 的 `fuzzy` 參數重算，把相似度 ≥ 門檻者補成**粉紅色**配對。全程 best-effort。
 
 ### 左右對齊版面（`alignLayout`）
 
@@ -189,10 +201,12 @@ CSS 變數集中於 `:root`：
 | `--common-bg / --common-bd` | 灰：相同 commit |
 | `--cherry-bg / --cherry-bd` | 黃：cherry-pick |
 | `--unique-bg / --unique-bd` | 紅：獨有 commit |
+| `--manual-bd` | 紫：手動連結 |
+| `--fuzzy-bg / --fuzzy-bd` | 粉紅：Fuzzy Match 內容相似度配對 |
 | `--accent` | 青色強調色（HUD 發光） |
 | `--row-h` | 列高 |
 
-連線樣式：`.link.common`（灰實線）、`.link.cherry`（黃虛線）、`.link.patch`（黃點線，內容/patch-id 配對）、`.link.selected`（加粗發光）、`.link.faded`（其餘變淡）。連線為**直角轉折**走線（`ConnectionLines.jsx`），並以透明加寬的 `.link-hit` 路徑承接點擊。
+連線樣式：`.link.common`（灰實線）、`.link.cherry`（黃虛線）、`.link.patch`（黃點線，內容/patch-id 配對）、`.link.manual`（紫實線，手動連結）、`.link.fuzzy`（粉紅粗虛線，內容相似度配對）、`.link.selected`（加粗發光）、`.link.faded`（其餘變淡）。連線為**直角轉折**走線（`ConnectionLines.jsx`），並以透明加寬的 `.link-hit` 路徑承接點擊。
 
 ---
 
@@ -302,6 +316,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\uninstall-context-menu
 | `Ctrl` + 左鍵點 commit | 開啟該 commit 的詳情浮窗（可多開；重複點同一個不重開） |
 | 右鍵點 commit | 跳出情境選單：新增/編輯註記、強制背景顏色（綠/亮紅/藍/黃）、清除顏色 |
 | 點 commit 上的 📝 圖示 | 檢視 / 編輯 / 刪除該列註記 |
+| 工具列 ≈ Fuzzy Match 開關 / 門檻框 | 開關內容相似度模糊配對；門檻框設定相似度百分比（0–100%，預設 80%） |
 | 工具列 View（Compare / Left only / Right only） | 切換雙邊比對或單邊放大模式 |
 | 工具列 ◗ Clear manual links / 📝 Clear notes / 🎨 Clear colors | 一次清除目前 repro pair 的手動連結 / 註記 / 強制顏色及其 `localStorage` 暫存 |
 | 工具列 ⬇ Export Excel | 匯出對齊後的 commit＋顏色＋註記＋手動連結為 `.xlsx`（先詢問筆數，預設 ALL） |
@@ -334,6 +349,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\uninstall-context-menu
 | 我想改… | 去這裡 |
 | --- | --- |
 | 顏色 / 分類規則 | `src/lib/diff.js`（`computeDiff`） |
+| Fuzzy Match（相似度配對 / 包含率） | `src/lib/diff.js`（`computeDiff` 第 5 階段、`containment`）、`electron/git.js`（`getDiffTexts`）、`src/App.jsx`（`fuzzyEnabled`/`fuzzyThreshold`/`diffTexts`）、`src/components/Toolbar.jsx`（`fuzzy-toggle`） |
 | 左右對齊邏輯 | `src/lib/diff.js`（`alignLayout` / `longestIncreasingByPr`） |
 | 顏色數值 / 主題 | `src/styles.css`（`:root` 變數） |
 | 列高 / overscan / 預設筆數 | `src/lib/constants.js` |
@@ -347,6 +363,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\uninstall-context-menu
 | 註記（Note）浮窗 / 邏輯 | `src/components/NotePopup.jsx`、`src/App.jsx`（`openNote`/`saveNote`/`deleteNote`/`clearNotes`） |
 | 右鍵選單 / 強制顏色 | `src/components/RowMenu.jsx`、`src/App.jsx`（`openRowMenu`/`setColor`/`clearColors`）、`src/styles.css`（`.commit-row.force-*`） |
 | Commit 詳情浮窗 / Markdown / HL 高亮 | `src/components/CommitDetail.jsx`、`src/lib/markdown.js`、`src/App.jsx`（`openDetail`/`resolveDetail`/`details`） |
+| 可點擊 commit 連結（🌐 Web / 遠端 URL） | `src/components/CommitDetail.jsx`、`electron/git.js`（`getRemoteUrl` / `loadRepo` remoteUrl）、`electron/main.js`（`shell:openExternal`）、`electron/excel.js`（SHA 超連結） |
 | VS Code Chat 整合（💬 Chat） | `src/components/CommitDetail.jsx`（`openInChat`）、`electron/preload.js`（`openInVSCodeChat`）、`electron/main.js`（`vscode:chat` / `resolveCodeCommand`） |
 | 應用程式圖示產生（SVG→ICO） | `scripts/make-icon.mjs`、`public/icon.svg`、`public/icon.ico` |
 | 單一 Repo（View）模式 | `src/App.jsx`（`single` 狀態、`view` useMemo）、`src/components/Toolbar.jsx`、`src/styles.css`（`.repo-column.plain`） |

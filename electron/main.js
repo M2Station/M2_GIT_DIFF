@@ -134,6 +134,16 @@ ipcMain.handle('repo:patchIds', async (_evt, payload) => {
   return Object.fromEntries(map);
 });
 
+ipcMain.handle('repo:diffTexts', async (_evt, payload) => {
+  const { repoPath, shas } = payload || {};
+  if (!repoPath || !Array.isArray(shas) || shas.length === 0) return {};
+  if (!git.isGitRepo(repoPath)) return {};
+  // git.getDiffTexts returns a Map<sha, string[]>; convert to a plain object so
+  // it survives IPC serialization.
+  const map = await git.getDiffTexts(repoPath, shas);
+  return Object.fromEntries(map);
+});
+
 ipcMain.handle('repo:gitOp', async (_evt, payload) => {
   const { repoPath, op } = payload || {};
   if (!repoPath) throw new Error('repoPath is required');

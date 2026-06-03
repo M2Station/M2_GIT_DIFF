@@ -13,6 +13,37 @@ export function normalizeSubject(s = '') {
   return s.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
+// --- Fuzzy (approximate content) matching helpers -------------------------
+// Fuzzy matching compares the ACTUAL changed lines of two commits (the edits
+// inside the files, not the commit message). The diff text is supplied by the
+// main process as a deduped array of normalized "+line" / "-line" strings.
+//
+// We score with a containment ratio rather than a symmetric one:
+//
+//     score = |A \u2229 B| / min(|A|, |B|)
+//
+// so a commit whose edits are a SUBSET of another's still scores ~1.0. That is
+// exactly the target case: TOT bundles edits for two projects, while a personal
+// branch only touches one \u2014 the shared project's lines are fully contained, so
+// the pair links even though TOT changed more.
+const FUZZY_MIN_LINES = 3; // ignore tiny diffs to avoid spurious matches
+
+function diffLineSet(diffTexts, sha) {
+  if (!diffTexts) return null;
+  const arr = typeof diffTexts.get === 'function' ? diffTexts.get(sha) : diffTexts[sha];
+  if (!arr || !arr.length) return null;
+  return new Set(arr);
+}
+
+function containment(aSet, bSet) {
+  const small = aSet.size <= bSet.size ? aSet : bSet;
+  const big = small === aSet ? bSet : aSet;
+  if (small.size === 0) return 0;
+  let inter = 0;
+  for (const v of small) if (big.has(v)) inter++;
+  return inter / small.size;
+}
+
 // Read a patch-id for a sha from either a Map or a plain object (the latter
 // is what survives Electron IPC serialization).
 function patchIdOf(patchIds, sha) {
@@ -20,7 +51,7 @@ function patchIdOf(patchIds, sha) {
   return typeof patchIds.get === 'function' ? patchIds.get(sha) : patchIds[sha];
 }
 
-export function computeDiff(left, right, patchIds = null, manualLinks = null) {
+export function computeDiff(left, right, patchIds = null, manualLinks = null, fuzzy = null) {
   const L = left?.commits ?? [];
   const R = right?.commits ?? [];
 
@@ -148,9 +179,50 @@ export function computeDiff(left, right, patchIds = null, manualLinks = null) {
     }
   }
 
+  // 5) fuzzy content matching: for commits STILL unique (no SHA/title/patch-id
+  //    /manual match), pair them by how much their CHANGED LINES overlap. Uses a
+  //    containment ratio so a subset of edits (personal branch) still matches a
+  //    superset (TOT bundling multiple projects). Opt-in via the toolbar
+  //    `Fuzzy Match` toggle so it never overrides exact matches.
+  if (fuzzy && fuzzy.enabled) {
+    const thr = typeof fuzzy.threshold === 'number' ? fuzzy.threshold : 0.7;
+    const dt = fuzzy.diffTexts || null;
+    const buildCand = (rows) =>
+      rows
+        .filter((r) => r.status === 'unique' && !r.matchId)
+        .map((r) => ({ row: r, set: diffLineSet(dt, r.sha) }))
+        .filter((c) => c.set && c.set.size >= FUZZY_MIN_LINES);
+    const Lcand = buildCand(leftRows);
+    const Rcand = buildCand(rightRows);
+
+    const pairs = [];
+    for (const l of Lcand) {
+      for (const r of Rcand) {
+        const score = containment(l.set, r.set);
+        if (score >= thr) pairs.push({ li: l.row.index, ri: r.row.index, score });
+      }
+    }
+    pairs.sort((a, b) => b.score - a.score);
+
+    const usedL = new Set();
+    const usedR = new Set();
+    let fuzzySeq = 0;
+    for (const p of pairs) {
+      if (usedL.has(p.li) || usedR.has(p.ri)) continue;
+      usedL.add(p.li);
+      usedR.add(p.ri);
+      const id = 'fuzzy:' + fuzzySeq++;
+      leftRows[p.li].status = 'fuzzy';
+      leftRows[p.li].matchId = id;
+      rightRows[p.ri].status = 'fuzzy';
+      rightRows[p.ri].matchId = id;
+      links.push({ type: 'fuzzy', leftIndex: p.li, rightIndex: p.ri, id, score: p.score });
+    }
+  }
+
   // Remaining rows keep status 'unique' (red).
   const stats = (rows) => {
-    const s = { common: 0, cherry: 0, unique: 0 };
+    const s = { common: 0, cherry: 0, unique: 0, fuzzy: 0 };
     rows.forEach((r) => (s[r.status] += 1));
     return s;
   };

@@ -58,6 +58,10 @@ export default function Toolbar({
   single,
   onSetSingle,
   onSwapSides,
+  fuzzyEnabled,
+  fuzzyThreshold,
+  onToggleFuzzy,
+  onSetFuzzyThreshold,
   onExport,
   canExport
 }) {
@@ -69,6 +73,33 @@ export default function Toolbar({
       </div>
 
       <RepoSlot side="L" repo={left} loading={loading.L} onPick={onPick} onReload={onReload} stats={leftStats} />
+      <div className="fuzzy-block" role="group" aria-label="Fuzzy match">
+        <button
+          className={'btn fuzzy-toggle' + (fuzzyEnabled ? ' on' : '')}
+          onClick={onToggleFuzzy}
+          title="依檔案實際修改內容的相似度做模糊配對（SHA / 標題 / patch-id 都比對不上時）。用變更行的重疊比例計分，子集也能配對：TOT 把多個專案一起改，personal branch 只改其中一個專案也能連起來。"
+          aria-pressed={fuzzyEnabled}
+        >
+          ≈ Fuzzy Match
+        </button>
+        <span className="fuzzy-pct" title="相似度門檻 0-100%（預設 70%）">
+          <input
+            className="fuzzy-input"
+            type="number"
+            min={0}
+            max={100}
+            step={5}
+            value={fuzzyThreshold}
+            disabled={!fuzzyEnabled}
+            onChange={(e) => {
+              const n = Math.max(0, Math.min(100, Number(e.target.value) || 0));
+              onSetFuzzyThreshold(n);
+            }}
+            aria-label="Fuzzy Match 相似度門檻百分比"
+          />
+          <span className="fuzzy-unit">%</span>
+        </span>
+      </div>
       <button
         className="btn swap-sides"
         onClick={onSwapSides}

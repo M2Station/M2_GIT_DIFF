@@ -20,6 +20,10 @@
   --manual-bg: rgba(163, 113, 255, 0.16);
   --manual-bd: #a371ff;
 
+  /* fuzzy (approximate content) match — its own magenta/pink color system */
+  --fuzzy-bg: rgba(255, 93, 177, 0.16);
+  --fuzzy-bd: #ff5db1;
+
   --row-h: 36px;
 }
 
@@ -250,6 +254,58 @@ body {
 }
 .btn.swap-sides:hover:not(:disabled) {
   box-shadow: 0 0 6px rgba(54, 214, 255, 0.4);
+}
+
+/* fuzzy-match control (toggle + threshold %), sits left of the Swap button */
+.fuzzy-block {
+  align-self: center;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.btn.fuzzy-toggle {
+  font-weight: 600;
+  /* OFF state: clearly muted / grayscale so it never looks active */
+  border-color: var(--line);
+  color: var(--muted);
+  filter: grayscale(1);
+  opacity: 0.75;
+}
+.btn.fuzzy-toggle.on {
+  /* ON state: bright filled pink, unmistakably active */
+  filter: none;
+  opacity: 1;
+  border-color: var(--fuzzy-bd);
+  color: #fff;
+  background: var(--fuzzy-bd);
+  box-shadow: 0 0 8px rgba(255, 93, 177, 0.6);
+}
+.fuzzy-pct {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.fuzzy-input {
+  width: 46px;
+  padding: 3px 4px;
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 12px;
+  text-align: right;
+}
+.fuzzy-input:focus {
+  outline: none;
+  border-color: var(--fuzzy-bd);
+}
+.fuzzy-input:disabled {
+  opacity: 0.5;
+}
+.fuzzy-unit {
+  color: var(--muted);
 }
 
 .search-block {
@@ -1161,6 +1217,13 @@ mark.cd-hl {
   stroke-opacity: 0.95;
   stroke-width: 2;
 }
+/* fuzzy (approximate content) match — thick bold dashes, own pink color */
+.link.fuzzy {
+  stroke: var(--fuzzy-bd);
+  stroke-opacity: 0.95;
+  stroke-width: 3;
+  stroke-dasharray: 8 5;
+}
 .link.selected {
   stroke-width: 2.6;
   stroke-opacity: 1;
@@ -1248,6 +1311,14 @@ mark.cd-hl {
 .repo-column[data-side='R'] .commit-row.manual {
   border-right-color: var(--manual-bd);
 }
+/* fuzzy match — its own pink color system */
+.commit-row.fuzzy {
+  background: var(--fuzzy-bg);
+  border-left-color: var(--fuzzy-bd);
+}
+.repo-column[data-side='R'] .commit-row.fuzzy {
+  border-right-color: var(--fuzzy-bd);
+}
 
 /* ---- forced background color (right-click override) ----
    Highest-priority background; the left/right accent border is tinted to match
@@ -1285,6 +1356,7 @@ mark.cd-hl {
    plain background. Forced colors (right-click) still win via .force-*. */
 .repo-column.plain .commit-row.common:not([class*='force-']),
 .repo-column.plain .commit-row.cherry:not([class*='force-']),
+.repo-column.plain .commit-row.fuzzy:not([class*='force-']),
 .repo-column.plain .commit-row.unique:not([class*='force-']) {
   background: transparent;
 }
@@ -1441,6 +1513,9 @@ mark {
 }
 .legend .chip.manual {
   color: var(--manual-bd);
+}
+.legend .chip.fuzzy {
+  color: var(--fuzzy-bd);
 }
 .legend .spacer {
   flex: 1;
