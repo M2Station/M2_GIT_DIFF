@@ -110,23 +110,23 @@ async function getPatchIds(cwd, shas) {
   const map = new Map();
   if (!shas || shas.length === 0) return map;
   try {
-    for (const sha of shas) {
-      // git show <sha> | git patch-id --stable
-      const patch = await run(
-        ['show', '--no-color', '--format=%H', sha],
-        cwd
+    // Pipe the diffs of every requested commit through a single
+    // `git patch-id --stable`. Each output line is "<patchId> <commitSha>",
+    // so the mapping stays correct regardless of order. This keeps the whole
+    // request to two git invocations instead of two per commit.
+    const patch = await run(['show', '--no-color', ...shas], cwd);
+    const idOut = await new Promise((resolve) => {
+      const cp = execFile(
+        'git',
+        ['patch-id', '--stable'],
+        { cwd, maxBuffer: 1024 * 1024 * 256, windowsHide: true },
+        (e, stdout) => resolve(e ? '' : stdout.toString())
       );
-      const idOut = await new Promise((resolve) => {
-        const cp = execFile(
-          'git',
-          ['patch-id', '--stable'],
-          { cwd, maxBuffer: 1024 * 1024 * 64, windowsHide: true },
-          (e, stdout) => resolve(e ? '' : stdout.toString())
-        );
-        cp.stdin.end(patch);
-      });
-      const id = idOut.trim().split(/\s+/)[0];
-      if (id) map.set(sha, id);
+      cp.stdin.end(patch);
+    });
+    for (const line of idOut.split('\n')) {
+      const [patchId, sha] = line.trim().split(/\s+/);
+      if (patchId && sha) map.set(sha, patchId);
     }
   } catch {
     return new Map();

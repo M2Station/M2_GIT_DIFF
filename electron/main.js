@@ -11,6 +11,40 @@ const APP_NAME = 'M2_GIT_DIFF';
 
 let mainWindow = null;
 
+// Parse `-L <path>` / `-R <path>` (also --left / --right) from the launch
+// argv so repros can be auto-opened. Relative paths resolve against the
+// directory the app was launched from. Returns { left, right }.
+function parseRepoArgs(argv) {
+  const out = { left: null, right: null };
+  // In dev the args follow the "." entry (electron . -L x -R y); in a packaged
+  // build they follow the exe. Scanning the whole argv works for both.
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    let key = null;
+    if (a === '-L' || a === '--left') key = 'left';
+    else if (a === '-R' || a === '--right') key = 'right';
+    else if (a.startsWith('--left=')) { out.left = a.slice(7); continue; }
+    else if (a.startsWith('--right=')) { out.right = a.slice(8); continue; }
+    if (key) {
+      const val = argv[i + 1];
+      if (val && !val.startsWith('-')) {
+        out[key] = val;
+        i++;
+      }
+    }
+  }
+  const resolve = (p) => (p ? path.resolve(process.cwd(), p) : null);
+  // Fall back to env vars (REPRO_L / REPRO_R) when not given on argv. This is
+  // how start.cmd forwards paths in dev mode, where argv can't reliably pass
+  // through the concurrently -> wait-on -> electron chain.
+  return {
+    left: resolve(out.left ?? process.env.REPRO_L ?? null),
+    right: resolve(out.right ?? process.env.REPRO_R ?? null)
+  };
+}
+
+const initialRepos = parseRepoArgs(process.argv);
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1480,
@@ -57,6 +91,8 @@ app.on('window-all-closed', () => {
 
 // ---- IPC handlers ----
 
+ipcMain.handle('app:getInitialRepos', () => initialRepos);
+
 ipcMain.handle('dialog:pickFolder', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
     properties: ['openDirectory'],
@@ -86,6 +122,16 @@ ipcMain.handle('repo:load', async (_evt, payload) => {
   const repo = await git.loadRepo(repoPath, { branch, limit: lim });
   db.set(key, repo.head, repo);
   return { ...repo, cached: false };
+});
+
+ipcMain.handle('repo:patchIds', async (_evt, payload) => {
+  const { repoPath, shas } = payload || {};
+  if (!repoPath || !Array.isArray(shas) || shas.length === 0) return {};
+  if (!git.isGitRepo(repoPath)) return {};
+  // git.getPatchIds returns a Map; convert to a plain object so it survives
+  // IPC serialization.
+  const map = await git.getPatchIds(repoPath, shas);
+  return Object.fromEntries(map);
 });
 
 async function safeHead(repoPath) {

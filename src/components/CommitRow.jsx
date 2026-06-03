@@ -31,7 +31,8 @@ export default function CommitRow({ commit, side, query, dimmed, isHit, selected
     .filter(Boolean)
     .join(' ');
 
-  const handleClick = () => {
+  const handleClick = (e) => {
+    e.stopPropagation();
     if (commit.matchId) onSelect(selected ? null : commit.matchId);
   };
 

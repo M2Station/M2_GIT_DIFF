@@ -4,12 +4,23 @@
 //   common  -> same SHA on both sides            (gray)
 //   cherry  -> same title, different SHA          (yellow, linked)
 //   unique  -> exists on only one side            (red)
+//
+// Cherry-picks are detected in two passes: first by normalized title, then
+// (for the leftovers) by `git patch-id` so a cherry-pick whose title was
+// edited still pairs up via its actual change content.
 
 export function normalizeSubject(s = '') {
   return s.trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
-export function computeDiff(left, right) {
+// Read a patch-id for a sha from either a Map or a plain object (the latter
+// is what survives Electron IPC serialization).
+function patchIdOf(patchIds, sha) {
+  if (!patchIds) return undefined;
+  return typeof patchIds.get === 'function' ? patchIds.get(sha) : patchIds[sha];
+}
+
+export function computeDiff(left, right, patchIds = null) {
   const L = left?.commits ?? [];
   const R = right?.commits ?? [];
 
@@ -77,6 +88,42 @@ export function computeDiff(left, right) {
       rightRows[ri].status = 'cherry';
       rightRows[ri].matchId = id;
       links.push({ type: 'cherry', leftIndex: li, rightIndex: ri, id });
+    }
+  }
+
+  // 3) content-based cherry-pick fallback: for commits still unmarked as
+  //    unique (title differed), match by git patch-id so edited-title
+  //    cherry-picks pair up via their actual diff content.
+  if (patchIds) {
+    const groupByPatch = (rows) => {
+      const m = new Map();
+      rows.forEach((row) => {
+        if (row.status !== 'unique') return; // already matched by SHA/title
+        const p = patchIdOf(patchIds, row.sha);
+        if (!p) return;
+        if (!m.has(p)) m.set(p, []);
+        m.get(p).push(row.index);
+      });
+      return m;
+    };
+
+    const Lpatch = groupByPatch(leftRows);
+    const Rpatch = groupByPatch(rightRows);
+
+    for (const [p, lIdxs] of Lpatch) {
+      const rIdxs = Rpatch.get(p);
+      if (!rIdxs) continue;
+      const n = Math.min(lIdxs.length, rIdxs.length);
+      for (let j = 0; j < n; j++) {
+        const li = lIdxs[j];
+        const ri = rIdxs[j];
+        const id = 'patch:' + cherrySeq++;
+        leftRows[li].status = 'cherry';
+        leftRows[li].matchId = id;
+        rightRows[ri].status = 'cherry';
+        rightRows[ri].matchId = id;
+        links.push({ type: 'patch', leftIndex: li, rightIndex: ri, id });
+      }
     }
   }
 

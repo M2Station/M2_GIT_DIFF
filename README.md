@@ -15,15 +15,17 @@
 | 並排雙欄 | 左右各開一個本機 repo，分別顯示其 branch 與 commit 列表 | — |
 | 相同 commit | 兩邊 **SHA 完全相同** | 灰色背景 |
 | 各自獨有 | 只存在於單一邊的 commit | 紅色背景 |
-| Cherry-pick | **標題相同但 SHA 不同**（可能是 cherry-pick），並用線左右對齊連接 | 黃色背景＋黃色虛線 |
+| Cherry-pick（標題） | **標題相同但 SHA 不同**，並用線左右對齊連接 | 黃色背景＋黃色虛線 |
+| Cherry-pick（內容 / patch-id） | 標題**不同**但 `git patch-id`（實際變更內容指紋）相同 → 標題被改寫的 cherry-pick 也能配對 | 黃色背景＋黃色點線 |
 | **左右對齊版面** | 配對成功的列（灰＋黃）會被排到**同一個顯示列**，連接線變成水平直線；無法配對者填補空檔 | — |
 | 搜尋 | 可搜尋 標題 / 內文 / SHA / 作者 / 日期，命中高亮、其餘變暗，顯示命中數量 | — |
 | Filter 模式 | 開啟後只保留命中的 commit（壓縮排列），關閉則只是變暗 | — |
+| **命令列自動開啟** | 啟動時帶 `-L <path> -R <path>` 可自動載入左右兩側 repro | — |
 | 虛擬化 | 只渲染視窗內的列，支援大型倉庫（數千 commit）順暢捲動 | — |
 | 快取 | 解析結果以 HEAD SHA 為版本快取，重開同 repo 免重新解析 | — |
 | LOGO / 品牌 | 工具列左上角 LOGO ＋ `M2_GIT_DIFF` 名稱；視窗標題與 favicon 同步 | — |
 
-點擊任一有連線的列（灰/黃），會高亮其對應的連接線、其餘連線變淡。
+點擊任一有連線的列（灰/黃），或**直接點擊連接線**，會高亮其對應的連接線、其餘連線變淡。連接線採**直角轉折（orthogonal）**走線，並有 hover 變粗、selected 加粗發光的效果。選取後焦點移到比對區，**按 `Esc` 或點擊空白處**即可取消選取。
 
 ### 左右對齊（align）如何運作
 
@@ -89,15 +91,22 @@ Renderer (React + Vite)
 
 ## 4. 比對演算法（src/lib/diff.js）
 
-`computeDiff(left, right)` 三階段：
+`computeDiff(left, right, patchIds)` 三階段：
 
 1. **相同 commit（灰）**：以 SHA 建集合，兩邊都有同一 SHA → `status = 'common'`，建立 `type: 'common'` 連線。
-2. **Cherry-pick（黃）**：把尚未被 SHA 配對的 commit 依「正規化標題」（`normalizeSubject`：去頭尾、小寫、空白壓縮）分組，左右同標題者依序配對 → `status = 'cherry'`，建立 `type: 'cherry'` 連線。
-3. **獨有（紅）**：其餘維持 `status = 'unique'`。
+2. **Cherry-pick — 標題（黃，虛線）**：把尚未被 SHA 配對的 commit 依「正規化標題」（`normalizeSubject`：去頭尾、小寫、空白壓縮）分組，左右同標題者依序配對 → `status = 'cherry'`，建立 `type: 'cherry'` 連線。
+3. **Cherry-pick — 內容 / patch-id（黃，點線）**：對前兩步仍為 unique 的 commit，依 `git patch-id`（實際 diff 內容指紋）分組配對 → `status = 'cherry'`，建立 `type: 'patch'` 連線。即使標題被改寫，內容相同的 cherry-pick 也能配上。
+4. **獨有（紅）**：其餘維持 `status = 'unique'`。
 
 回傳：`leftRows / rightRows`（每列含 `status`、`matchId`、`index`）、`links`、以及各邊統計 `{ common, cherry, unique }`。
 
 `matchesQuery(commit, query)`：在 subject / body / sha / short / author / authorDate 做不分大小寫子字串比對。
+
+### patch-id（內容）配對資料流
+
+- `App.jsx` 第一輪 `computeDiff` 完成 SHA + 標題比對後，收集兩邊仍為 `unique` 的 commit，透過 IPC `repo:patchIds` 向主行程要 `git patch-id`。
+- `electron/git.js` 的 `getPatchIds()` 採**批次**：整批 `git show` 一次 pipe 給 `git patch-id --stable`，總共僅兩次 git 呼叫（非每個 commit 兩次）。
+- 取回的 `sha → patchId` 對應表回填後重算 `computeDiff`，把內容相同者補成黃色配對。全程 best-effort，失敗則退回標題比對。每個 sha 只查一次。
 
 ### 左右對齊版面（`alignLayout`）
 
@@ -107,7 +116,7 @@ Renderer (React + Vite)
 - 逐段在錨點之間填入兩邊未配對列（`Math.max(gapL, gapR)` 列高，盡量共用），錨點本身落在共用列上 → 連線水平。
 - 回傳 `{ L, R, links, totalRows }`，其中每列帶 `displayIndex`，連線座標已重映射到顯示列。
 
-> 預留強化點：`getPatchIds()` 已實作（用 `git patch-id --stable`），未來可改用 patch-id 比對 cherry-pick，即使標題被改寫也能配對。
+> patch-id 強化已實作：對標題比對不到的 commit，會用 `git patch-id --stable` 以內容指紋配對（見上方 patch-id 資料流）。
 
 ---
 
@@ -146,7 +155,7 @@ CSS 變數集中於 `:root`：
 | `--accent` | 青色強調色（HUD 發光） |
 | `--row-h` | 列高 |
 
-連線樣式：`.link.common`（灰實線）、`.link.cherry`（黃虛線）、`.link.selected`（加粗發光）、`.link.faded`（其餘變淡）。
+連線樣式：`.link.common`（灰實線）、`.link.cherry`（黃虛線）、`.link.patch`（黃點線，內容/patch-id 配對）、`.link.selected`（加粗發光）、`.link.faded`（其餘變淡）。連線為**直角轉折**走線（`ConnectionLines.jsx`），並以透明加寬的 `.link-hit` 路徑承接點擊。
 
 ---
 
@@ -159,6 +168,22 @@ npm run build        # 建置 renderer 到 dist/
 npm run dist         # electron-builder 打包（Windows NSIS）
 npm run rebuild      # 為當前 Electron ABI 重編 better-sqlite3
 ```
+
+### 啟動與自動開啟 repro（-L / -R）
+
+啟動時可帶入 `-L <path>` / `-R <path>`（亦接受 `--left` / `--right`）自動載入左右兩側 repro：
+
+```powershell
+# 開發模式（start.cmd 會检查 NPM / 修復 Electron 後啟動）
+.\start.cmd -L "D:\path\to\repoA" -R "D:\path\to\repoB"
+
+# 已建置（production）或打包後的 exe
+npx electron . -L "D:\path\to\repoA" -R "D:\path\to\repoB"
+```
+
+- `electron/main.js` 的 `parseRepoArgs()` 解析 argv；找不到時改讀環境變數 `REPRO_L` / `REPRO_R`。
+- `start.cmd` 走 dev 模式，參數無法穩定穿過 `concurrently → wait-on → electron`，所以改將 `-L`/`-R` 設成 `REPRO_L`/`REPRO_R` 環境變數轉傳。
+- 相對路徑以啟動目錄解析。修改 `src/` 程式碼後，production 啟動需先 `npm run build`。
 
 ### 環境注意事項（本機已知狀況）
 
@@ -178,7 +203,7 @@ npm run rebuild      # 為當前 Electron ABI 重編 better-sqlite3
 
 ## 9. 後續可擴充方向
 
-- 以 `git patch-id` 取代標題比對，提升 cherry-pick 偵測準確度。
+
 - 指定分支 / 標籤 / 日期範圍載入（`getCommits` 已支援 `branch`、`limit` 參數）。
 - 鍵盤導覽、跳到下一個命中。
 - 匯出比對結果（CSV / Markdown）。
@@ -197,8 +222,10 @@ npm run rebuild      # 為當前 Electron ABI 重編 better-sqlite3
 | 工具列 / 搜尋 / Filter 按鈕 | `src/components/Toolbar.jsx` |
 | LOGO 圖樣 | `src/assets/logo.svg`、`public/icon.svg` |
 | 左右欄欄位排版（order） | `src/styles.css`（`.repo-column[data-side='R']`） |
-| 連接線畫法 | `src/components/ConnectionLines.jsx` |
+| 連接線畫法（直角轉折 / 可點選） | `src/components/ConnectionLines.jsx` |
+| 選取 focus / Esc / 點空白取消 | `src/App.jsx`（`handleSelect` / `onBodyClick` / keydown） |
 | 虛擬化渲染 | `src/components/RepoColumn.jsx` |
-| git log 解析欄位 | `electron/git.js` |
+| git log 解析欄位 / patch-id | `electron/git.js` |
 | 快取邏輯 | `electron/db.js` |
-| 視窗 / IPC / App 名稱與圖示 | `electron/main.js` |
+| 視窗 / IPC / CLI 參數 / App 名稱與圖示 | `electron/main.js` |
+| 啟動檢查 / Electron 修復 / -L -R 轉傳 | `start.cmd` / `repair-electron.ps1` |
