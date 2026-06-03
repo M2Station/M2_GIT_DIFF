@@ -665,9 +665,12 @@ export default function App() {
             ? window.api.getPatchIds({ repoPath: right.path, shas: rNeed })
             : {}
         ]);
-        // Mark as requested even on miss so we never refetch the same sha.
-        [...lNeed, ...rNeed].forEach((s) => requestedShas.current.add(s));
         if (cancelled) return;
+        // Mark as requested only after a non-cancelled completion, so a fetch
+        // interrupted by a repo switch can retry when that repo returns instead
+        // of leaving a permanent gap. On a hit/miss for the live repo we record
+        // it so the same sha is never refetched.
+        [...lNeed, ...rNeed].forEach((s) => requestedShas.current.add(s));
         const merged = { ...lMap, ...rMap };
         if (Object.keys(merged).length) {
           setPatchIds((prev) => ({ ...prev, ...merged }));
@@ -713,9 +716,11 @@ export default function App() {
             ? window.api.getDiffTexts({ repoPath: right.path, shas: rNeed })
             : {}
         ]);
+        if (cancelled) return;
+        // Record only after a non-cancelled completion so an interrupted fetch
+        // (repo switched away and back) can retry rather than silently skip.
         lNeed.forEach((s) => requestedDiffShas.current.add('L:' + s));
         rNeed.forEach((s) => requestedDiffShas.current.add('R:' + s));
-        if (cancelled) return;
         const merged = { ...lMap, ...rMap };
         if (Object.keys(merged).length) {
           setDiffTexts((prev) => ({ ...prev, ...merged }));
