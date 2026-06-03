@@ -27,7 +27,7 @@ function hexToTint(hex, alpha) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-export default function CommitRow({ commit, side, query, dimmed, isHit, selected, height, top, onSelect, manualLinked, pending, onNode, activeHit, hasNote, onNoteOpen, color, onRowMenu, onDetail }) {
+function CommitRow({ commit, side, query, dimmed, isHit, selected, height, top, onSelect, manualLinked, pending, onNode, activeHit, hasNote, onNoteOpen, color, onRowMenu, onDetail }) {
   // A `#rrggbb` color is a user-defined custom swatch: paint it inline since it
   // has no `.force-*` CSS class. Named keys still use the class.
   const isHex = typeof color === 'string' && color.charAt(0) === '#';
@@ -62,7 +62,11 @@ export default function CommitRow({ commit, side, query, dimmed, isHit, selected
       onDetail(side, commit.sha, e.clientX, e.clientY);
       return;
     }
-    if (commit.matchId) onSelect(selected ? null : commit.matchId);
+    // Toggle the match selection (matched rows only) AND move the keyboard
+    // cursor to this row so Arrow Up/Down continue from where the user clicked.
+    const rowKey = commit.sha + ':' + commit.index;
+    const nextId = commit.matchId ? (selected ? null : commit.matchId) : null;
+    onSelect(nextId, rowKey);
   };
 
   // Right-click anywhere on the row opens the context menu (note + color).
@@ -131,3 +135,8 @@ export default function CommitRow({ commit, side, query, dimmed, isHit, selected
     </div>
   );
 }
+
+// Rendered thousands of times in the virtualized columns; memoize so unrelated
+// parent state changes (scroll, fuzzy toggle, opening popups) don't re-render
+// every row. All callback props are useCallback-stable in App.jsx.
+export default React.memo(CommitRow);

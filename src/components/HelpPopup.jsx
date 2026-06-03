@@ -13,6 +13,8 @@ const SHORTCUTS = [
   { keys: ['Shift', 'F3'], desc: '跳到上一個搜尋結果' },
   { keys: ['↑'], desc: '移到上一個 commit' },
   { keys: ['↓'], desc: '移到下一個 commit' },
+  { keys: ['←'], desc: '焦點跳到左欄最接近的 commit' },
+  { keys: ['→'], desc: '焦點跳到右欄最接近的 commit' },
   { keys: ['Enter'], desc: '開啟目前 commit 的詳細視窗' },
   { keys: ['Ctrl', 'Click'], desc: '開啟該 commit 的詳細視窗（可同時開多個）' },
   { keys: ['Esc'], desc: '關閉所有彈窗 / 取消選取 / 取消連結中' },

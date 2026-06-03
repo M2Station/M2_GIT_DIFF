@@ -1345,6 +1345,20 @@ mark.cd-hl {
   stroke-width: 2.2;
   stroke-opacity: 1;
 }
+/* keyboard focus: the <g> is focusable (tabIndex/role=button), so mirror the
+   hover emphasis and add a dashed halo so the focused link is clearly visible */
+.link-group:focus {
+  outline: none;
+}
+.link-group:focus-visible .link {
+  stroke-width: 2.6;
+  stroke-opacity: 1;
+}
+.link-group:focus-visible .link-hit {
+  stroke: rgba(120, 170, 255, 0.55);
+  stroke-width: 4;
+  stroke-dasharray: 5 4;
+}
 .link.common {
   stroke: var(--common-bd);
   stroke-opacity: 0.55;

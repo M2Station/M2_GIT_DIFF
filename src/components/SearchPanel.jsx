@@ -95,6 +95,7 @@ export default function SearchPanel({
             className="search"
             type="text"
             placeholder="Search…"
+            aria-label="搜尋 commit（Ctrl+F）"
             value={query}
             onChange={(e) => onQuery(e.target.value)}
             onKeyDown={onInputKeyDown}

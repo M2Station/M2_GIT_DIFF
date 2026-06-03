@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import CommitRow from './CommitRow.jsx';
 import { ROW_HEIGHT, OVERSCAN } from '../lib/constants.js';
 
@@ -35,7 +35,10 @@ export default function RepoColumn({
     Math.ceil((scrollTop + viewportHeight) / ROW_HEIGHT) + OVERSCAN
   );
 
-  const visible = rows.filter((r) => r.displayIndex >= start && r.displayIndex < end);
+  const visible = useMemo(
+    () => rows.filter((r) => r.displayIndex >= start && r.displayIndex < end),
+    [rows, start, end]
+  );
 
   return (
     <div className={'repo-column' + (plain ? ' plain' : '')} data-side={side} style={{ height: bodyHeight }}>

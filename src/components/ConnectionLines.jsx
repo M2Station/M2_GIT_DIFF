@@ -29,12 +29,22 @@ function buildPath(y1, y2, width) {
   ].join(' ');
 }
 
-export default function ConnectionLines({ links, height, width, selectedMatch, onSelect, scrollTop = 0, viewportHeight = 0 }) {
+function ConnectionLines({ links, height, width, selectedMatch, onSelect, scrollTop = 0, viewportHeight = 0 }) {
   const yOf = (index) => index * ROW_HEIGHT + ROW_HEIGHT / 2;
 
   const handleClick = (id) => (e) => {
     e.stopPropagation();
     onSelect?.(selectedMatch === id ? null : id);
+  };
+
+  // Keyboard activation: Enter / Space toggles the focused link, mirroring the
+  // pointer click so the connections are reachable without a mouse.
+  const handleKeyDown = (id) => (e) => {
+    if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+      e.preventDefault();
+      e.stopPropagation();
+      onSelect?.(selectedMatch === id ? null : id);
+    }
   };
 
   // Virtualization: only draw links whose vertical span overlaps the viewport
@@ -63,8 +73,22 @@ export default function ConnectionLines({ links, height, width, selectedMatch, o
         ]
           .filter(Boolean)
           .join(' ');
+        const scorePct =
+          link.type === 'fuzzy' && typeof link.score === 'number'
+            ? ` ${Math.round(link.score * 100)}%`
+            : '';
+        const ariaLabel = `${link.type} 連結${scorePct}，${isSel ? '已選取，' : ''}按 Enter ${isSel ? '取消' : '選取'}`;
         return (
-          <g key={link.id} className="link-group" onClick={handleClick(link.id)}>
+          <g
+            key={link.id}
+            className="link-group"
+            role="button"
+            tabIndex={0}
+            aria-pressed={isSel}
+            aria-label={ariaLabel}
+            onClick={handleClick(link.id)}
+            onKeyDown={handleKeyDown(link.id)}
+          >
             {/* invisible wide hit area so the thin line is easy to click */}
             <path className="link-hit" d={d} fill="none" />
             <path className={cls} d={d} fill="none" />
@@ -99,3 +123,7 @@ export default function ConnectionLines({ links, height, width, selectedMatch, o
     </svg>
   );
 }
+
+// Memoize: the SVG only needs to redraw when the links, geometry, selection,
+// or scroll position change — not on every unrelated App re-render.
+export default React.memo(ConnectionLines);

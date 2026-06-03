@@ -41,6 +41,7 @@
 | **可點擊的 commit 連結** | Commit 詳情浮窗在 SHA 旁顯示 **🌐 Web** 連結，以系統預設瀏覽器開啟該 commit 的遠端頁面（自動辨識 GitHub / GitLab / Gitea / ADO / Bitbucket）；Excel 匯出時 SHA 儲存格也會超連結到同一遠端 URL | — |
 | **VS Code Chat 整合** | Commit 詳情浮窗的 **💬 Chat** 按鈕，呼叫本機安裝的 VS Code（`code chat`）並以該 repo 為工作區開啟 Copilot Chat（agent 模式），自動帶入該 commit 的英文說明 prompt（可在 chat 內執行 `git show <sha>` 看完整 diff）；未安裝 VS Code 時於浮窗顯示提示 | — |
 | 虛擬化 | 只渲染視窗內的列，支援大型倉庫（數千 commit）順暢捲動 | — |
+| **快捷鍵說明（Help）** | 工具列右上 **❓ Help** 開啟置中彈窗，列出全部快捷鍵（鍵帽樣式）；底部含可點擊的 `Powered by OA Hsiao` 徽章連到作者 GitHub。背景點擊 / ✕ / `Esc` 皆可關閉 | — |
 | 快取 | 解析結果以 HEAD SHA 為版本快取，重開同 repo 免重新解析 | — |
 | LOGO / 品牌 | 工具列左上角 LOGO ＋ `M2_GIT_DIFF` 名稱；視窗標題與 favicon 同步 | — |
 
@@ -97,6 +98,7 @@ Renderer (React + Vite)
    ├─ RepoGitBar.jsx       每側 Git 操作列（pull / fetch…）
    ├─ GitTerminalPopup.jsx Git 操作結果浮窗（可拖曳，顯示指令/輸出/exit code，成功綠框失敗紅框）
    ├─ ExportPrompt.jsx     匯出前的筆數確認對話框（預設 ALL，或前 N 筆）
+   ├─ HelpPopup.jsx       快捷鍵說明彈窗（置中 Modal、鍵帽列表、OA Hsiao 徽章，`Esc`/背景關閉）
    └─ CommitDetail.jsx     Commit 詳情浮窗（Markdown 渲染、Related item、SHA 旁 🌐 Web 連結開遠端頁面、可移動縮放、可多開、💬 Chat 開 VS Code）
 ```
 
@@ -320,6 +322,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\uninstall-context-menu
 | 工具列 View（Compare / Left only / Right only） | 切換雙邊比對或單邊放大模式 |
 | 工具列 ◗ Clear manual links / 📝 Clear notes / 🎨 Clear colors | 一次清除目前 repro pair 的手動連結 / 註記 / 強制顏色及其 `localStorage` 暫存 |
 | 工具列 ⬇ Export Excel | 匯出對齊後的 commit＋顏色＋註記＋手動連結為 `.xlsx`（先詢問筆數，預設 ALL） |
+| 工具列 ❓ Help | 開啟快捷鍵說明彈窗（列出全部快捷鍵；`Esc` / ✕ / 點背景關閉） |
 | 右鍵選單最後的取色器 | 自訂任意顏色套用該列，並記成全域第五個快速色票 |
 
 > `F3` 的循環順序為顯示列由上到下、同列時左欄先於右欄；命中集合改變（修改搜尋字）時游標自動歸零。`Ctrl`+`F` 與 `F3` 在全域監聽，即使焦點在搜尋框內也有效。`Esc` 在全域監聽：只要搜尋面板開啟，不論焦點在哪裡都會關閉它。搜尋面板下方的 **📝 Notes** 區塊與搜尋完全分開，以 ↑ / ↓ 在所有有註記的 commit 間跳躍（顯示列順序、左欄先於右欄）。
@@ -359,6 +362,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\uninstall-context-menu
 | 連接線畫法（直角轉折 / 可點選） | `src/components/ConnectionLines.jsx` |
 | 選取 focus / Esc / 點空白取消 | `src/App.jsx`（`handleSelect` / `onBodyClick` / keydown） |
 | 快捷鍵（Ctrl+F / Esc / F3） | `src/App.jsx`（`cycleHit` / keydown / `onSearchKeyDown` / `closeSearch`） |
+| 快捷鍵說明彈窗（Help） | `src/components/HelpPopup.jsx`、`src/components/Toolbar.jsx`（`onOpenHelp`）、`src/App.jsx`（`helpOpen`） |
 | 浮動搜尋面板 / 📝 Notes 導航 | `src/components/SearchPanel.jsx`、`src/App.jsx`（`noteHits` / `cycleNote`） |
 | 註記（Note）浮窗 / 邏輯 | `src/components/NotePopup.jsx`、`src/App.jsx`（`openNote`/`saveNote`/`deleteNote`/`clearNotes`） |
 | 右鍵選單 / 強制顏色 | `src/components/RowMenu.jsx`、`src/App.jsx`（`openRowMenu`/`setColor`/`clearColors`）、`src/styles.css`（`.commit-row.force-*`） |

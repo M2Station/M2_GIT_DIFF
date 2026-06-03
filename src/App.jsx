@@ -1071,19 +1071,66 @@ export default function App() {
     );
   }, [view]);
 
-  // Move the focused row up (dir -1) or down (dir +1) and scroll it into view.
+  // Move the focused row up (dir -1) or down (dir +1) WITHIN the current side
+  // and scroll it into view. Up/down stays in the same column; switching
+  // columns is done with Left/Right (moveCursorSide).
   const moveCursor = useCallback(
     (dir) => {
       if (navRows.length === 0) return;
-      let cur = navRows.findIndex((r) => r.key === activeHit);
-      if (cur < 0) cur = dir > 0 ? -1 : 0;
-      const next = (cur + dir + navRows.length) % navRows.length;
-      const row = navRows[next];
+      const cur = navRows.find((r) => r.key === activeHit);
+      // No cursor yet: land on the first/last row overall.
+      if (!cur) {
+        const row = dir > 0 ? navRows[0] : navRows[navRows.length - 1];
+        setActiveHit(row.key);
+        const el = scrollRef.current;
+        if (el) {
+          const target =
+            row.displayIndex * ROW_HEIGHT - el.clientHeight / 2 + ROW_HEIGHT / 2;
+          el.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
+        }
+        return;
+      }
+      const sideRows = navRows.filter((r) => r.side === cur.side);
+      const idx = sideRows.findIndex((r) => r.key === cur.key);
+      const next = (idx + dir + sideRows.length) % sideRows.length;
+      const row = sideRows[next];
       setActiveHit(row.key);
       const el = scrollRef.current;
       if (el) {
         const target =
           row.displayIndex * ROW_HEIGHT - el.clientHeight / 2 + ROW_HEIGHT / 2;
+        el.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
+      }
+    },
+    [navRows, activeHit]
+  );
+
+  // Move the focused row to the OTHER side (ArrowLeft -> 'L', ArrowRight ->
+  // 'R'), staying on the row whose displayIndex is closest to the current one.
+  // Makes side-to-side navigation as intuitive as walking up/down.
+  const moveCursorSide = useCallback(
+    (targetSide) => {
+      const sideRows = navRows.filter((r) => r.side === targetSide);
+      if (sideRows.length === 0) return;
+      const cur = navRows.find((r) => r.key === activeHit);
+      // No current cursor (or already on the target side with none focused):
+      // jump to the first row of that side.
+      const anchor = cur ? cur.displayIndex : 0;
+      let best = sideRows[0];
+      let bestDist = Math.abs(best.displayIndex - anchor);
+      for (const r of sideRows) {
+        const d = Math.abs(r.displayIndex - anchor);
+        if (d < bestDist) {
+          best = r;
+          bestDist = d;
+        }
+      }
+      if (cur && cur.side === targetSide && best.key === cur.key) return;
+      setActiveHit(best.key);
+      const el = scrollRef.current;
+      if (el) {
+        const target =
+          best.displayIndex * ROW_HEIGHT - el.clientHeight / 2 + ROW_HEIGHT / 2;
         el.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
       }
     },
@@ -1101,10 +1148,13 @@ export default function App() {
   }, [navRows, activeHit, openDetail]);
 
   // Select a match and move keyboard focus to the diff body so Esc / blank
-  // clicks can clear it. Passing null clears the selection.
-  const handleSelect = useCallback((id) => {
+  // clicks can clear it. Passing null clears the selection. When a row click
+  // supplies `rowKey`, sync the keyboard cursor (activeHit) to that row so
+  // Arrow Up/Down continue from the clicked item instead of an old position.
+  const handleSelect = useCallback((id, rowKey) => {
     setSelectedMatch(id);
-    if (id != null) scrollRef.current?.focus();
+    if (rowKey) setActiveHit(rowKey);
+    if (rowKey || id != null) scrollRef.current?.focus();
   }, []);
 
   // Click on empty gutter / column background clears the selection. Row and
@@ -1160,7 +1210,8 @@ export default function App() {
         cycleHit(e.shiftKey ? -1 : 1);
         return;
       }
-      // ArrowUp/ArrowDown -> walk the focused commit row up/down; Enter opens
+      // ArrowUp/ArrowDown -> walk the focused commit row up/down; ArrowLeft/
+      // ArrowRight -> jump to the nearest row on the other side; Enter opens
       // the detail popup for it. Skipped while typing in a field.
       if (!typing && !e.ctrlKey && !e.metaKey && !e.altKey) {
         if (e.key === 'ArrowDown') {
@@ -1171,6 +1222,16 @@ export default function App() {
         if (e.key === 'ArrowUp') {
           e.preventDefault();
           moveCursor(-1);
+          return;
+        }
+        if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          moveCursorSide('L');
+          return;
+        }
+        if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          moveCursorSide('R');
           return;
         }
         if (e.key === 'Enter' && activeHit) {
@@ -1218,6 +1279,7 @@ export default function App() {
     loading.L,
     loading.R,
     moveCursor,
+    moveCursorSide,
     openCursorDetail,
     activeHit
   ]);
@@ -1350,7 +1412,7 @@ export default function App() {
         );
       })}
 
-      {error && <div className="error-bar">⚠ {error}</div>}
+      {error && <div className="error-bar" role="alert" aria-live="assertive">⚠ {error}</div>}
 
       {gitTerminal && (
         <GitTerminalPopup
@@ -1387,7 +1449,7 @@ export default function App() {
         tabIndex={-1}
       >
         {fuzzyPending && !loadingEmpty && !noRepos && (
-          <div className="fuzzy-pending">
+          <div className="fuzzy-pending" role="status" aria-live="polite">
             <span className="fuzzy-pending-dot" />
             模糊比對中…
           </div>
@@ -1397,8 +1459,10 @@ export default function App() {
             {loadingEmpty ? (
               <>
                 <div className="stage-spinner" />
-                <div className="stage-empty-title">讀取 commit 中…</div>
-                <div className="stage-empty-sub">正在載入 repository 歷史</div>
+                <div className="stage-empty-title" role="status" aria-live="polite">讀取 commit 中…</div>
+                <div className="stage-empty-sub">
+                  正在載入 {loading.L && loading.R ? '左右兩個' : loading.L ? '左側' : '右側'} repository 歷史（最多 {DEFAULT_LIMIT.toLocaleString()} 筆）
+                </div>
               </>
             ) : noRepos ? (
               <>
