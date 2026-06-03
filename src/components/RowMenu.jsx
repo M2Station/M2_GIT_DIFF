@@ -11,7 +11,7 @@ const COLORS = [
 
 // Right-click context menu for a commit row: add/edit a note or force-override
 // the row background color. Closes on outside click, Escape, or after a choice.
-export default function RowMenu({ side, sha, short, x, y, hasNote, color, onAddNote, onSetColor, onClearColor, onClose }) {
+export default function RowMenu({ side, sha, short, x, y, hasNote, color, customColor, onAddNote, onSetColor, onPickCustom, onClearColor, onClose }) {
   const ref = useRef(null);
   const [pos, setPos] = useState(() => ({
     x: Math.min(x, window.innerWidth - 190),
@@ -74,6 +74,35 @@ export default function RowMenu({ side, sha, short, x, y, hasNote, color, onAddN
             }}
           />
         ))}
+        {customColor && (
+          <button
+            key="custom"
+            type="button"
+            className={'rm-swatch' + (color === customColor ? ' on' : '')}
+            style={{ background: customColor }}
+            title={'自訂顏色 ' + customColor}
+            aria-label={'自訂顏色 ' + customColor}
+            onClick={() => {
+              onSetColor(side, sha, customColor);
+              onClose();
+            }}
+          />
+        )}
+        <label
+          className="rm-swatch rm-swatch-pick"
+          title="自訂顏色…"
+          aria-label="自訂顏色"
+        >
+          ＋
+          <input
+            type="color"
+            value={customColor || '#888888'}
+            onChange={(e) => {
+              onPickCustom(side, sha, e.target.value);
+              onClose();
+            }}
+          />
+        </label>
       </div>
 
       <button

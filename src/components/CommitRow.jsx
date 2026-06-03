@@ -19,7 +19,18 @@ function shortDate(iso) {
   return iso.slice(0, 10);
 }
 
+// Turn a `#rrggbb` hex into a translucent rgba fill for the forced background.
+function hexToTint(hex, alpha) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 export default function CommitRow({ commit, side, query, dimmed, isHit, selected, height, top, onSelect, manualLinked, pending, onNode, activeHit, hasNote, onNoteOpen, color, onRowMenu, onDetail }) {
+  // A `#rrggbb` color is a user-defined custom swatch: paint it inline since it
+  // has no `.force-*` CSS class. Named keys still use the class.
+  const isHex = typeof color === 'string' && color.charAt(0) === '#';
   const cls = [
     'commit-row',
     commit.status, // common | cherry | unique
@@ -30,10 +41,18 @@ export default function CommitRow({ commit, side, query, dimmed, isHit, selected
     commit.matchId ? 'linkable' : '',
     manualLinked ? 'manual' : '',
     hasNote ? 'has-note' : '',
-    color ? 'force-' + color : ''
+    color && !isHex ? 'force-' + color : ''
   ]
     .filter(Boolean)
     .join(' ');
+
+  // Inline background/accent for custom hex colors (tinted fill + solid accent).
+  const rowStyle = { height, top };
+  if (isHex) {
+    rowStyle.background = hexToTint(color, 0.25);
+    rowStyle.borderLeftColor = color;
+    if (side === 'R') rowStyle.borderRightColor = color;
+  }
 
   const handleClick = (e) => {
     e.stopPropagation();
@@ -85,7 +104,7 @@ export default function CommitRow({ commit, side, query, dimmed, isHit, selected
   return (
     <div
       className={cls}
-      style={{ height, top }}
+      style={rowStyle}
       onClick={handleClick}
       onContextMenu={handleContextMenu}
       title={title}

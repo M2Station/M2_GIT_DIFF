@@ -50,6 +50,17 @@ export default function App() {
   const colorsHydratedRef = useRef(null);
   const colorsSkipSaveRef = useRef(false);
 
+  // User-defined custom swatch (a `#rrggbb` hex), shown as the 5th quick color
+  // in the right-click menu. Persisted globally (not per repo-pair).
+  const [customSwatch, setCustomSwatch] = useState(() => {
+    try {
+      const v = localStorage.getItem('customSwatch');
+      return /^#[0-9a-fA-F]{6}$/.test(v || '') ? v : null;
+    } catch {
+      return null;
+    }
+  });
+
   // Commit detail popups (Ctrl+Click a row). Multiple can be open at once;
   // each entry is { side, sha, x, y }. Ctrl+Clicking an already-open commit is
   // ignored (no duplicate window).
@@ -469,6 +480,21 @@ export default function App() {
     });
   }, []);
 
+  // Pick a user-defined color: remember it as the 5th quick swatch (persisted)
+  // and immediately apply it to the targeted commit.
+  const pickCustomColor = useCallback((side, sha, hex) => {
+    if (!/^#[0-9a-fA-F]{6}$/.test(hex || '')) return;
+    const value = hex.toLowerCase();
+    setCustomSwatch(value);
+    try {
+      localStorage.setItem('customSwatch', value);
+    } catch {
+      /* ignore quota/availability errors */
+    }
+    const id = `${side}:${sha}`;
+    setColors((prev) => ({ ...prev, [id]: value }));
+  }, []);
+
   // Remove the forced color for one commit.
   const clearColor = useCallback((side, sha) => {
     const id = `${side}:${sha}`;
@@ -875,8 +901,10 @@ export default function App() {
             y={rowMenu.y}
             hasNote={!!notes[noteIdOf(rowMenu.side, rowMenu.sha)]}
             color={colors[noteIdOf(rowMenu.side, rowMenu.sha)] || null}
+            customColor={customSwatch}
             onAddNote={openNote}
             onSetColor={setColor}
+            onPickCustom={pickCustomColor}
             onClearColor={clearColor}
             onClose={() => setRowMenu(null)}
           />
