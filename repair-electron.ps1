@@ -1,4 +1,4 @@
-# repair-electron.ps1
+﻿# repair-electron.ps1
 # 修復 Electron 二進位檔在網路磁碟 (例如 Z:) 上 npm 解壓會掉檔的問題。
 # 作法：把 @electron/get 快取的 zip 先解壓到本機 TEMP，再用 robocopy 複製進 node_modules\electron\dist。
 $ErrorActionPreference = 'Stop'
