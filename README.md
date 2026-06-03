@@ -33,6 +33,7 @@
 | **每列註記（Note）** | 右鍵任一 commit → 新增/編輯註記（浮動可拖曳編輯框，`Ctrl+Enter` 儲存）；有註記者顯示 📝 圖示，點圖示可檢視/編輯/刪除 | — |
 | **強制背景顏色** | 右鍵 commit → 選 綠 / 亮紅 / 藍 / 黃 強制覆蓋該列背景；可清除單列或一次清除全部 | 綠/亮紅/藍/黃 |
 | **Commit 詳情浮窗** | `Ctrl`+左鍵點 commit → 浮動視窗顯示 SHA / 作者 / 日期（清楚標示）＋ Markdown 渲染的 commit 內文；配對的 **Related item** 特別凸顯；右上 **HL** 輸入格可即時高亮符合文字（開啟時自動帶入目前搜尋字）；可**移動、拖拉縮放**、依內容自動調整寬度；可**同時開多個**（重複點同一個不重開） | — |
+| **VS Code Chat 整合** | Commit 詳情浮窗的 **💬 Chat** 按鈕，呼叫本機安裝的 VS Code（`code chat`）並以該 repo 為工作區開啟 Copilot Chat（agent 模式），自動帶入該 commit 的英文說明 prompt（可在 chat 內執行 `git show <sha>` 看完整 diff）；未安裝 VS Code 時於浮窗顯示提示 | — |
 | 虛擬化 | 只渲染視窗內的列，支援大型倉庫（數千 commit）順暢捲動 | — |
 | 快取 | 解析結果以 HEAD SHA 為版本快取，重開同 repo 免重新解析 | — |
 | LOGO / 品牌 | 工具列左上角 LOGO ＋ `M2_GIT_DIFF` 名稱；視窗標題與 favicon 同步 | — |
@@ -84,10 +85,12 @@ Renderer (React + Vite)
    ├─ SearchPanel.jsx      浮動可拖曳搜尋面板（可選搜尋範圍、上/下則、Filter，並含獨立的 📝 Notes 導航區）
    ├─ NotePopup.jsx        浮動註記編輯/檢視器（可拖曳）
    ├─ RowMenu.jsx          右鍵情境選單（註記 + 強制背景顏色）
-   └─ CommitDetail.jsx     Commit 詳情浮窗（Markdown 渲染、Related item、可移動縮放、可多開）
+   └─ CommitDetail.jsx     Commit 詳情浮窗（Markdown 渲染、Related item、可移動縮放、可多開、💬 Chat 開 VS Code）
 ```
 
-另有 `public/icon.svg`（圓角深底圖示，作為 favicon 與 Electron 視窗 / 工作列圖示）。
+另有 `public/icon.svg`（透明背景、漸層 M 字標圖示，作為 favicon 與 Electron 視窗 / 工作列圖示）。執行 `node scripts/make-icon.mjs` 會由它產生多尺寸的 `public/icon.ico`，供 Windows 檔案總管右鍵選單與打包後的應用程式圖示使用。
+
+**VS Code Chat 整合**：`CommitDetail.jsx` 的 💬 Chat 按鈕透過 `window.api.openInVSCodeChat` → 主行程 `vscode:chat` IPC，以 `where code.cmd` 解析 VS Code 路徑後執行 `code chat -r -m agent -`，commit 說明 prompt 經 **stdin**（非命令列，避免注入）串入；找不到 VS Code 時丟出 `VSCODE_NOT_FOUND`，由浮窗顯示提示。prompt 全程使用英文以避免 stdin 編碼造成的亂碼。
 
 **技術選型**：Electron + React + Vite + better-sqlite3（快取，選用）。
 
@@ -216,6 +219,8 @@ npm run rebuild      # 為當前 Electron ABI 重編 better-sqlite3
 npm run demo:gif     # 重新產生操作預覽動畫 public/demo.gif
 ```
 
+> 產生應用程式圖示：`node scripts/make-icon.mjs` 會把 `public/icon.svg` 轉成多尺寸（16~256px、透明背景）的 `public/icon.ico`，供右鍵選單與打包圖示使用；改了 `icon.svg` 後重跑即可。
+
 ### 啟動與自動開啟 repro（-L / -R）
 
 啟動時可帶入 `-L <path>` / `-R <path>`（亦接受 `--left` / `--right`）自動載入左右兩側 repro：
@@ -260,6 +265,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\uninstall-context-menu
 - 兩段式狀態由 `tools\m2gitdiff-launcher.ps1` 處理：「Select」會把左側路徑寫入 `%LOCALAPPDATA%\M2_GIT_DIFF\left-folder.txt`；「Compare」讀回該路徑，呼叫 `start.cmd -L <左> -R <目前>` 啟動，完成後清除狀態。
 - 若尚未選擇左側就按 Compare，會跳出提示訊息。
 - 選單會指向 `tools\` 內的腳本與專案根的 `start.cmd`，因此**請勿移動專案資料夾**；若移動了，重新執行 `install-context-menu.ps1` 即可更新路徑。
+- 選單圖示使用 `public\icon.ico`（由 `node scripts/make-icon.mjs` 自 `public/icon.svg` 產生）；若該檔不存在則退回 PowerShell 內建圖示。Windows 右鍵選單僅支援 `.ico` / `.exe` / `.dll` 圖示，不吃 SVG/PNG，故需先轉檔。
 
 ### 環境注意事項（本機已知狀況）
 
@@ -299,6 +305,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\uninstall-context-menu
 - `contextIsolation: true`、`nodeIntegration: false`，renderer 僅透過 preload 的 `window.api` 取得受限介面。
 - `index.html` 設有 CSP。
 - git 指令一律用 `execFile`（陣列參數，非 shell 字串），避免命令注入。
+- VS Code Chat 整合的 commit 內容一律經 **stdin** 串給 `code chat`（命令列僅含固定/白名單參數），避免 shell 注入。
 
 ---
 
@@ -307,7 +314,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\uninstall-context-menu
 
 - 指定分支 / 標籤 / 日期範圍載入（`getCommits` 已支援 `branch`、`limit` 參數）。
 - 匯出比對結果（CSV / Markdown）。
-- 兩邊 commit 點選後顯示完整 **diff 內容**（目前 Ctrl+點選已可顯示 commit 訊息與 metadata 詳情，尚未含逐行 diff）。
+- 兩邊 commit 點選後顯示完整 **diff 內容**（目前 Ctrl+點選已可顯示 commit 訊息與 metadata 詳情，尚未含逐行 diff；亦可用 💬 Chat 交給 VS Code Copilot 解說）。
 
 ---
 
@@ -329,6 +336,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\uninstall-context-menu
 | 註記（Note）浮窗 / 邏輯 | `src/components/NotePopup.jsx`、`src/App.jsx`（`openNote`/`saveNote`/`deleteNote`/`clearNotes`） |
 | 右鍵選單 / 強制顏色 | `src/components/RowMenu.jsx`、`src/App.jsx`（`openRowMenu`/`setColor`/`clearColors`）、`src/styles.css`（`.commit-row.force-*`） |
 | Commit 詳情浮窗 / Markdown / HL 高亮 | `src/components/CommitDetail.jsx`、`src/lib/markdown.js`、`src/App.jsx`（`openDetail`/`resolveDetail`/`details`） |
+| VS Code Chat 整合（💬 Chat） | `src/components/CommitDetail.jsx`（`openInChat`）、`electron/preload.js`（`openInVSCodeChat`）、`electron/main.js`（`vscode:chat` / `resolveCodeCommand`） |
+| 應用程式圖示產生（SVG→ICO） | `scripts/make-icon.mjs`、`public/icon.svg`、`public/icon.ico` |
 | 單一 Repo（View）模式 | `src/App.jsx`（`single` 狀態、`view` useMemo）、`src/components/Toolbar.jsx`、`src/styles.css`（`.repo-column.plain`） |
 | 手動連結（節點 / 暫存 / RESUME / Clear） | `src/App.jsx`（`onNode` / `manualLinks` / `clearManualLinks` / localStorage）、`src/lib/diff.js`（manual 階段） |
 | 虛擬化渲染 | `src/components/RepoColumn.jsx` |
