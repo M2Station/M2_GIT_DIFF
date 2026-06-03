@@ -21,7 +21,10 @@ export default function RepoColumn({
   onNode,
   activeHit,
   noteShas,
-  onNoteOpen
+  onNoteOpen,
+  colorMap,
+  onRowMenu,
+  plain
 }) {
   const bodyHeight = totalRows * ROW_HEIGHT;
 
@@ -34,7 +37,7 @@ export default function RepoColumn({
   const visible = rows.filter((r) => r.displayIndex >= start && r.displayIndex < end);
 
   return (
-    <div className="repo-column" data-side={side} style={{ height: bodyHeight }}>
+    <div className={'repo-column' + (plain ? ' plain' : '')} data-side={side} style={{ height: bodyHeight }}>
       {rows.length === 0 ? (
         <div className="empty-col">{filterActive ? 'No matches' : 'No commits loaded'}</div>
       ) : (
@@ -62,6 +65,8 @@ export default function RepoColumn({
               activeHit={activeHit === rowKey}
               hasNote={!!noteShas && noteShas.has(c.sha)}
               onNoteOpen={onNoteOpen}
+              color={colorMap ? colorMap[c.sha] : undefined}
+              onRowMenu={onRowMenu}
             />
           );
         })

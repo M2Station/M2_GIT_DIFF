@@ -52,7 +52,11 @@ export default function Toolbar({
   manualCount,
   onClearManualLinks,
   noteCount,
-  onClearNotes
+  onClearNotes,
+  colorCount,
+  onClearColors,
+  single,
+  onSetSingle
 }) {
   return (
     <div className="toolbar">
@@ -63,6 +67,33 @@ export default function Toolbar({
 
       <RepoSlot side="L" repo={left} loading={loading.L} onPick={onPick} onReload={onReload} stats={leftStats} />
       <RepoSlot side="R" repo={right} loading={loading.R} onPick={onPick} onReload={onReload} stats={rightStats} />
+
+      <div className="mode-block" role="group" aria-label="View mode">
+        <span className="mode-label">View</span>
+        <button
+          className={'btn mode' + (single === null ? ' on' : '')}
+          onClick={() => onSetSingle(null)}
+          title="雙邊比對模式"
+        >
+          ⇄ Compare
+        </button>
+        <button
+          className={'btn mode' + (single === 'L' ? ' on' : '')}
+          onClick={() => onSetSingle('L')}
+          disabled={!left.path}
+          title="只顯示左側 Repo（放大）"
+        >
+          ◧ Left only
+        </button>
+        <button
+          className={'btn mode' + (single === 'R' ? ' on' : '')}
+          onClick={() => onSetSingle('R')}
+          disabled={!right.path}
+          title="只顯示右側 Repo（放大）"
+        >
+          ◨ Right only
+        </button>
+      </div>
 
       <div className="search-block">
         <button className="btn" onClick={onOpenSearch} title="Search (Ctrl+F)">
@@ -83,6 +114,14 @@ export default function Toolbar({
           title="刪除所有註記並清除暫存"
         >
           📝 Clear notes{noteCount ? ` (${noteCount})` : ''}
+        </button>
+        <button
+          className="btn clear-colors"
+          onClick={onClearColors}
+          disabled={!colorCount}
+          title="清除所有強制背景顏色"
+        >
+          🎨 Clear colors{colorCount ? ` (${colorCount})` : ''}
         </button>
       </div>
     </div>

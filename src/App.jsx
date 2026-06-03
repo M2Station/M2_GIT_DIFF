@@ -4,6 +4,7 @@ import RepoColumn from './components/RepoColumn.jsx';
 import ConnectionLines from './components/ConnectionLines.jsx';
 import SearchPanel from './components/SearchPanel.jsx';
 import NotePopup from './components/NotePopup.jsx';
+import RowMenu from './components/RowMenu.jsx';
 import { computeDiff, matchesQuery, alignLayout } from './lib/diff.js';
 import { ROW_HEIGHT, GUTTER_WIDTH, DEFAULT_LIMIT } from './lib/constants.js';
 
@@ -39,6 +40,14 @@ export default function App() {
   const notesHydratedRef = useRef(null);
   const notesSkipSaveRef = useRef(false);
 
+  // Per-commit forced background color: { [`${side}:${sha}`]: 'green'|'red'|
+  // 'blue'|'yellow' }. Persisted alongside notes/links (same repo-pair key).
+  // `rowMenu` drives the right-click context menu: { side, sha, x, y } | null.
+  const [colors, setColors] = useState({});
+  const [rowMenu, setRowMenu] = useState(null);
+  const colorsHydratedRef = useRef(null);
+  const colorsSkipSaveRef = useRef(false);
+
   // Virtualization scroll state
   const scrollRef = useRef(null);
   const [scrollTop, setScrollTop] = useState(0);
@@ -51,6 +60,9 @@ export default function App() {
 
   // Floating search panel: open/closed + which commit fields to search.
   const [searchOpen, setSearchOpen] = useState(false);
+  // Single-repo mode: null = dual compare; 'L' or 'R' = show only that repo,
+  // full width. Toggled from the toolbar.
+  const [single, setSingle] = useState(null);
   const [scopes, setScopes] = useState({
     subject: true,
     body: true,
@@ -327,6 +339,88 @@ export default function App() {
     return { L, R };
   }, [notes]);
 
+  // ---- Per-commit forced colors: persistence (same repo-pair key) ----
+  useEffect(() => {
+    if (!linkKey) return;
+    let parsed = {};
+    try {
+      const raw = localStorage.getItem('color:' + linkKey);
+      if (raw) parsed = JSON.parse(raw);
+    } catch {
+      parsed = {};
+    }
+    colorsSkipSaveRef.current = true;
+    colorsHydratedRef.current = linkKey;
+    setColors(parsed && typeof parsed === 'object' ? parsed : {});
+    setRowMenu(null);
+  }, [linkKey]);
+
+  useEffect(() => {
+    if (!linkKey || colorsHydratedRef.current !== linkKey) return;
+    if (colorsSkipSaveRef.current) {
+      colorsSkipSaveRef.current = false;
+      return;
+    }
+    try {
+      localStorage.setItem('color:' + linkKey, JSON.stringify(colors));
+    } catch {
+      /* storage unavailable -> colors live for this session only */
+    }
+  }, [colors, linkKey]);
+
+  // Open the right-click context menu (note + color override) at the cursor.
+  const openRowMenu = useCallback((side, sha, x, y) => {
+    setRowMenu({ side, sha, x, y });
+  }, []);
+
+  // Set (or toggle off) the forced background color for one commit.
+  const setColor = useCallback((side, sha, color) => {
+    const id = `${side}:${sha}`;
+    setColors((prev) => {
+      const next = { ...prev };
+      if (!color || prev[id] === color) delete next[id];
+      else next[id] = color;
+      return next;
+    });
+  }, []);
+
+  // Remove the forced color for one commit.
+  const clearColor = useCallback((side, sha) => {
+    const id = `${side}:${sha}`;
+    setColors((prev) => {
+      if (!(id in prev)) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  }, []);
+
+  // Wipe every forced color for the current repo pair.
+  const clearColors = useCallback(() => {
+    setColors({});
+    setRowMenu(null);
+    if (linkKey) {
+      try {
+        localStorage.removeItem('color:' + linkKey);
+      } catch {
+        /* storage unavailable -> nothing persisted to remove */
+      }
+    }
+  }, [linkKey]);
+
+  // Per-side maps of SHA -> forced color (for the row background override).
+  const colorMap = useMemo(() => {
+    const L = {};
+    const R = {};
+    Object.keys(colors).forEach((id) => {
+      const sep = id.indexOf(':');
+      const side = id.slice(0, sep);
+      const sha = id.slice(sep + 1);
+      (side === 'L' ? L : R)[sha] = colors[id];
+    });
+    return { L, R };
+  }, [colors]);
+
   // Fallback pass: for commits still `unique` after SHA + title matching, fetch
   // their git patch-id (content fingerprint) and retry matching by content so
   // cherry-picks with edited titles still pair up. Best-effort; runs once per
@@ -383,8 +477,26 @@ export default function App() {
         .map((c) => ({ commit: c, isHit: query ? matchesQuery(c, query, scopes) : false }))
         .filter((r) => !(filterActive && !r.isHit));
 
+    // Single-repo mode: stack the chosen repo's commits sequentially, no
+    // alignment gaps, no cross-links.
+    if (single) {
+      const rows = prep(single === 'L' ? diff.leftRows : diff.rightRows).map((r, i) => ({
+        commit: r.commit,
+        displayIndex: i,
+        isHit: r.isHit
+      }));
+      const sideData = { rows, count: rows.length };
+      const empty = { rows: [], count: 0 };
+      return {
+        L: single === 'L' ? sideData : empty,
+        R: single === 'R' ? sideData : empty,
+        links: [],
+        totalRows: rows.length
+      };
+    }
+
     return alignLayout(prep(diff.leftRows), prep(diff.rightRows), diff.links);
-  }, [diff, query, filterActive, scopes]);
+  }, [diff, query, filterActive, scopes, single]);
 
   const matchCount = useMemo(() => {
     if (!query) return 0;
@@ -480,6 +592,7 @@ export default function App() {
         setSelectedMatch(null);
         setPendingNode(null);
         setNotePopup(null);
+        setRowMenu(null);
       } else if (
         (e.key === 'Delete' || e.key === 'Backspace') &&
         typeof selectedMatch === 'string' &&
@@ -537,6 +650,10 @@ export default function App() {
         onClearManualLinks={clearManualLinks}
         noteCount={Object.keys(notes).length}
         onClearNotes={clearNotes}
+        colorCount={Object.keys(colors).length}
+        onClearColors={clearColors}
+        single={single}
+        onSetSingle={setSingle}
       />
 
       {searchOpen && (
@@ -576,6 +693,27 @@ export default function App() {
         );
       })()}
 
+      {rowMenu && (() => {
+        const arr = rowMenu.side === 'L' ? left.commits : right.commits;
+        const c = arr.find((x) => x.sha === rowMenu.sha);
+        return (
+          <RowMenu
+            key={rowMenu.side + ':' + rowMenu.sha}
+            side={rowMenu.side}
+            sha={rowMenu.sha}
+            short={c?.short || rowMenu.sha.slice(0, 7)}
+            x={rowMenu.x}
+            y={rowMenu.y}
+            hasNote={!!notes[noteIdOf(rowMenu.side, rowMenu.sha)]}
+            color={colors[noteIdOf(rowMenu.side, rowMenu.sha)] || null}
+            onAddNote={openNote}
+            onSetColor={setColor}
+            onClearColor={clearColor}
+            onClose={() => setRowMenu(null)}
+          />
+        );
+      })()}
+
       {error && <div className="error-bar">⚠ {error}</div>}
 
       <div
@@ -586,6 +724,7 @@ export default function App() {
         tabIndex={-1}
       >
         <div className="diff-scroll" style={{ minHeight: bodyHeight }}>
+          {single !== 'R' && (
           <RepoColumn
             side="L"
             rows={view.L.rows}
@@ -602,8 +741,13 @@ export default function App() {
             activeHit={activeHit}
             noteShas={noteShas.L}
             onNoteOpen={openNote}
+            colorMap={colorMap.L}
+            onRowMenu={openRowMenu}
+            plain={!!single}
           />
+          )}
 
+          {!single && (
           <div className="gutter" style={{ width: GUTTER_WIDTH, minHeight: bodyHeight }}>
             <ConnectionLines
               links={view.links}
@@ -613,7 +757,9 @@ export default function App() {
               onSelect={handleSelect}
             />
           </div>
+          )}
 
+          {single !== 'L' && (
           <RepoColumn
             side="R"
             rows={view.R.rows}
@@ -630,7 +776,11 @@ export default function App() {
             activeHit={activeHit}
             noteShas={noteShas.R}
             onNoteOpen={openNote}
+            colorMap={colorMap.R}
+            onRowMenu={openRowMenu}
+            plain={!!single}
           />
+          )}
         </div>
       </div>
 

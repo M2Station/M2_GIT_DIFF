@@ -19,7 +19,7 @@ function shortDate(iso) {
   return iso.slice(0, 10);
 }
 
-export default function CommitRow({ commit, side, query, dimmed, isHit, selected, height, top, onSelect, manualLinked, pending, onNode, activeHit, hasNote, onNoteOpen }) {
+export default function CommitRow({ commit, side, query, dimmed, isHit, selected, height, top, onSelect, manualLinked, pending, onNode, activeHit, hasNote, onNoteOpen, color, onRowMenu }) {
   const cls = [
     'commit-row',
     commit.status, // common | cherry | unique
@@ -29,7 +29,8 @@ export default function CommitRow({ commit, side, query, dimmed, isHit, selected
     selected ? 'selected' : '',
     commit.matchId ? 'linkable' : '',
     manualLinked ? 'manual' : '',
-    hasNote ? 'has-note' : ''
+    hasNote ? 'has-note' : '',
+    color ? 'force-' + color : ''
   ]
     .filter(Boolean)
     .join(' ');
@@ -39,12 +40,12 @@ export default function CommitRow({ commit, side, query, dimmed, isHit, selected
     if (commit.matchId) onSelect(selected ? null : commit.matchId);
   };
 
-  // Right-click anywhere on the row opens the note editor at the cursor.
+  // Right-click anywhere on the row opens the context menu (note + color).
   const handleContextMenu = (e) => {
-    if (typeof onNoteOpen !== 'function') return;
+    if (typeof onRowMenu !== 'function') return;
     e.preventDefault();
     e.stopPropagation();
-    onNoteOpen(side, commit.sha, e.clientX, e.clientY);
+    onRowMenu(side, commit.sha, e.clientX, e.clientY);
   };
 
   // Click the note icon to view/edit the existing note.
