@@ -8,6 +8,7 @@ import NotePopup from './components/NotePopup.jsx';
 import RowMenu from './components/RowMenu.jsx';
 import CommitDetail from './components/CommitDetail.jsx';
 import GitTerminalPopup from './components/GitTerminalPopup.jsx';
+import ExportPrompt from './components/ExportPrompt.jsx';
 import { computeDiff, matchesQuery, alignLayout } from './lib/diff.js';
 import { ROW_HEIGHT, GUTTER_WIDTH, DEFAULT_LIMIT } from './lib/constants.js';
 
@@ -674,6 +675,127 @@ export default function App() {
 
     return alignLayout(prep(diff.leftRows), prep(diff.rightRows), diff.links);
   }, [diff, query, filterActive, scopes, single]);
+  // Export the aligned diff (notes + forced colors + manual links) to a styled
+  // .xlsx. Matched pairs already share a display row, so commits stay aligned;
+  // alignment gaps become empty cells. Notes ride along as cell tooltips.
+  const [exporting, setExporting] = useState(false);
+  // Pre-export prompt: ask how many rows to write (guards against huge files).
+  // { total } while open, null when closed. Default choice is ALL.
+  const [exportPrompt, setExportPrompt] = useState(null);
+  const canExport = (left.commits.length > 0 || right.commits.length > 0) && !exporting;
+
+  // Build the full ordered row list (aligned, empty cells for gaps) plus the
+  // flat manual-link list. Shared by the prompt (to know the row count) and the
+  // actual export (which may slice to a user-chosen limit).
+  const buildExportRows = useCallback(() => {
+    const total = view.totalRows || 0;
+    const leftByRow = new Array(total).fill(null);
+    const rightByRow = new Array(total).fill(null);
+
+    const cellFor = (commit, side) => ({
+      short: commit.short,
+      sha: commit.sha,
+      subject: commit.subject,
+      author: commit.author,
+      date: commit.authorDate,
+      color: colors[noteIdOf(side, commit.sha)] || null,
+      note: notes[noteIdOf(side, commit.sha)] || null
+    });
+
+    view.L.rows.forEach((r) => {
+      if (r.displayIndex != null) leftByRow[r.displayIndex] = cellFor(r.commit, 'L');
+    });
+    view.R.rows.forEach((r) => {
+      if (r.displayIndex != null) rightByRow[r.displayIndex] = cellFor(r.commit, 'R');
+    });
+
+    // Connector type per display row (aligned pairs land on the same row).
+    const linkByRow = new Array(total).fill(null);
+    view.links.forEach((l) => {
+      if (l.leftIndex != null) linkByRow[l.leftIndex] = l.type;
+      if (l.rightIndex != null) linkByRow[l.rightIndex] = l.type;
+    });
+
+    const rows = [];
+    for (let i = 0; i < total; i++) {
+      const lc = leftByRow[i];
+      const rc = rightByRow[i];
+      if (!lc && !rc) continue; // skip fully-empty rows
+      rows.push({ left: lc, right: rc, link: linkByRow[i] });
+    }
+
+    // Every manual link spelled out (covers non-aligned/slanted pairs too).
+    const manualLinks = diff.links
+      .filter((l) => l.type === 'manual')
+      .map((l) => {
+        const lc = diff.leftRows[l.leftIndex];
+        const rc = diff.rightRows[l.rightIndex];
+        return {
+          leftShort: lc?.short || '',
+          leftSubject: lc?.subject || '',
+          rightShort: rc?.short || '',
+          rightSubject: rc?.subject || ''
+        };
+      });
+
+    return { rows, manualLinks };
+  }, [view, colors, notes, diff]);
+
+  // Step 1: clicking Export opens the row-count prompt (default ALL).
+  const openExportPrompt = useCallback(() => {
+    if (typeof window.api?.exportExcel !== 'function') {
+      setError('此版本不支援匯出（請更新 app）。');
+      return;
+    }
+    const { rows } = buildExportRows();
+    if (rows.length === 0) {
+      setError('沒有可匯出的資料。');
+      return;
+    }
+    setExportPrompt({ total: rows.length });
+  }, [buildExportRows]);
+
+  // Step 2: run the export. `limit` is null = ALL, or a positive row count.
+  const runExport = useCallback(
+    async (limit) => {
+      const { rows: allRows, manualLinks } = buildExportRows();
+      const rows =
+        limit && limit > 0 && limit < allRows.length ? allRows.slice(0, limit) : allRows;
+
+      const defaultName = `${left.name || 'left'}__vs__${right.name || 'right'}`.replace(
+        /[\\/:*?"<>|]+/g,
+        '-'
+      );
+
+      setExportPrompt(null);
+      setExporting(true);
+      setError('');
+      try {
+        const res = await window.api.exportExcel({
+          leftName: left.name || 'LEFT',
+          rightName: right.name || 'RIGHT',
+          defaultName,
+          rows,
+          manualLinks
+        });
+        if (res?.canceled) return;
+        setGitTerminal({
+          side: 'L',
+          op: 'export',
+          repoName: res?.path || '',
+          ok: true,
+          command: 'Excel 匯出',
+          output: `已匯出 ${rows.length} 列（含 ${manualLinks.length} 個手動連結）到：\n${res?.path || ''}`,
+          exitCode: 0
+        });
+      } catch (e) {
+        setError('匯出 Excel 失敗：' + String(e?.message || e));
+      } finally {
+        setExporting(false);
+      }
+    },
+    [buildExportRows, left, right]
+  );
 
   const matchCount = useMemo(() => {
     if (!query) return 0;
@@ -795,9 +917,18 @@ export default function App() {
   }, []);
 
   // Esc clears the current selection / pending manual link. Delete removes the
-  // selected manual link. Ctrl+F opens search, F3 cycles matches.
+  // selected manual link. Ctrl+F opens search, Alt+F opens a repo, F3 cycles.
   useEffect(() => {
     const onKey = (e) => {
+      // Alt+F -> open a repo via the folder picker. Left first; once the left
+      // side is set, Alt+F targets the right side (so when neither or only-left
+      // is chosen it fills the next empty slot, and when both are already
+      // chosen it re-opens the right side).
+      if (e.altKey && !e.ctrlKey && !e.metaKey && (e.key === 'f' || e.key === 'F')) {
+        e.preventDefault();
+        if (!loading.L && !loading.R) pick(left.path ? 'R' : 'L');
+        return;
+      }
       // Ctrl/Cmd+F -> open the floating search panel.
       if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) {
         e.preventDefault();
@@ -836,7 +967,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [selectedMatch, cycleHit, openSearch, searchOpen, closeSearch]);
+  }, [selectedMatch, cycleHit, openSearch, searchOpen, closeSearch, pick, left.path, loading.L, loading.R]);
 
   // Esc inside the search box closes the panel, clearing the query and its
   // highlights and returning focus to the diff body.
@@ -874,6 +1005,8 @@ export default function App() {
         single={single}
         onSetSingle={setSingle}
         onSwapSides={swapSides}
+        onExport={openExportPrompt}
+        canExport={canExport}
       />
 
       {searchOpen && (
@@ -964,6 +1097,14 @@ export default function App() {
         <GitTerminalPopup
           info={gitTerminal}
           onClose={() => setGitTerminal(null)}
+        />
+      )}
+
+      {exportPrompt && (
+        <ExportPrompt
+          total={exportPrompt.total}
+          onExport={runExport}
+          onCancel={() => setExportPrompt(null)}
         />
       )}
 

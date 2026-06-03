@@ -32,6 +32,10 @@
 | **單一 Repo 模式** | 工具列 **View** 切換 `⇄ Compare` / `◧ Left only` / `◨ Right only`；只看單邊時該欄放大佔滿整個視窗，隱藏 gutter 與連線；單欄模式下 commit 背景改為**正常（透明）**，強制顏色仍保留 | — |
 | **每列註記（Note）** | 右鍵任一 commit → 新增/編輯註記（浮動可拖曳編輯框，`Ctrl+Enter` 儲存）；有註記者顯示 📝 圖示，點圖示可檢視/編輯/刪除 | — |
 | **強制背景顏色** | 右鍵 commit → 選 綠 / 亮紅 / 藍 / 黃 強制覆蓋該列背景；可清除單列或一次清除全部 | 綠/亮紅/藍/黃 |
+| **自訂顏色（第五色）** | 右鍵選單最後一個色票為 `<input type="color">` 取色器，選色後即套用該列，並把該色記成全域第五個「快速」色票（存 `localStorage` 的 `customSwatch`），之後右鍵選單會多出一格自訂色可重複使用 | 任意 HEX |
+| **Git 操作浮窗（terminal）** | 工具列每側的 Git bar 執行 pull / fetch 等操作後，跳出可拖曳的浮動視窗顯示該次 `git` 指令與完整 stdout/stderr 與 exit code；成功為綠框、失敗為紅框；只有成功才重新載入該 repo | 綠/紅框 |
+| **匯出 Excel（.xlsx）** | 工具列右上 **⬇ Export Excel**：把左右對齊後的 commit、強制顏色、註記與手動連結一併輸出成 styled `.xlsx`（ExcelJS）。儲存格底色對應強制顏色、註記以 cell 註解（像 tip）呈現、配對 commit 以空白 cell 對齊；另含一張 **Manual Links** 工作表列出所有手動連結 | 與畫面同色 |
+| **匯出筆數確認** | 按下匯出前先跳出對話框詢問要輸出多少筆（預設 **全部 ALL**，或指定前 N 筆），資料量大時提醒，避免一次輸出過多造成卡頓 | — |
 | **Commit 詳情浮窗** | `Ctrl`+左鍵點 commit → 浮動視窗顯示 SHA / 作者 / 日期（清楚標示）＋ Markdown 渲染的 commit 內文；配對的 **Related item** 特別凸顯；右上 **HL** 輸入格可即時高亮符合文字（開啟時自動帶入目前搜尋字）；可**移動、拖拉縮放**、依內容自動調整寬度；可**同時開多個**（重複點同一個不重開） | — |
 | **VS Code Chat 整合** | Commit 詳情浮窗的 **💬 Chat** 按鈕，呼叫本機安裝的 VS Code（`code chat`）並以該 repo 為工作區開啟 Copilot Chat（agent 模式），自動帶入該 commit 的英文說明 prompt（可在 chat 內執行 `git show <sha>` 看完整 diff）；未安裝 VS Code 時於浮窗顯示提示 | — |
 | 虛擬化 | 只渲染視窗內的列，支援大型倉庫（數千 commit）順暢捲動 | — |
@@ -65,9 +69,10 @@
 
 ```
 Electron (主行程)
-├─ electron/main.js      視窗建立、IPC handler、資料夾選擇對話框
-├─ electron/preload.js   contextBridge 安全橋接，暴露 window.api
-├─ electron/git.js       呼叫系統 git，解析 git log → 結構化 commit
+├─ electron/main.js      視窗建立、IPC handler、資料夾選擇對話框、Excel 匯出存檔對話框
+├─ electron/preload.js   contextBridge 安全橋接，暴露 window.api（含 exportExcel）
+├─ electron/git.js       呼叫系統 git，解析 git log → 結構化 commit；gitOp 回傳完整 stdout/stderr 與 exit code
+├─ electron/excel.js     ExcelJS 產生 styled .xlsx（顏色填滿、註記 cell 註解、Manual Links 工作表）
 └─ electron/db.js        better-sqlite3 快取層（缺少時自動退回記憶體快取）
 
 Renderer (React + Vite)
@@ -78,13 +83,16 @@ Renderer (React + Vite)
 ├─ src/lib/constants.js         版面常數（列高、gutter 寬、overscan…）
 ├─ src/assets/logo.svg          工具列 LOGO（青色 M2 字標）
 └─ src/components/
-   ├─ Toolbar.jsx          上方工具列：LOGO＋名稱、開啟 repo、branch 徽章、統計、View 模式切換、搜尋、Clear manual/notes/colors
+   ├─ Toolbar.jsx          上方工具列：LOGO＋名稱、開啟 repo、branch 徽章、統計、View 模式切換、搜尋、Clear manual/notes/colors、Export Excel
    ├─ RepoColumn.jsx       單欄虛擬化渲染（只畫視窗內的列）
    ├─ CommitRow.jsx        單一 commit 列（絕對定位 + 高亮 + 註記圖示 + 右鍵選單 + Ctrl點詳情）
    ├─ ConnectionLines.jsx  中央 gutter 的 SVG 連接線（端點同列時退化為水平線）
    ├─ SearchPanel.jsx      浮動可拖曳搜尋面板（可選搜尋範圍、上/下則、Filter，並含獨立的 📝 Notes 導航區）
    ├─ NotePopup.jsx        浮動註記編輯/檢視器（可拖曳）
-   ├─ RowMenu.jsx          右鍵情境選單（註記 + 強制背景顏色）
+   ├─ RowMenu.jsx          右鍵情境選單（註記 + 強制背景顏色 + 自訂取色第五色）
+   ├─ RepoGitBar.jsx       每側 Git 操作列（pull / fetch…）
+   ├─ GitTerminalPopup.jsx Git 操作結果浮窗（可拖曳，顯示指令/輸出/exit code，成功綠框失敗紅框）
+   ├─ ExportPrompt.jsx     匯出前的筆數確認對話框（預設 ALL，或前 N 筆）
    └─ CommitDetail.jsx     Commit 詳情浮窗（Markdown 渲染、Related item、可移動縮放、可多開、💬 Chat 開 VS Code）
 ```
 
@@ -280,6 +288,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\uninstall-context-menu
 | 按鍵 / 操作 | 作用 |
 | --- | --- |
 | `Ctrl` + `F` | 跳到搜尋框並全選現有字串（開始搜尋） |
+| `Alt` + `F` | 開啟資料夾選擇器載入 repo：左側未載入時先選**左邊**，左側已載入則選**右邊**（兩邊都載入時仍重選右邊） |
 | `Esc`（搜尋面板開啟時，任何焦點） | 關閉搜尋面板，同時清空搜尋字與高亮、焦點回到比對區 |
 | `F3` | 循環跳到**下一個**搜尋命中的 commit，捲動置中並以青色外框高亮 |
 | `Shift` + `F3` | 循環跳到**上一個**搜尋命中的 commit |
@@ -295,6 +304,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\uninstall-context-menu
 | 點 commit 上的 📝 圖示 | 檢視 / 編輯 / 刪除該列註記 |
 | 工具列 View（Compare / Left only / Right only） | 切換雙邊比對或單邊放大模式 |
 | 工具列 ◗ Clear manual links / 📝 Clear notes / 🎨 Clear colors | 一次清除目前 repro pair 的手動連結 / 註記 / 強制顏色及其 `localStorage` 暫存 |
+| 工具列 ⬇ Export Excel | 匯出對齊後的 commit＋顏色＋註記＋手動連結為 `.xlsx`（先詢問筆數，預設 ALL） |
+| 右鍵選單最後的取色器 | 自訂任意顏色套用該列，並記成全域第五個快速色票 |
 
 > `F3` 的循環順序為顯示列由上到下、同列時左欄先於右欄；命中集合改變（修改搜尋字）時游標自動歸零。`Ctrl`+`F` 與 `F3` 在全域監聽，即使焦點在搜尋框內也有效。`Esc` 在全域監聽：只要搜尋面板開啟，不論焦點在哪裡都會關閉它。搜尋面板下方的 **📝 Notes** 區塊與搜尋完全分開，以 ↑ / ↓ 在所有有註記的 commit 間跳躍（顯示列順序、左欄先於右欄）。
 
@@ -313,7 +324,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\uninstall-context-menu
 
 
 - 指定分支 / 標籤 / 日期範圍載入（`getCommits` 已支援 `branch`、`limit` 參數）。
-- 匯出比對結果（CSV / Markdown）。
+- 匯出比對結果（CSV / Markdown）。Excel（.xlsx）匯出**已實作**（顏色、註記、手動連結，見 §1）。
 - 兩邊 commit 點選後顯示完整 **diff 內容**（目前 Ctrl+點選已可顯示 commit 訊息與 metadata 詳情，尚未含逐行 diff；亦可用 💬 Chat 交給 VS Code Copilot 解說）。
 
 ---

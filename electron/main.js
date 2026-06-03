@@ -140,6 +140,24 @@ ipcMain.handle('repo:gitOp', async (_evt, payload) => {
   return git.gitOp(repoPath, op);
 });
 
+// Export the aligned diff (with notes, forced colors, and manual links) to a
+// styled .xlsx via a save dialog. Returns { ok, path } or { canceled: true }.
+ipcMain.handle('excel:export', async (_evt, payload) => {
+  const data = payload || {};
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: 'Export diff to Excel',
+    defaultPath: (data.defaultName || 'git-diff') + '.xlsx',
+    filters: [{ name: 'Excel Workbook', extensions: ['xlsx'] }]
+  });
+  if (result.canceled || !result.filePath) return { canceled: true };
+
+  const excel = require('./excel');
+  const fs = require('node:fs');
+  const buf = await excel.buildWorkbook(data);
+  await fs.promises.writeFile(result.filePath, buf);
+  return { ok: true, path: result.filePath };
+});
+
 // Resolve the VS Code launcher once. On Windows the `code` shim is `code.cmd`;
 // `where` returns its full path. Returns null when VS Code is not installed /
 // not on PATH so callers can surface a friendly message.

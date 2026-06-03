@@ -57,7 +57,9 @@ export default function Toolbar({
   onClearColors,
   single,
   onSetSingle,
-  onSwapSides
+  onSwapSides,
+  onExport,
+  canExport
 }) {
   return (
     <div className="toolbar">
@@ -132,6 +134,17 @@ export default function Toolbar({
           title="清除所有強制背景顏色"
         >
           🎨 Clear colors{colorCount ? ` (${colorCount})` : ''}
+        </button>
+      </div>
+
+      <div className="export-block">
+        <button
+          className="btn export-xlsx"
+          onClick={onExport}
+          disabled={!canExport}
+          title="匯出對齊後的差異到 Excel（含 NOTE 提示、強制顏色、手動連結）"
+        >
+          ⬇ Export Excel
         </button>
       </div>
     </div>
