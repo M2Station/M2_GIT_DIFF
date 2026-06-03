@@ -179,60 +179,80 @@ export function computeDiff(left, right, patchIds = null, manualLinks = null, fu
     }
   }
 
-  // 5) fuzzy content matching: for commits STILL unique (no SHA/title/patch-id
-  //    /manual match), pair them by how much their CHANGED LINES overlap. Uses a
-  //    containment ratio so a subset of edits (personal branch) still matches a
-  //    superset (TOT bundling multiple projects). Opt-in via the toolbar
-  //    `Fuzzy Match` toggle so it never overrides exact matches.
-  if (fuzzy && fuzzy.enabled) {
-    const thr = typeof fuzzy.threshold === 'number' ? fuzzy.threshold : 0.7;
-    const dt = fuzzy.diffTexts || null;
-    const buildCand = (rows) =>
-      rows
-        .filter((r) => r.status === 'unique' && !r.matchId)
-        .map((r) => ({ row: r, set: diffLineSet(dt, r.sha) }))
-        .filter((c) => c.set && c.set.size >= FUZZY_MIN_LINES);
-    const Lcand = buildCand(leftRows);
-    const Rcand = buildCand(rightRows);
+  // 5) fuzzy content matching is applied as a SEPARATE pass (applyFuzzy) so the
+  //    expensive exact-match result above can be memoized independently and not
+  //    recomputed every time a single diff-text arrives. For backward
+  //    compatibility computeDiff still honors a `fuzzy` argument by delegating.
+  const result = {
+    leftRows,
+    rightRows,
+    links,
+    leftStats: computeStats(leftRows),
+    rightStats: computeStats(rightRows)
+  };
+  if (fuzzy && fuzzy.enabled) return applyFuzzy(result, fuzzy);
+  return result;
+}
 
-    const pairs = [];
-    for (const l of Lcand) {
-      for (const r of Rcand) {
-        const score = containment(l.set, r.set);
-        if (score >= thr) pairs.push({ li: l.row.index, ri: r.row.index, score });
-      }
-    }
-    pairs.sort((a, b) => b.score - a.score);
+// Tally per-status counts for a side. Shared by computeDiff and applyFuzzy.
+function computeStats(rows) {
+  const s = { common: 0, cherry: 0, unique: 0, fuzzy: 0 };
+  rows.forEach((r) => (s[r.status] += 1));
+  return s;
+}
 
-    const usedL = new Set();
-    const usedR = new Set();
-    let fuzzySeq = 0;
-    for (const p of pairs) {
-      if (usedL.has(p.li) || usedR.has(p.ri)) continue;
-      usedL.add(p.li);
-      usedR.add(p.ri);
-      const id = 'fuzzy:' + fuzzySeq++;
-      leftRows[p.li].status = 'fuzzy';
-      leftRows[p.li].matchId = id;
-      rightRows[p.ri].status = 'fuzzy';
-      rightRows[p.ri].matchId = id;
-      links.push({ type: 'fuzzy', leftIndex: p.li, rightIndex: p.ri, id, score: p.score });
+// Fuzzy (approximate content) matching as a standalone pass over an existing
+// computeDiff result. Clones the rows/links so the input (typically a memoized
+// exact-match result) is never mutated, then pairs commits STILL marked unique
+// by how much their CHANGED LINES overlap (containment ratio). Returns a new
+// result object; pass-through (no clone) when fuzzy is disabled.
+export function applyFuzzy(base, fuzzy) {
+  if (!fuzzy || !fuzzy.enabled) return base;
+
+  const leftRows = base.leftRows.map((r) => ({ ...r }));
+  const rightRows = base.rightRows.map((r) => ({ ...r }));
+  const links = base.links.slice();
+
+  const thr = typeof fuzzy.threshold === 'number' ? fuzzy.threshold : 0.7;
+  const dt = fuzzy.diffTexts || null;
+  const buildCand = (rows) =>
+    rows
+      .filter((r) => r.status === 'unique' && !r.matchId)
+      .map((r) => ({ row: r, set: diffLineSet(dt, r.sha) }))
+      .filter((c) => c.set && c.set.size >= FUZZY_MIN_LINES);
+  const Lcand = buildCand(leftRows);
+  const Rcand = buildCand(rightRows);
+
+  const pairs = [];
+  for (const l of Lcand) {
+    for (const r of Rcand) {
+      const score = containment(l.set, r.set);
+      if (score >= thr) pairs.push({ li: l.row.index, ri: r.row.index, score });
     }
   }
+  pairs.sort((a, b) => b.score - a.score);
 
-  // Remaining rows keep status 'unique' (red).
-  const stats = (rows) => {
-    const s = { common: 0, cherry: 0, unique: 0, fuzzy: 0 };
-    rows.forEach((r) => (s[r.status] += 1));
-    return s;
-  };
+  const usedL = new Set();
+  const usedR = new Set();
+  let fuzzySeq = 0;
+  for (const p of pairs) {
+    if (usedL.has(p.li) || usedR.has(p.ri)) continue;
+    usedL.add(p.li);
+    usedR.add(p.ri);
+    const id = 'fuzzy:' + fuzzySeq++;
+    leftRows[p.li].status = 'fuzzy';
+    leftRows[p.li].matchId = id;
+    rightRows[p.ri].status = 'fuzzy';
+    rightRows[p.ri].matchId = id;
+    links.push({ type: 'fuzzy', leftIndex: p.li, rightIndex: p.ri, id, score: p.score });
+  }
 
   return {
     leftRows,
     rightRows,
     links,
-    leftStats: stats(leftRows),
-    rightStats: stats(rightRows)
+    leftStats: computeStats(leftRows),
+    rightStats: computeStats(rightRows)
   };
 }
 

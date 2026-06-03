@@ -9,7 +9,7 @@ import RowMenu from './components/RowMenu.jsx';
 import CommitDetail from './components/CommitDetail.jsx';
 import GitTerminalPopup from './components/GitTerminalPopup.jsx';
 import ExportPrompt from './components/ExportPrompt.jsx';
-import { computeDiff, matchesQuery, alignLayout } from './lib/diff.js';
+import { computeDiff, applyFuzzy, matchesQuery, alignLayout } from './lib/diff.js';
 import { ROW_HEIGHT, GUTTER_WIDTH, DEFAULT_LIMIT } from './lib/constants.js';
 
 const emptyRepo = { path: '', name: '', branch: '', head: '', commits: [] };
@@ -236,14 +236,23 @@ export default function App() {
     }
   }, [left, right]);
 
+  // Exact-match pass (common / cherry / patch-id / manual). Memoized on its own
+  // so it is NOT recomputed every time a single fuzzy diff-text arrives.
+  const baseDiff = useMemo(
+    () => computeDiff(left, right, patchIds, manualLinks),
+    [left, right, patchIds, manualLinks]
+  );
+
+  // Fuzzy pass layered on top of the cached exact result. Only this (cheaper)
+  // pass reruns as `diffTexts` fills in or the threshold changes.
   const diff = useMemo(
     () =>
-      computeDiff(left, right, patchIds, manualLinks, {
+      applyFuzzy(baseDiff, {
         enabled: fuzzyEnabled,
         threshold: fuzzyThreshold / 100,
         diffTexts
       }),
-    [left, right, patchIds, manualLinks, fuzzyEnabled, fuzzyThreshold, diffTexts]
+    [baseDiff, fuzzyEnabled, fuzzyThreshold, diffTexts]
   );
 
   // Swap the LEFT and RIGHT sides. Repos plus every side-keyed piece of state
