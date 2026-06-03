@@ -308,11 +308,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\uninstall-context-menu
 | `Esc`（搜尋面板開啟時，任何焦點） | 關閉搜尋面板，同時清空搜尋字與高亮、焦點回到比對區 |
 | `F3` | 循環跳到**下一個**搜尋命中的 commit，捲動置中並以青色外框高亮 |
 | `Shift` + `F3` | 循環跳到**上一個**搜尋命中的 commit |
+| `↑` / `↓` | 在**目前所在欄位**內把焦點游標移到上一筆 / 下一筆 commit（捲動置中） |
+| `←` / `→` | 把焦點游標切換到左欄 / 右欄，落在 displayIndex 最接近的 commit |
+| `Enter`（焦點在比對區時） | 開啟目前焦點 commit 的詳情浮窗 |
 | 搜尋面板 📝 Notes  ↑ / ↓ | 在每個有註記的 commit 間跳躍（與搜尋功能分開），捲動置中並高亮 |
 | Commit 詳情浮窗右上 HL 輸入格 | 在該浮窗內即時高亮符合的文字；開啟時自動帶入目前搜尋字 |
 | `Esc`（焦點在比對區時） | 取消目前選取的連線、取消進行中的手動連結、關閉所有詳情浮窗
 | `Delete` / `Backspace` | 刪除目前選取的**手動連結** |
-| 點擊有連線的列 / 點擊連接線 | 高亮該配對連線，其餘變淡；焦點移到比對區 |
+| 點擊有連線的列 / 點擊連接線 | 高亮該配對連線，其餘變淡；焦點移到比對區，並把**鍵盤游標同步**到該列（之後 ↑↓←→ 由此列起算） |
 | 點擊空白處 | 取消選取與進行中的手動連結 |
 | 點擊節點 ◗（未配對列） | 開始 / 完成 / 斷開手動連結（左右各點一個） |
 | `Ctrl` + 左鍵點 commit | 開啟該 commit 的詳情浮窗（可多開；重複點同一個不重開） |
@@ -362,6 +365,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\uninstall-context-menu
 | 連接線畫法（直角轉折 / 可點選） | `src/components/ConnectionLines.jsx` |
 | 選取 focus / Esc / 點空白取消 | `src/App.jsx`（`handleSelect` / `onBodyClick` / keydown） |
 | 快捷鍵（Ctrl+F / Esc / F3） | `src/App.jsx`（`cycleHit` / keydown / `onSearchKeyDown` / `closeSearch`） |
+| 鍵盤游標導覽（↑↓←→ / Enter） | `src/App.jsx`（`navRows` / `moveCursor` / `moveCursorSide` / `openCursorDetail` / `activeHit`） |
 | 快捷鍵說明彈窗（Help） | `src/components/HelpPopup.jsx`、`src/components/Toolbar.jsx`（`onOpenHelp`）、`src/App.jsx`（`helpOpen`） |
 | 浮動搜尋面板 / 📝 Notes 導航 | `src/components/SearchPanel.jsx`、`src/App.jsx`（`noteHits` / `cycleNote`） |
 | 註記（Note）浮窗 / 邏輯 | `src/components/NotePopup.jsx`、`src/App.jsx`（`openNote`/`saveNote`/`deleteNote`/`clearNotes`） |
