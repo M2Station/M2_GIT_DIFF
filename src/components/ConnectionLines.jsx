@@ -57,6 +57,31 @@ export default function ConnectionLines({ links, height, width, selectedMatch, o
             {/* invisible wide hit area so the thin line is easy to click */}
             <path className="link-hit" d={d} fill="none" />
             <path className={cls} d={d} fill="none" />
+            {link.type === 'fuzzy' && typeof link.score === 'number' && (
+              (() => {
+                const cx = width / 2;
+                const cy = (y1 + y2) / 2;
+                const label = `${Math.round(link.score * 100)}%`;
+                const bw = 38;
+                const bh = 20;
+                return (
+                  <g className={`link-score${isSel ? ' selected' : ''}${selectedMatch != null && !isSel ? ' faded' : ''}`}>
+                    <rect
+                      className="link-score-bg"
+                      x={cx - bw / 2}
+                      y={cy - bh / 2}
+                      width={bw}
+                      height={bh}
+                      rx={7}
+                      ry={7}
+                    />
+                    <text className="link-score-text" x={cx} y={cy} textAnchor="middle" dominantBaseline="central">
+                      {label}
+                    </text>
+                  </g>
+                );
+              })()
+            )}
           </g>
         );
       })}
