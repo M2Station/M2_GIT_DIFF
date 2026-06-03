@@ -208,6 +208,8 @@ export default function CommitDetail({ side, commit, related, repoPath, x, y, se
       return;
     }
     const prompt = [
+      `# Commit ${commit.short} - ${commit.subject}`,
+      '',
       'Explain the following Git commit: summarize what it changes, its purpose, and any potential risks.',
       `You can run \`git show ${commit.sha}\` in this repo to inspect the full diff.`,
       '',
