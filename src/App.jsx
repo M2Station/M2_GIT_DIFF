@@ -1005,6 +1005,14 @@ export default function App() {
 
   const bodyHeight = view.totalRows * ROW_HEIGHT;
 
+  // Empty / loading placeholder state for the diff stage. Only shown when there
+  // are no rows to display, so a reload of an already-populated view doesn't
+  // flash an overlay over existing content.
+  const noRepos = !left.path && !right.path;
+  const loadingEmpty = (loading.L || loading.R) && view.totalRows === 0;
+  const stageEmpty =
+    !noRepos && !loading.L && !loading.R && view.totalRows === 0;
+
   // Select a match and move keyboard focus to the diff body so Esc / blank
   // clicks can clear it. Passing null clears the selection.
   const handleSelect = useCallback((id) => {
@@ -1250,6 +1258,37 @@ export default function App() {
         onClick={onBodyClick}
         tabIndex={-1}
       >
+        {(noRepos || loadingEmpty || stageEmpty) && (
+          <div className="stage-empty">
+            {loadingEmpty ? (
+              <>
+                <div className="stage-spinner" />
+                <div className="stage-empty-title">讀取 commit 中…</div>
+                <div className="stage-empty-sub">正在載入 repository 歷史</div>
+              </>
+            ) : noRepos ? (
+              <>
+                <div className="stage-empty-icon">⌥</div>
+                <div className="stage-empty-title">尚未選擇 repository</div>
+                <div className="stage-empty-sub">
+                  從上方工具列選擇左右兩個 Git 資料夾，開始比對 commit 歷史
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="stage-empty-icon">∅</div>
+                <div className="stage-empty-title">
+                  {filterActive ? '沒有符合搜尋的 commit' : '沒有 commit 可顯示'}
+                </div>
+                <div className="stage-empty-sub">
+                  {filterActive
+                    ? '調整關鍵字，或關閉「只看符合」改顯示全部'
+                    : '這個 repository 沒有可顯示的歷史紀錄'}
+                </div>
+              </>
+            )}
+          </div>
+        )}
         <div className="diff-scroll" style={{ minHeight: bodyHeight }}>
           {single !== 'R' && (
           <RepoColumn
