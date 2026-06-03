@@ -12,18 +12,21 @@
     "build": "vite build",
     "start": "cross-env NODE_ENV=development electron .",
     "rebuild": "electron-rebuild -f -w better-sqlite3",
-    "dist": "vite build && electron-builder"
+    "dist": "vite build && electron-builder",
+    "demo:gif": "node scripts/make-demo-gif.mjs"
   },
   "optionalDependencies": {
     "better-sqlite3": "^11.8.1"
   },
   "devDependencies": {
     "@electron/rebuild": "^3.7.1",
+    "@napi-rs/canvas": "^1.0.0",
     "@vitejs/plugin-react": "^4.3.4",
     "concurrently": "^9.1.2",
     "cross-env": "^7.0.3",
     "electron": "^33.3.1",
     "electron-builder": "^25.1.8",
+    "gifenc": "^1.0.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "vite": "^6.0.7",

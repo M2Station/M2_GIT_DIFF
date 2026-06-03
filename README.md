@@ -6,6 +6,13 @@
 
 > 原始需求摘要：左右並排顯示兩個 local repo 的 git 紀錄與 branch；兩邊相同的 commit 用灰色背景，獨有的用紅色背景，標題相同疑似 cherry-pick 的用黃色背景並用線左右對齊連結；可搜尋標題 / 內文 / SHA / 日期。
 
+## 操作預覽
+
+![操作預覽動畫](public/demo.gif)
+
+> 上方為合成示意動畫（非實機錄影），依序展示：雙欄比對與連接線、點選連線、搜尋高亮、右鍵強制背景顏色、`Ctrl`+點選詳情浮窗與 HL 高亮、註記導航。
+> 動畫由 `scripts/make-demo-gif.mjs` 以與 `src/styles.css` 相同的配色繪製，執行 `npm run demo:gif` 可重新產生 `public/demo.gif`。
+
 ---
 
 ## 1. 功能總覽
