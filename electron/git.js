@@ -166,8 +166,28 @@ async function gitOp(cwd, op) {
   const args = GIT_OPS[op];
   if (!args) throw new Error(`Unsupported git operation: ${op}`);
   if (!isGitRepo(cwd)) throw new Error(`Not a git repository: ${cwd}`);
-  const out = await run(args, cwd);
-  return { ok: true, output: out.trim() };
+  // Capture both stdout and stderr (git writes progress/summary to stderr even
+  // on success) so the UI can show the full terminal transcript either way.
+  const command = 'git ' + args.join(' ');
+  return new Promise((resolve) => {
+    execFile(
+      'git',
+      args,
+      { cwd, maxBuffer: 1024 * 1024 * 256, windowsHide: true },
+      (err, stdout, stderr) => {
+        const out = [stdout?.toString() || '', stderr?.toString() || '']
+          .filter(Boolean)
+          .join('\n')
+          .trim();
+        resolve({
+          ok: !err,
+          command,
+          output: out || (err ? err.message : ''),
+          exitCode: err && typeof err.code === 'number' ? err.code : err ? 1 : 0
+        });
+      }
+    );
+  });
 }
 
 module.exports = {

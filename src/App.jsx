@@ -7,6 +7,7 @@ import SearchPanel from './components/SearchPanel.jsx';
 import NotePopup from './components/NotePopup.jsx';
 import RowMenu from './components/RowMenu.jsx';
 import CommitDetail from './components/CommitDetail.jsx';
+import GitTerminalPopup from './components/GitTerminalPopup.jsx';
 import { computeDiff, matchesQuery, alignLayout } from './lib/diff.js';
 import { ROW_HEIGHT, GUTTER_WIDTH, DEFAULT_LIMIT } from './lib/constants.js';
 
@@ -20,6 +21,10 @@ export default function App() {
   const [loading, setLoading] = useState({ L: false, R: false });
   const [error, setError] = useState('');
   const [selectedMatch, setSelectedMatch] = useState(null);
+
+  // Floating window showing the git terminal transcript after a Fetch/Pull.
+  // { side, op, repoName, ok, command, output, exitCode } | null
+  const [gitTerminal, setGitTerminal] = useState(null);
 
   // Content-based cherry-pick matching: sha -> git patch-id. Filled lazily for
   // commits that stay `unique` after SHA + title matching.
@@ -186,12 +191,35 @@ export default function App() {
     setError('');
     setLoading((s) => ({ ...s, [side]: true }));
     try {
-      await window.api.gitOp({ repoPath: repo.path, op });
-      const fresh = await window.api.loadRepo({ repoPath: repo.path, limit: DEFAULT_LIMIT });
-      if (side === 'L') setLeft(fresh);
-      else setRight(fresh);
+      const res = await window.api.gitOp({ repoPath: repo.path, op });
+      // Surface the full git terminal transcript in a floating window, whether
+      // the operation succeeded or failed.
+      setGitTerminal({
+        side,
+        op,
+        repoName: repo.name || repo.path,
+        ok: res?.ok !== false,
+        command: res?.command || `git ${op}`,
+        output: res?.output || '',
+        exitCode: typeof res?.exitCode === 'number' ? res.exitCode : res?.ok === false ? 1 : 0
+      });
+      if (res?.ok !== false) {
+        const fresh = await window.api.loadRepo({ repoPath: repo.path, limit: DEFAULT_LIMIT });
+        if (side === 'L') setLeft(fresh);
+        else setRight(fresh);
+      }
     } catch (e) {
-      setError(`git ${op} 失敗：${String(e?.message || e)}`);
+      const msg = String(e?.message || e);
+      setGitTerminal({
+        side,
+        op,
+        repoName: repo.name || repo.path,
+        ok: false,
+        command: `git ${op}`,
+        output: msg,
+        exitCode: 1
+      });
+      setError(`git ${op} 失敗：${msg}`);
     } finally {
       setLoading((s) => ({ ...s, [side]: false }));
     }
@@ -931,6 +959,13 @@ export default function App() {
       })}
 
       {error && <div className="error-bar">⚠ {error}</div>}
+
+      {gitTerminal && (
+        <GitTerminalPopup
+          info={gitTerminal}
+          onClose={() => setGitTerminal(null)}
+        />
+      )}
 
       <div className="git-bars">
         {single !== 'R' && (
