@@ -373,11 +373,13 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, [selectedMatch, cycleHit]);
 
-  // Esc inside the search box leaves the field (back to the diff body).
+  // Esc inside the search box clears the query (and its highlights) and leaves
+  // the field, returning focus to the diff body.
   const onSearchKeyDown = useCallback((e) => {
     if (e.key === 'Escape') {
       e.preventDefault();
       e.stopPropagation();
+      setQuery('');
       searchRef.current?.blur();
       scrollRef.current?.focus();
     }
