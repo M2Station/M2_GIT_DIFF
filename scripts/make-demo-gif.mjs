@@ -40,6 +40,7 @@ const C = {
   cherryBd: '#f0c83c',
   uniqueBd: '#eb4650',
   manualBd: '#a371ff',
+  fuzzyBd: '#ff5db1',
   forceGreen: '#2ea043',
   forceRed: '#ff2d3c',
   forceBlue: '#3b82f6',
@@ -79,7 +80,15 @@ const LINKS = [
 ];
 
 const bdOf = (s) =>
-  s === 'cherry' ? C.cherryBd : s === 'unique' ? C.uniqueBd : s === 'manual' ? C.manualBd : C.commonBd;
+  s === 'cherry'
+    ? C.cherryBd
+    : s === 'unique'
+      ? C.uniqueBd
+      : s === 'manual'
+        ? C.manualBd
+        : s === 'fuzzy'
+          ? C.fuzzyBd
+          : C.commonBd;
 
 // ---- layout ----
 const TOOLBAR_H = 56;
@@ -109,7 +118,7 @@ function drawBackground(ctx) {
   ctx.fillRect(0, 0, W, H);
 }
 
-function drawToolbar(ctx) {
+function drawToolbar(ctx, opts = {}) {
   ctx.fillStyle = C.panel;
   ctx.fillRect(0, 0, W, TOOLBAR_H);
   ctx.strokeStyle = C.line;
@@ -136,8 +145,48 @@ function drawToolbar(ctx) {
   badge(ctx, 200, 16, 'LEFT  ·  main', C.accent);
   badge(ctx, 330, 16, 'RIGHT ·  feature', C.forceYellow);
 
+  // fuzzy match toggle (grayscale off / bright pink on) + threshold
+  drawFuzzyToggle(ctx, 470, 15, !!opts.fuzzyOn);
+
   // view segmented control (right)
   segmented(ctx, W - 260, 14, ['Compare', 'L only', 'R only'], 0);
+}
+
+function drawFuzzyToggle(ctx, x, y, on) {
+  ctx.font = `12px ${MONO}`;
+  const label = 'Fuzzy';
+  const lw = ctx.measureText(label).width + 30;
+  // toggle pill
+  ctx.fillStyle = on ? C.fuzzyBd : C.bgSoft;
+  ctx.strokeStyle = on ? C.fuzzyBd : C.line;
+  ctx.lineWidth = 1;
+  roundRect(ctx, x, y, lw, 26, 6);
+  ctx.fill();
+  ctx.stroke();
+  // small "approx" glyph (two wavy strokes) drawn instead of unsupported ≈
+  const gx = x + 9;
+  const gy = y + 13;
+  ctx.strokeStyle = on ? '#1a0a13' : C.muted;
+  ctx.lineWidth = 1.4;
+  for (let r = 0; r < 2; r++) {
+    const oy = gy - 2 + r * 5;
+    ctx.beginPath();
+    ctx.moveTo(gx, oy);
+    ctx.quadraticCurveTo(gx + 2.5, oy - 3, gx + 5, oy);
+    ctx.quadraticCurveTo(gx + 7.5, oy + 3, gx + 10, oy);
+    ctx.stroke();
+  }
+  ctx.fillStyle = on ? '#1a0a13' : C.muted;
+  ctx.fillText(label, x + 22, y + 17);
+  // threshold box
+  const tx = x + lw + 6;
+  ctx.fillStyle = C.bgSoft;
+  ctx.strokeStyle = on ? C.fuzzyBd : C.line;
+  roundRect(ctx, tx, y, 50, 26, 6);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = on ? C.text : C.muted;
+  ctx.fillText('80%', tx + 10, y + 17);
 }
 
 function badge(ctx, x, y, text, color) {
@@ -280,7 +329,7 @@ function drawHighlightedText(ctx, text, x, y, term) {
   }
 }
 
-function drawConnections(ctx, reveal = 1, highlightIdx = -1) {
+function drawConnections(ctx, reveal = 1, highlightIdx = -1, dim = 1) {
   LINKS.forEach((lk, k) => {
     if (k / LINKS.length > reveal) return;
     const y1 = rowY(lk.l) + (ROW_H - 8) / 2;
@@ -289,7 +338,7 @@ function drawConnections(ctx, reveal = 1, highlightIdx = -1) {
     const x2 = RIGHT_X;
     ctx.strokeStyle = bdOf(lk.status);
     ctx.lineWidth = highlightIdx === k ? 3 : 1.6;
-    ctx.globalAlpha = highlightIdx === -1 || highlightIdx === k ? 1 : 0.4;
+    ctx.globalAlpha = (highlightIdx === -1 || highlightIdx === k ? 1 : 0.4) * dim;
     const midX = (x1 + x2) / 2;
     ctx.beginPath();
     ctx.moveTo(x1, y1);
@@ -305,6 +354,59 @@ function drawConnections(ctx, reveal = 1, highlightIdx = -1) {
     ctx.fill();
     ctx.globalAlpha = 1;
   });
+}
+
+function drawFuzzyConnection(ctx, li, ri) {
+  const y1 = rowY(li) + (ROW_H - 8) / 2;
+  const y2 = rowY(ri) + (ROW_H - 8) / 2;
+  const x1 = LEFT_X + COL_W;
+  const x2 = RIGHT_X;
+  const midX = (x1 + x2) / 2;
+  const trace = () => {
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(midX, y1);
+    ctx.lineTo(midX, y2);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+  };
+  // soft glow underlay so the thin dashed line survives GIF downscale + quantize
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = 'rgba(255,93,177,0.30)';
+  ctx.lineWidth = 9;
+  ctx.setLineDash([]);
+  trace();
+  // bold solid pink core (no dash gaps -> always visible) ...
+  ctx.strokeStyle = C.fuzzyBd;
+  ctx.lineWidth = 4.5;
+  trace();
+  // ... plus a contrasting dashed overlay to keep the "fuzzy" look
+  ctx.strokeStyle = '#ffd1ea';
+  ctx.lineWidth = 1.6;
+  ctx.setLineDash([7, 6]);
+  trace();
+  ctx.setLineDash([]);
+  ctx.lineCap = 'butt';
+  ctx.lineJoin = 'miter';
+  ctx.fillStyle = C.fuzzyBd;
+  ctx.beginPath();
+  ctx.arc(x1, y1, 4, 0, Math.PI * 2);
+  ctx.arc(x2, y2, 4, 0, Math.PI * 2);
+  ctx.fill();
+  // score badge near the mid bend
+  ctx.font = `11px ${MONO}`;
+  const t = '96%';
+  const bw = ctx.measureText(t).width + 12;
+  const by = (y1 + y2) / 2 - 9;
+  ctx.fillStyle = 'rgba(255,93,177,0.18)';
+  ctx.strokeStyle = C.fuzzyBd;
+  ctx.lineWidth = 1;
+  roundRect(ctx, midX - bw / 2, by, bw, 18, 5);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = C.fuzzyBd;
+  ctx.fillText(t, midX - bw / 2 + 6, by + 13);
 }
 
 function drawCaption(ctx, title, sub) {
@@ -441,6 +543,34 @@ function drawContextMenu(ctx, x, y) {
   ctx.fillText('✕ 清除顏色', x + 12, y + 132);
 }
 
+function drawWebLinkPill(ctx, x, y) {
+  ctx.font = `11px ${MONO}`;
+  const label = 'Web';
+  const tw = ctx.measureText(label).width;
+  const w = tw + 30;
+  ctx.fillStyle = 'rgba(54,214,255,0.12)';
+  ctx.strokeStyle = C.accent;
+  ctx.lineWidth = 1;
+  roundRect(ctx, x, y, w, 18, 5);
+  ctx.fill();
+  ctx.stroke();
+  // tiny globe glyph (circle + meridians) so we avoid emoji tofu
+  const gx = x + 10;
+  const gy = y + 9;
+  ctx.strokeStyle = C.accent;
+  ctx.beginPath();
+  ctx.arc(gx, gy, 5, 0, Math.PI * 2);
+  ctx.moveTo(gx - 5, gy);
+  ctx.lineTo(gx + 5, gy);
+  ctx.moveTo(gx, gy - 5);
+  ctx.lineTo(gx, gy + 5);
+  ctx.stroke();
+  ctx.ellipse(gx, gy, 2.4, 5, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.fillStyle = C.accent;
+  ctx.fillText(label, x + 18, y + 13);
+}
+
 function drawDetailPopup(ctx, hl) {
   const x = 250;
   const y = 120;
@@ -489,13 +619,15 @@ function drawDetailPopup(ctx, hl) {
     ['作者', 'Ada Lovelace <ada@dev>', C.text],
     ['日期', '2026-05-30 14:21', C.text]
   ];
-  meta.forEach(([k, v, col]) => {
+  meta.forEach(([k, v, col], idx) => {
     ctx.fillStyle = C.muted;
     ctx.font = `11px ${MONO}`;
     ctx.fillText(k, x + 22, cy);
     ctx.fillStyle = col;
     ctx.font = `12px ${MONO}`;
     ctx.fillText(v, x + 70, cy);
+    // clickable Web link next to the SHA row
+    if (idx === 0) drawWebLinkPill(ctx, x + w - 86, cy - 13);
     cy += 20;
   });
 
@@ -544,12 +676,14 @@ function drawDetailPopup(ctx, hl) {
 // ---- scene composition ----
 function baseScene(ctx, opts = {}) {
   drawBackground(ctx);
-  drawToolbar(ctx);
+  drawToolbar(ctx, { fuzzyOn: opts.fuzzyOn });
   drawColumnHeader(ctx, LEFT_X, 'LEFT  ·  main');
   drawColumnHeader(ctx, RIGHT_X, 'RIGHT  ·  feature');
-  LEFT.forEach((c, i) => drawRow(ctx, LEFT_X, i, c, 'L', opts.left?.[i] || {}));
-  RIGHT.forEach((c, i) => drawRow(ctx, RIGHT_X, i, c, 'R', opts.right?.[i] || {}));
-  if (opts.reveal !== undefined) drawConnections(ctx, opts.reveal, opts.linkHi ?? -1);
+  const leftData = opts.leftData || LEFT;
+  const rightData = opts.rightData || RIGHT;
+  leftData.forEach((c, i) => drawRow(ctx, LEFT_X, i, c, 'L', opts.left?.[i] || {}));
+  rightData.forEach((c, i) => drawRow(ctx, RIGHT_X, i, c, 'R', opts.right?.[i] || {}));
+  if (opts.reveal !== undefined) drawConnections(ctx, opts.reveal, opts.linkHi ?? -1, opts.linkDim ?? 1);
 }
 
 function buildFrames() {
@@ -574,6 +708,27 @@ function buildFrames() {
     drawCursor(ctx, (LEFT_X + COL_W + RIGHT_X) / 2, rowY(1) + 8);
     drawCaption(ctx, '點選連線', '高亮該配對，其餘連線變淡；可直接點線或點列');
   }, 1100);
+
+  // Scene 2.5: turn on Fuzzy Match -> two unique commits link by content similarity
+  const fuzzL = LEFT.map((c, i) => (i === 2 ? { ...c, status: 'fuzzy' } : c));
+  const fuzzR = RIGHT.map((c, i) => (i === 3 ? { ...c, status: 'fuzzy' } : c));
+  // cursor moving onto the toggle, still off
+  push((ctx) => {
+    baseScene(ctx, { reveal: 1, fuzzyOn: false });
+    drawCursor(ctx, 500, 40);
+    drawCaption(ctx, 'Fuzzy Match（內容相似度）', '工具列按鈕預設關閉（灰階）；門檻預設 80%');
+  }, 900);
+  // toggle on: pink dashed link appears between the two still-unique rows
+  push((ctx) => {
+    baseScene(ctx, { reveal: 1, fuzzyOn: true, leftData: fuzzL, rightData: fuzzR, linkDim: 0.35 });
+    drawFuzzyConnection(ctx, 2, 3);
+    drawCursor(ctx, 500, 40);
+    drawCaption(
+      ctx,
+      'Fuzzy Match（內容相似度）',
+      'SHA/標題/patch-id 都比不上時，比變更行包含率 ≥ 80% → 粉紅粗虛線配對'
+    );
+  }, 2200);
 
   // Scene 3: search highlight
   const q = 'fix';
@@ -615,7 +770,7 @@ function buildFrames() {
     const l = LEFT.map((c, i) => (i === 3 ? { force: 'blue' } : {}));
     baseScene(ctx, { reveal: 1, left: l });
     drawDetailPopup(ctx, '');
-    drawCaption(ctx, 'Ctrl+點選 → 詳情浮窗', 'Markdown 內文 · Related item · 可拖拉縮放、可多開');
+    drawCaption(ctx, 'Ctrl+點選 → 詳情浮窗', 'Markdown 內文 · Related item · 🌐 Web 連結開遠端頁面 · 可拖拉縮放、可多開');
   }, 1100);
   push((ctx) => {
     const l = LEFT.map((c, i) => (i === 3 ? { force: 'blue' } : {}));
