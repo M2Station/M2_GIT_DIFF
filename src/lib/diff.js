@@ -20,7 +20,7 @@ function patchIdOf(patchIds, sha) {
   return typeof patchIds.get === 'function' ? patchIds.get(sha) : patchIds[sha];
 }
 
-export function computeDiff(left, right, patchIds = null) {
+export function computeDiff(left, right, patchIds = null, manualLinks = null) {
   const L = left?.commits ?? [];
   const R = right?.commits ?? [];
 
@@ -124,6 +124,27 @@ export function computeDiff(left, right, patchIds = null) {
         rightRows[ri].matchId = id;
         links.push({ type: 'patch', leftIndex: li, rightIndex: ri, id });
       }
+    }
+  }
+
+  // 4) manual links: user-drawn connections between two still-unique commits.
+  //    Identified by SHA so they survive reloads / new commits. Kept as their
+  //    own `manual` link type (distinct color) and never auto-removed.
+  if (manualLinks && manualLinks.length) {
+    const LbySha = new Map(leftRows.map((r) => [r.sha, r]));
+    const RbySha = new Map(rightRows.map((r) => [r.sha, r]));
+    for (const ml of manualLinks) {
+      const lr = LbySha.get(ml.leftSha);
+      const rr = RbySha.get(ml.rightSha);
+      // Only honor the link if both ends still exist and are unmatched, so an
+      // auto-match (SHA/title/patch-id) never collides with a manual one.
+      if (!lr || !rr || lr.status !== 'unique' || rr.status !== 'unique') continue;
+      const id = 'manual:' + ml.leftSha + '|' + ml.rightSha;
+      lr.matchId = id;
+      lr.manual = true;
+      rr.matchId = id;
+      rr.manual = true;
+      links.push({ type: 'manual', leftIndex: lr.index, rightIndex: rr.index, id });
     }
   }
 

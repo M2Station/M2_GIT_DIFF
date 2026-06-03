@@ -52,7 +52,11 @@ export default function Toolbar({
   rightStats,
   matchCount,
   filterOnly,
-  onToggleFilter
+  onToggleFilter,
+  searchRef,
+  onSearchKeyDown,
+  manualCount,
+  onClearManualLinks
 }) {
   return (
     <div className="toolbar">
@@ -66,11 +70,13 @@ export default function Toolbar({
 
       <div className="search-block">
         <input
+          ref={searchRef}
           className="search"
           type="text"
-          placeholder="Search title, body, SHA, author, date…"
+          placeholder="Search title, body, SHA, author, date…  (Ctrl+F)"
           value={query}
           onChange={(e) => onQuery(e.target.value)}
+          onKeyDown={onSearchKeyDown}
         />
         {query && <span className="match-count">{matchCount} hits</span>}
         <button
@@ -84,6 +90,14 @@ export default function Toolbar({
         {query && (
           <button className="btn ghost" onClick={() => onQuery('')} title="Clear">✕</button>
         )}
+        <button
+          className="btn clear-manual"
+          onClick={onClearManualLinks}
+          disabled={!manualCount}
+          title="刪除所有手動連結並清除暫存"
+        >
+          ◗ Clear manual links{manualCount ? ` (${manualCount})` : ''}
+        </button>
       </div>
     </div>
   );

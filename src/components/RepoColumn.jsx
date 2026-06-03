@@ -15,7 +15,11 @@ export default function RepoColumn({
   scrollTop,
   viewportHeight,
   selectedMatch,
-  onSelect
+  onSelect,
+  manualShas,
+  pendingNode,
+  onNode,
+  activeHit
 }) {
   const bodyHeight = totalRows * ROW_HEIGHT;
 
@@ -37,9 +41,10 @@ export default function RepoColumn({
           const dimmed = !filterActive && query ? !r.isHit : false;
           const selected =
             selectedMatch != null && c.matchId != null && c.matchId === selectedMatch;
+          const rowKey = c.sha + ':' + c.index;
           return (
             <CommitRow
-              key={c.sha + ':' + c.index}
+              key={rowKey}
               commit={c}
               side={side}
               query={query}
@@ -49,6 +54,10 @@ export default function RepoColumn({
               height={ROW_HEIGHT}
               top={r.displayIndex * ROW_HEIGHT}
               onSelect={onSelect}
+              manualLinked={!!manualShas && manualShas.has(c.sha)}
+              pending={!!pendingNode && pendingNode.side === side && pendingNode.sha === c.sha}
+              onNode={onNode}
+              activeHit={activeHit === rowKey}
             />
           );
         })

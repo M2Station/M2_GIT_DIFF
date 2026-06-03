@@ -21,10 +21,23 @@ export default function App() {
   const [patchIds, setPatchIds] = useState({});
   const requestedShas = useRef(new Set());
 
+  // Manual links: user-drawn connections between two unmatched commits, stored
+  // as { leftSha, rightSha } and persisted per repo-pair so reopening the same
+  // repros resumes them. `pendingNode` holds the first endpoint while linking.
+  const [manualLinks, setManualLinks] = useState([]);
+  const [pendingNode, setPendingNode] = useState(null); // { side, sha } | null
+  const hydratedKeyRef = useRef(null);
+  const skipSaveRef = useRef(false);
+
   // Virtualization scroll state
   const scrollRef = useRef(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(800);
+
+  // Search box ref (Ctrl+F focus) and F3 cycling through matched rows.
+  const searchRef = useRef(null);
+  const [activeHit, setActiveHit] = useState(null); // row key currently focused
+  const hitIdxRef = useRef(-1);
 
   const onScroll = useCallback((e) => {
     setScrollTop(e.currentTarget.scrollTop);
@@ -106,7 +119,97 @@ export default function App() {
     }
   }, [left, right]);
 
-  const diff = useMemo(() => computeDiff(left, right, patchIds), [left, right, patchIds]);
+  const diff = useMemo(
+    () => computeDiff(left, right, patchIds, manualLinks),
+    [left, right, patchIds, manualLinks]
+  );
+
+  // ---- Manual links: persistence (resume the same repro pair) ----
+  const linkKey = left.path && right.path ? `${left.path}|${right.path}` : null;
+
+  // Load saved manual links whenever the repo pair changes.
+  useEffect(() => {
+    if (!linkKey) return;
+    let parsed = [];
+    try {
+      const raw = localStorage.getItem('mlink:' + linkKey);
+      if (raw) parsed = JSON.parse(raw);
+    } catch {
+      parsed = [];
+    }
+    skipSaveRef.current = true; // don't immediately rewrite what we just read
+    hydratedKeyRef.current = linkKey;
+    setManualLinks(Array.isArray(parsed) ? parsed : []);
+    setPendingNode(null);
+  }, [linkKey]);
+
+  // Persist manual links after any user change (skips the post-hydration pass).
+  useEffect(() => {
+    if (!linkKey || hydratedKeyRef.current !== linkKey) return;
+    if (skipSaveRef.current) {
+      skipSaveRef.current = false;
+      return;
+    }
+    try {
+      localStorage.setItem('mlink:' + linkKey, JSON.stringify(manualLinks));
+    } catch {
+      /* storage full / unavailable -> links live for this session only */
+    }
+  }, [manualLinks, linkKey]);
+
+  // Per-side sets of SHAs that already take part in a manual link.
+  const manualShas = useMemo(() => {
+    const L = new Set();
+    const R = new Set();
+    manualLinks.forEach((l) => {
+      L.add(l.leftSha);
+      R.add(l.rightSha);
+    });
+    return { L, R };
+  }, [manualLinks]);
+
+  // Click on a row's link node: start, complete, or break a manual link.
+  const onNode = useCallback(
+    (side, sha) => {
+      // Already part of a manual link -> clicking the node disconnects it.
+      const existing = manualLinks.find((l) =>
+        side === 'L' ? l.leftSha === sha : l.rightSha === sha
+      );
+      if (existing) {
+        setManualLinks((prev) => prev.filter((l) => l !== existing));
+        setPendingNode(null);
+        return;
+      }
+      // No pending source, or clicking another node on the same side -> (re)arm.
+      if (!pendingNode || pendingNode.side === side) {
+        setPendingNode({ side, sha });
+        return;
+      }
+      // Opposite side -> complete the link (one endpoint each side).
+      const leftSha = side === 'L' ? sha : pendingNode.sha;
+      const rightSha = side === 'R' ? sha : pendingNode.sha;
+      setManualLinks((prev) => [
+        ...prev.filter((l) => l.leftSha !== leftSha && l.rightSha !== rightSha),
+        { leftSha, rightSha }
+      ]);
+      setPendingNode(null);
+    },
+    [manualLinks, pendingNode]
+  );
+
+  // Wipe every manual link for the current repo pair and remove its persisted
+  // entry from localStorage.
+  const clearManualLinks = useCallback(() => {
+    setManualLinks([]);
+    setPendingNode(null);
+    if (linkKey) {
+      try {
+        localStorage.removeItem('mlink:' + linkKey);
+      } catch {
+        /* storage unavailable -> nothing persisted to remove */
+      }
+    }
+  }, [linkKey]);
 
   // Fallback pass: for commits still `unique` after SHA + title matching, fetch
   // their git patch-id (content fingerprint) and retry matching by content so
@@ -175,6 +278,46 @@ export default function App() {
     return n;
   }, [query, diff]);
 
+  // Flat list of matched rows in display order (top-to-bottom, left before
+  // right) so F3 can cycle through them.
+  const hits = useMemo(() => {
+    if (!query) return [];
+    const collect = (rows, side) =>
+      rows
+        .filter((r) => r.isHit && r.displayIndex != null)
+        .map((r) => ({
+          side,
+          displayIndex: r.displayIndex,
+          key: r.commit.sha + ':' + r.commit.index
+        }));
+    return [...collect(view.L.rows, 'L'), ...collect(view.R.rows, 'R')].sort(
+      (a, b) => a.displayIndex - b.displayIndex || (a.side < b.side ? -1 : 1)
+    );
+  }, [view, query]);
+
+  // Reset the cycle cursor whenever the matched set changes.
+  useEffect(() => {
+    hitIdxRef.current = -1;
+    setActiveHit(null);
+  }, [query]);
+
+  // Scroll the next (or previous) matched row into view and highlight it.
+  const cycleHit = useCallback(
+    (dir) => {
+      if (hits.length === 0) return;
+      const next = (hitIdxRef.current + dir + hits.length) % hits.length;
+      hitIdxRef.current = next;
+      const hit = hits[next];
+      setActiveHit(hit.key);
+      const el = scrollRef.current;
+      if (el) {
+        const target = hit.displayIndex * ROW_HEIGHT - el.clientHeight / 2 + ROW_HEIGHT / 2;
+        el.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
+      }
+    },
+    [hits]
+  );
+
   const bodyHeight = view.totalRows * ROW_HEIGHT;
 
   // Select a match and move keyboard focus to the diff body so Esc / blank
@@ -186,15 +329,58 @@ export default function App() {
 
   // Click on empty gutter / column background clears the selection. Row and
   // connection-line clicks stop propagation, so they never reach here.
-  const onBodyClick = useCallback(() => setSelectedMatch(null), []);
+  const onBodyClick = useCallback(() => {
+    setSelectedMatch(null);
+    setPendingNode(null);
+  }, []);
 
-  // Esc clears the current selection.
+  // Esc clears the current selection / pending manual link. Delete removes the
+  // selected manual link. Ctrl+F focuses search, F3 cycles matches.
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key === 'Escape') setSelectedMatch(null);
+      // Ctrl/Cmd+F -> jump to the search box.
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) {
+        e.preventDefault();
+        searchRef.current?.focus();
+        searchRef.current?.select();
+        return;
+      }
+      // F3 -> cycle through highlighted matches (Shift+F3 goes backwards).
+      if (e.key === 'F3') {
+        e.preventDefault();
+        cycleHit(e.shiftKey ? -1 : 1);
+        return;
+      }
+      if (e.key === 'Escape') {
+        setSelectedMatch(null);
+        setPendingNode(null);
+      } else if (
+        (e.key === 'Delete' || e.key === 'Backspace') &&
+        typeof selectedMatch === 'string' &&
+        selectedMatch.startsWith('manual:')
+      ) {
+        const body = selectedMatch.slice('manual:'.length);
+        const sep = body.indexOf('|');
+        const leftSha = body.slice(0, sep);
+        const rightSha = body.slice(sep + 1);
+        setManualLinks((prev) =>
+          prev.filter((l) => !(l.leftSha === leftSha && l.rightSha === rightSha))
+        );
+        setSelectedMatch(null);
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
+  }, [selectedMatch, cycleHit]);
+
+  // Esc inside the search box leaves the field (back to the diff body).
+  const onSearchKeyDown = useCallback((e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      searchRef.current?.blur();
+      scrollRef.current?.focus();
+    }
   }, []);
 
   return (
@@ -212,12 +398,16 @@ export default function App() {
         matchCount={matchCount}
         filterOnly={filterOnly}
         onToggleFilter={() => setFilterOnly((v) => !v)}
+        searchRef={searchRef}
+        onSearchKeyDown={onSearchKeyDown}
+        manualCount={manualLinks.length}
+        onClearManualLinks={clearManualLinks}
       />
 
       {error && <div className="error-bar">⚠ {error}</div>}
 
       <div
-        className="diff-body"
+        className={'diff-body' + (pendingNode ? ' linking' : '')}
         ref={scrollRef}
         onScroll={onScroll}
         onClick={onBodyClick}
@@ -234,6 +424,10 @@ export default function App() {
             viewportHeight={viewportHeight}
             selectedMatch={selectedMatch}
             onSelect={handleSelect}
+            manualShas={manualShas.L}
+            pendingNode={pendingNode}
+            onNode={onNode}
+            activeHit={activeHit}
           />
 
           <div className="gutter" style={{ width: GUTTER_WIDTH, minHeight: bodyHeight }}>
@@ -256,6 +450,10 @@ export default function App() {
             viewportHeight={viewportHeight}
             selectedMatch={selectedMatch}
             onSelect={handleSelect}
+            manualShas={manualShas.R}
+            pendingNode={pendingNode}
+            onNode={onNode}
+            activeHit={activeHit}
           />
         </div>
       </div>
@@ -264,8 +462,13 @@ export default function App() {
         <span className="chip common">■ Common (same SHA)</span>
         <span className="chip cherry">■ Cherry-pick (same title)</span>
         <span className="chip unique">■ Unique (one side only)</span>
+        <span className="chip manual">■ Manual link</span>
         <span className="spacer" />
-        <span className="hint">Click a linked row to highlight its connection</span>
+        <span className="hint">
+          {pendingNode
+            ? 'Pick a node on the other side to link · Esc to cancel'
+            : 'Click a row node ◗ to link two commits · Del removes a selected manual link'}
+        </span>
       </div>
     </div>
   );

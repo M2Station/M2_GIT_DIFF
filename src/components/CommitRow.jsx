@@ -19,14 +19,16 @@ function shortDate(iso) {
   return iso.slice(0, 10);
 }
 
-export default function CommitRow({ commit, side, query, dimmed, isHit, selected, height, top, onSelect }) {
+export default function CommitRow({ commit, side, query, dimmed, isHit, selected, height, top, onSelect, manualLinked, pending, onNode, activeHit }) {
   const cls = [
     'commit-row',
     commit.status, // common | cherry | unique
     dimmed ? 'dimmed' : '',
     isHit ? 'hit' : '',
+    activeHit ? 'active-hit' : '',
     selected ? 'selected' : '',
-    commit.matchId ? 'linkable' : ''
+    commit.matchId ? 'linkable' : '',
+    manualLinked ? 'manual' : ''
   ]
     .filter(Boolean)
     .join(' ');
@@ -36,6 +38,26 @@ export default function CommitRow({ commit, side, query, dimmed, isHit, selected
     if (commit.matchId) onSelect(selected ? null : commit.matchId);
   };
 
+  // Only unmatched commits expose a node to draw a manual link from/to.
+  const showNode = commit.status === 'unique' && typeof onNode === 'function';
+  const handleNode = (e) => {
+    e.stopPropagation();
+    onNode(side, commit.sha);
+  };
+  const nodeCls = [
+    'node-handle',
+    `node-${side}`,
+    manualLinked ? 'linked' : '',
+    pending ? 'pending' : ''
+  ]
+    .filter(Boolean)
+    .join(' ');
+  const nodeTitle = manualLinked
+    ? 'Click to disconnect this manual link'
+    : pending
+    ? 'Pick a node on the other side to link · Esc to cancel'
+    : 'Click to start a manual link';
+
   const title = `${commit.short}  ${commit.subject}\n${commit.author} · ${commit.authorDate}\n${commit.body || ''}`;
 
   return (
@@ -44,6 +66,9 @@ export default function CommitRow({ commit, side, query, dimmed, isHit, selected
       <span className="date">{shortDate(commit.authorDate)}</span>
       <span className="subject">{highlight(commit.subject, query)}</span>
       <span className="author">{commit.author}</span>
+      {showNode && (
+        <button type="button" className={nodeCls} onClick={handleNode} title={nodeTitle} aria-label={nodeTitle} />
+      )}
     </div>
   );
 }

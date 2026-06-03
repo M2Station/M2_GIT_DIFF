@@ -21,11 +21,16 @@
 | 搜尋 | 可搜尋 標題 / 內文 / SHA / 作者 / 日期，命中高亮、其餘變暗，顯示命中數量 | — |
 | Filter 模式 | 開啟後只保留命中的 commit（壓縮排列），關閉則只是變暗 | — |
 | **命令列自動開啟** | 啟動時帶 `-L <path> -R <path>` 可自動載入左右兩側 repro | — |
+| **手動連結** | 在未配對（紅）的 commit 上點節點 ◗，左右各點一個即可手動配對；顏色為**紫色**以區別 cherry 黃色；可斷開並自動暫存，重開相同 repro 會自動還原 | 紫色背景＋紫色實線 |
 | 虛擬化 | 只渲染視窗內的列，支援大型倉庫（數千 commit）順暢捲動 | — |
 | 快取 | 解析結果以 HEAD SHA 為版本快取，重開同 repo 免重新解析 | — |
 | LOGO / 品牌 | 工具列左上角 LOGO ＋ `M2_GIT_DIFF` 名稱；視窗標題與 favicon 同步 | — |
 
 點擊任一有連線的列（灰/黃），或**直接點擊連接線**，會高亮其對應的連接線、其餘連線變淡。連接線採**直角轉折（orthogonal）**走線，並有 hover 變粗、selected 加粗發光的效果。選取後焦點移到比對區，**按 `Esc` 或點擊空白處**即可取消選取。
+
+**手動連結**：把滑鼠移到未配對（紅）的 commit 上，靠中央側會出現一個圓形節點 ◗；先點左邊一個、再點右邊一個即建立紫色手動連線。再次點擊已連結的節點可斷開，或選取該連線後按 `Delete` / `Backspace` 移除。手動連結以兩側 repo 路徑為 key 存進 `localStorage`，**打開一模一樣的 repro 會自動 RESUME 還原**（以 SHA 記錄，新增 commit 後仍可還原）。
+
+**暫存位置**：手動連結存在 renderer 的 `localStorage`，key 為 `mlink:<左repo路徑>|<右repo路徑>`，value 為 `[{ leftSha, rightSha }, …]` 的 JSON。工具列上的紫色 **◗ Clear manual links** 按鈕（與手動連結同色）會一次取消目前 repro pair 的**所有手動連結並刪除該暫存**（有連結時顯示數量，無連結時 disabled）。
 
 ### 左右對齊（align）如何運作
 
@@ -193,7 +198,26 @@ npx electron . -L "D:\path\to\repoA" -R "D:\path\to\repoB"
 
 ---
 
-## 8. 安全性
+## 8. 快捷鍵與互動操作
+
+| 按鍵 / 操作 | 作用 |
+| --- | --- |
+| `Ctrl` + `F` | 跳到搜尋框並全選現有字串（開始搜尋） |
+| `Esc`（焦點在搜尋框時） | 離開搜尋框，焦點回到比對區（不清空搜尋字） |
+| `F3` | 循環跳到**下一個**搜尋命中的 commit，捲動置中並以青色外框高亮 |
+| `Shift` + `F3` | 循環跳到**上一個**搜尋命中的 commit |
+| `Esc`（焦點在比對區時） | 取消目前選取的連線、取消進行中的手動連結 |
+| `Delete` / `Backspace` | 刪除目前選取的**手動連結** |
+| 點擊有連線的列 / 點擊連接線 | 高亮該配對連線，其餘變淡；焦點移到比對區 |
+| 點擊空白處 | 取消選取與進行中的手動連結 |
+| 點擊節點 ◗（未配對列） | 開始 / 完成 / 斷開手動連結（左右各點一個） |
+| 工具列 ◗ Clear manual links | 一次取消目前 repro pair 的所有手動連結並清除 `localStorage` 暫存 |
+
+> `F3` 的循環順序為顯示列由上到下、同列時左欄先於右欄；命中集合改變（修改搜尋字）時游標自動歸零。`Ctrl`+`F` 與 `F3` 在全域監聽，即使焦點在搜尋框內也有效。
+
+---
+
+## 9. 安全性
 
 - `contextIsolation: true`、`nodeIntegration: false`，renderer 僅透過 preload 的 `window.api` 取得受限介面。
 - `index.html` 設有 CSP。
@@ -201,17 +225,16 @@ npx electron . -L "D:\path\to\repoA" -R "D:\path\to\repoB"
 
 ---
 
-## 9. 後續可擴充方向
+## 10. 後續可擴充方向
 
 
 - 指定分支 / 標籤 / 日期範圍載入（`getCommits` 已支援 `branch`、`limit` 參數）。
-- 鍵盤導覽、跳到下一個命中。
 - 匯出比對結果（CSV / Markdown）。
 - 兩邊 commit 點選後顯示完整 diff 內容。
 
 ---
 
-## 10. 檔案速查表
+## 11. 檔案速查表
 
 | 我想改… | 去這裡 |
 | --- | --- |
@@ -224,6 +247,8 @@ npx electron . -L "D:\path\to\repoA" -R "D:\path\to\repoB"
 | 左右欄欄位排版（order） | `src/styles.css`（`.repo-column[data-side='R']`） |
 | 連接線畫法（直角轉折 / 可點選） | `src/components/ConnectionLines.jsx` |
 | 選取 focus / Esc / 點空白取消 | `src/App.jsx`（`handleSelect` / `onBodyClick` / keydown） |
+| 快捷鍵（Ctrl+F / Esc / F3） | `src/App.jsx`（`cycleHit` / keydown / `onSearchKeyDown`） |
+| 手動連結（節點 / 暫存 / RESUME / Clear） | `src/App.jsx`（`onNode` / `manualLinks` / `clearManualLinks` / localStorage）、`src/lib/diff.js`（manual 階段） |
 | 虛擬化渲染 | `src/components/RepoColumn.jsx` |
 | git log 解析欄位 / patch-id | `electron/git.js` |
 | 快取邏輯 | `electron/db.js` |
