@@ -37,6 +37,16 @@ function Show-Info($text, $title = 'M2 GIT DIFF') {
     [System.Windows.Forms.MessageBox]::Show($text, $title) | Out-Null
 }
 
+function Start-Compare($left, $right) {
+    if (-not (Test-Path -LiteralPath $startCmd)) {
+        Show-Info "找不到 start.cmd：`n$startCmd`n`n請確認 tools 資料夾仍在專案內。"
+        exit 1
+    }
+    # Launch the app in dev mode with both repos pre-loaded. start.cmd opens its
+    # own console window and runs `npm run dev`.
+    Start-Process -FilePath $startCmd -ArgumentList @('-L', $left, '-R', $right) -WorkingDirectory $repoRoot
+}
+
 # Normalize: if a file was clicked, fall back to its containing directory.
 if (Test-Path -LiteralPath $Path -PathType Leaf) {
     $Path = Split-Path -Parent $Path
@@ -52,29 +62,89 @@ if ($Action -eq 'select') {
 }
 
 # --- compare ---
-if (-not (Test-Path -LiteralPath $leftFile)) {
-    Show-Info "尚未選擇左側資料夾。`n`n請先在另一個資料夾上按右鍵，選擇『Select Folder for M2 GIT DIFF』，再到這個資料夾選擇『Compare in M2 GIT DIFF』。"
-    exit 1
-}
+# Two ways to reach here:
+#   (A) Classic two-step: a left folder was remembered via "select" earlier.
+#   (B) Multi-select: the user selected 2+ folders and clicked "compare". Windows
+#       Explorer invokes this script once per selected folder in quick succession,
+#       so we collect the paths in a shared pending file and let the first
+#       ("leader") invocation launch the app once both sides are gathered.
 
-$left = (Get-Content -LiteralPath $leftFile -Raw).Trim()
-$right = $Path
+$pendingFile = Join-Path $stateDir 'compare-pending.txt'
+$lockFile    = Join-Path $stateDir 'compare-leader.lock'
 
-if ([string]::IsNullOrWhiteSpace($left) -or -not (Test-Path -LiteralPath $left)) {
-    Show-Info "記住的左側資料夾已失效，請重新選擇。"
+# (A) Classic two-step takes priority when a left folder was remembered.
+if (Test-Path -LiteralPath $leftFile) {
+    $left = (Get-Content -LiteralPath $leftFile -Raw).Trim()
+    $right = $Path
+
+    if ([string]::IsNullOrWhiteSpace($left) -or -not (Test-Path -LiteralPath $left)) {
+        Show-Info "記住的左側資料夾已失效，請重新選擇。"
+        Remove-Item -LiteralPath $leftFile -ErrorAction SilentlyContinue
+        exit 1
+    }
+
+    Start-Compare $left $right
+
+    # Clear the remembered left so the next compare starts fresh.
     Remove-Item -LiteralPath $leftFile -ErrorAction SilentlyContinue
+    exit 0
+}
+
+# (B) Multi-select: collect the paths from each per-folder invocation.
+if (-not (Test-Path -LiteralPath $stateDir)) {
+    New-Item -ItemType Directory -Path $stateDir -Force | Out-Null
+}
+
+$mutex = New-Object System.Threading.Mutex($false, 'M2GitDiffCompareCollect')
+[void]$mutex.WaitOne()
+$isLeader = $false
+try {
+    # Reset a stale collection left over by a previous (crashed) run.
+    if (Test-Path -LiteralPath $lockFile) {
+        $age = (Get-Date) - (Get-Item -LiteralPath $lockFile).LastWriteTime
+        if ($age.TotalSeconds -ge 5) {
+            Remove-Item -LiteralPath $lockFile, $pendingFile -ErrorAction SilentlyContinue
+        }
+    }
+
+    Add-Content -LiteralPath $pendingFile -Value $Path -Encoding UTF8
+
+    if (-not (Test-Path -LiteralPath $lockFile)) {
+        Set-Content -LiteralPath $lockFile -Value $PID -Encoding ASCII
+        $isLeader = $true
+    }
+}
+finally {
+    $mutex.ReleaseMutex()
+    $mutex.Dispose()
+}
+
+# Non-leader invocations have done their job (appended their path) and exit.
+if (-not $isLeader) {
+    exit 0
+}
+
+# Leader: wait briefly for sibling invocations to append their paths, then read.
+Start-Sleep -Milliseconds 800
+
+$mutex = New-Object System.Threading.Mutex($false, 'M2GitDiffCompareCollect')
+[void]$mutex.WaitOne()
+try {
+    $paths = @(Get-Content -LiteralPath $pendingFile -ErrorAction SilentlyContinue |
+               ForEach-Object { $_.Trim() } |
+               Where-Object { $_ } |
+               Select-Object -Unique)
+    Remove-Item -LiteralPath $pendingFile, $lockFile -ErrorAction SilentlyContinue
+}
+finally {
+    $mutex.ReleaseMutex()
+    $mutex.Dispose()
+}
+
+if ($paths.Count -lt 2) {
+    Show-Info "請一次選取兩個資料夾再選擇『Compare in M2 GIT DIFF』；`n或先在來源資料夾按右鍵選擇『Select Folder for M2 GIT DIFF』，再到目標資料夾選擇『Compare in M2 GIT DIFF』。"
     exit 1
 }
 
-if (-not (Test-Path -LiteralPath $startCmd)) {
-    Show-Info "找不到 start.cmd：`n$startCmd`n`n請確認 tools 資料夾仍在專案內。"
-    exit 1
-}
-
-# Launch the app in dev mode with both repros pre-loaded. start.cmd opens its own
-# console window and runs `npm run dev`.
-Start-Process -FilePath $startCmd -ArgumentList @('-L', $left, '-R', $right) -WorkingDirectory $repoRoot
-
-# Clear the remembered left so the next compare starts fresh.
-Remove-Item -LiteralPath $leftFile -ErrorAction SilentlyContinue
+Start-Compare $paths[0] $paths[1]
 exit 0
