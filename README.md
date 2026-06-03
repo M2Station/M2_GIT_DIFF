@@ -221,16 +221,21 @@ npm run demo:gif     # 重新產生操作預覽動畫 public/demo.gif
 啟動時可帶入 `-L <path>` / `-R <path>`（亦接受 `--left` / `--right`）自動載入左右兩側 repro：
 
 ```powershell
-# 開發模式（start.cmd 會检查 NPM / 修復 Electron 後啟動）
+# 一般模式（start.cmd：先 npm run build 再以 production 載入 dist/，啟動較快、無 dev server）
 .\start.cmd -L "D:\path\to\repoA" -R "D:\path\to\repoB"
+
+# 開發模式（start_dev.cmd：Vite dev server + Electron，含 HMR）
+.\start_dev.cmd -L "D:\path\to\repoA" -R "D:\path\to\repoB"
 
 # 已建置（production）或打包後的 exe
 npx electron . -L "D:\path\to\repoA" -R "D:\path\to\repoB"
 ```
 
+- **`start.cmd`（一般/production 模式）**：檢查 NPM / 修復 Electron → `npm run build` → `npm run start:prod`（`NODE_ENV=production`，載入 `dist/index.html`，無 Vite dev server）。
+- **`start_dev.cmd`（開發模式）**：同樣的前置檢查後跑 `npm run dev`（Vite dev server + Electron，含 HMR）。
 - `electron/main.js` 的 `parseRepoArgs()` 解析 argv；找不到時改讀環境變數 `REPRO_L` / `REPRO_R`。
-- `start.cmd` 走 dev 模式，參數無法穩定穿過 `concurrently → wait-on → electron`，所以改將 `-L`/`-R` 設成 `REPRO_L`/`REPRO_R` 環境變數轉傳。
-- 相對路徑以啟動目錄解析。修改 `src/` 程式碼後，production 啟動需先 `npm run build`。
+- 兩個啟動腳本因參數無法穩定穿過 `concurrently → wait-on → electron`，皆改將 `-L`/`-R` 設成 `REPRO_L`/`REPRO_R` 環境變數轉傳。
+- 相對路徑以啟動目錄解析。
 
 ### Windows 檔案總管右鍵整合（類似 Beyond Compare）
 
@@ -330,4 +335,4 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\uninstall-context-menu
 | git log 解析欄位 / patch-id | `electron/git.js` |
 | 快取邏輯 | `electron/db.js` |
 | 視窗 / IPC / CLI 參數 / App 名稱與圖示 | `electron/main.js` |
-| 啟動檢查 / Electron 修復 / -L -R 轉傳 | `start.cmd` / `repair-electron.ps1` |
+| 啟動檢查 / Electron 修復 / -L -R 轉傳 | `start.cmd`（一般/production）、`start_dev.cmd`（開發）、`repair-electron.ps1` |

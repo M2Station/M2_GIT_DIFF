@@ -11,6 +11,7 @@
     "dev:electron": "wait-on tcp:5173 && cross-env NODE_ENV=development electron .",
     "build": "vite build",
     "start": "cross-env NODE_ENV=development electron .",
+    "start:prod": "cross-env NODE_ENV=production electron .",
     "rebuild": "electron-rebuild -f -w better-sqlite3",
     "dist": "vite build && electron-builder",
     "demo:gif": "node scripts/make-demo-gif.mjs"

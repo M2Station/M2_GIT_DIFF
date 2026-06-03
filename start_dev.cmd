@@ -4,7 +4,7 @@ chcp 65001 >nul
 cd /d "%~dp0"
 
 echo ========================================
-echo   M2_GIT_DIFF - Launcher (NORMAL MODE)
+echo   M2_GIT_DIFF - Launcher (DEV MODE)
 echo ========================================
 echo.
 
@@ -84,21 +84,9 @@ if not exist "node_modules\electron\dist\electron.exe" (
     echo.
 )
 
-REM --- 建置前端 (production，輸出 dist/) ---
-echo [建置] 執行 production 建置 (npm run build)...
-call npm run build
-if errorlevel 1 (
-    echo.
-    echo [錯誤] 建置失敗。
-    pause
-    exit /b 1
-)
-echo [完成] 建置完成。
+REM --- 觸發程式執行 (Vite dev server + Electron, 含 HMR) ---
+echo [啟動] 開始執行程式 (DEV MODE)...
 echo.
-
-REM --- 觸發程式執行 (production，載入 dist/index.html，無 Vite dev server) ---
-echo [啟動] 開始執行程式 (NORMAL MODE)...
-echo.
-call npm run start:prod
+call npm run dev
 
 endlocal
