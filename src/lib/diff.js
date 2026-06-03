@@ -223,11 +223,30 @@ export function applyFuzzy(base, fuzzy) {
   const Lcand = buildCand(leftRows);
   const Rcand = buildCand(rightRows);
 
+  // Reverse index: changed-line -> right candidates containing it. Any pair with
+  // non-zero overlap (the only pairs that can clear the threshold) shares at
+  // least one line, so we only score those instead of the full L x R product.
+  const lineIndex = new Map();
+  for (const r of Rcand) {
+    for (const line of r.set) {
+      let bucket = lineIndex.get(line);
+      if (!bucket) lineIndex.set(line, (bucket = []));
+      bucket.push(r);
+    }
+  }
+
   const pairs = [];
   for (const l of Lcand) {
-    for (const r of Rcand) {
-      const score = containment(l.set, r.set);
-      if (score >= thr) pairs.push({ li: l.row.index, ri: r.row.index, score });
+    const seen = new Set();
+    for (const line of l.set) {
+      const bucket = lineIndex.get(line);
+      if (!bucket) continue;
+      for (const r of bucket) {
+        if (seen.has(r.row.index)) continue;
+        seen.add(r.row.index);
+        const score = containment(l.set, r.set);
+        if (score >= thr) pairs.push({ li: l.row.index, ri: r.row.index, score });
+      }
     }
   }
   pairs.sort((a, b) => b.score - a.score);
