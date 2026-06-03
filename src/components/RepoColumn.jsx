@@ -24,7 +24,8 @@ export default function RepoColumn({
   onNoteOpen,
   colorMap,
   onRowMenu,
-  plain
+  plain,
+  onDetail
 }) {
   const bodyHeight = totalRows * ROW_HEIGHT;
 
@@ -67,6 +68,7 @@ export default function RepoColumn({
               onNoteOpen={onNoteOpen}
               color={colorMap ? colorMap[c.sha] : undefined}
               onRowMenu={onRowMenu}
+              onDetail={onDetail}
             />
           );
         })

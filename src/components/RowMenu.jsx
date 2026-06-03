@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 // `.commit-row.force-<key>` that paint the forced background.
 const COLORS = [
   { key: 'green', label: '綠色', dot: '#2ea043' },
-  { key: 'red', label: '紅色', dot: '#eb4650' },
+  { key: 'red', label: '亮紅色', dot: '#ff2d3c' },
   { key: 'blue', label: '藍色', dot: '#3b82f6' },
   { key: 'yellow', label: '黃色', dot: '#e0a44a' }
 ];

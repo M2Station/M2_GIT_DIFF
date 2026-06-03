@@ -19,7 +19,7 @@ function shortDate(iso) {
   return iso.slice(0, 10);
 }
 
-export default function CommitRow({ commit, side, query, dimmed, isHit, selected, height, top, onSelect, manualLinked, pending, onNode, activeHit, hasNote, onNoteOpen, color, onRowMenu }) {
+export default function CommitRow({ commit, side, query, dimmed, isHit, selected, height, top, onSelect, manualLinked, pending, onNode, activeHit, hasNote, onNoteOpen, color, onRowMenu, onDetail }) {
   const cls = [
     'commit-row',
     commit.status, // common | cherry | unique
@@ -37,6 +37,12 @@ export default function CommitRow({ commit, side, query, dimmed, isHit, selected
 
   const handleClick = (e) => {
     e.stopPropagation();
+    // Ctrl/Cmd+Click -> open the floating commit detail popup.
+    if ((e.ctrlKey || e.metaKey) && typeof onDetail === 'function') {
+      e.preventDefault();
+      onDetail(side, commit.sha, e.clientX, e.clientY);
+      return;
+    }
     if (commit.matchId) onSelect(selected ? null : commit.matchId);
   };
 

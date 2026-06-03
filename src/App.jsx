@@ -5,6 +5,7 @@ import ConnectionLines from './components/ConnectionLines.jsx';
 import SearchPanel from './components/SearchPanel.jsx';
 import NotePopup from './components/NotePopup.jsx';
 import RowMenu from './components/RowMenu.jsx';
+import CommitDetail from './components/CommitDetail.jsx';
 import { computeDiff, matchesQuery, alignLayout } from './lib/diff.js';
 import { ROW_HEIGHT, GUTTER_WIDTH, DEFAULT_LIMIT } from './lib/constants.js';
 
@@ -47,6 +48,11 @@ export default function App() {
   const [rowMenu, setRowMenu] = useState(null);
   const colorsHydratedRef = useRef(null);
   const colorsSkipSaveRef = useRef(false);
+
+  // Commit detail popups (Ctrl+Click a row). Multiple can be open at once;
+  // each entry is { side, sha, x, y }. Ctrl+Clicking an already-open commit is
+  // ignored (no duplicate window).
+  const [details, setDetails] = useState([]);
 
   // Virtualization scroll state
   const scrollRef = useRef(null);
@@ -421,6 +427,44 @@ export default function App() {
     return { L, R };
   }, [colors]);
 
+  // Open a commit detail popup (Ctrl+Click). Ignores commits already shown so
+  // clicking an open one doesn't spawn a duplicate; cascades new windows a bit.
+  const openDetail = useCallback((side, sha, x, y) => {
+    setDetails((prev) => {
+      if (prev.some((d) => d.side === side && d.sha === sha)) return prev;
+      const offset = prev.length * 26;
+      return [...prev, { side, sha, x: (x || 80) + offset, y: (y || 80) + offset }];
+    });
+  }, []);
+
+  const closeDetail = useCallback((side, sha) => {
+    setDetails((prev) => prev.filter((d) => !(d.side === side && d.sha === sha)));
+  }, []);
+
+  // Resolve a commit and its matched ("related") counterpart on the other side,
+  // using the classified rows from computeDiff (which carry the shared matchId).
+  const resolveDetail = useCallback(
+    (side, sha) => {
+      const ownRows = side === 'L' ? diff.leftRows : diff.rightRows;
+      const otherRows = side === 'L' ? diff.rightRows : diff.leftRows;
+      const commit = ownRows.find((c) => c.sha === sha);
+      if (!commit) return null;
+      let related = null;
+      if (commit.matchId) {
+        const other = otherRows.find((c) => c.matchId === commit.matchId);
+        if (other) {
+          related = {
+            side: side === 'L' ? 'R' : 'L',
+            commit: other,
+            type: commit.status === 'common' ? 'common' : commit.manual ? 'manual' : commit.status
+          };
+        }
+      }
+      return { commit, related };
+    },
+    [diff]
+  );
+
   // Fallback pass: for commits still `unique` after SHA + title matching, fetch
   // their git patch-id (content fingerprint) and retry matching by content so
   // cherry-picks with edited titles still pair up. Best-effort; runs once per
@@ -593,6 +637,7 @@ export default function App() {
         setPendingNode(null);
         setNotePopup(null);
         setRowMenu(null);
+        setDetails([]);
       } else if (
         (e.key === 'Delete' || e.key === 'Backspace') &&
         typeof selectedMatch === 'string' &&
@@ -714,6 +759,23 @@ export default function App() {
         );
       })()}
 
+      {details.map((d) => {
+        const data = resolveDetail(d.side, d.sha);
+        if (!data) return null;
+        return (
+          <CommitDetail
+            key={d.side + ':' + d.sha}
+            side={d.side}
+            commit={data.commit}
+            related={data.related}
+            x={d.x}
+            y={d.y}
+            onClose={() => closeDetail(d.side, d.sha)}
+            onOpenRelated={(side, sha) => openDetail(side, sha, d.x + 40, d.y + 40)}
+          />
+        );
+      })}
+
       {error && <div className="error-bar">⚠ {error}</div>}
 
       <div
@@ -744,6 +806,7 @@ export default function App() {
             colorMap={colorMap.L}
             onRowMenu={openRowMenu}
             plain={!!single}
+            onDetail={openDetail}
           />
           )}
 
@@ -779,6 +842,7 @@ export default function App() {
             colorMap={colorMap.R}
             onRowMenu={openRowMenu}
             plain={!!single}
+            onDetail={openDetail}
           />
           )}
         </div>

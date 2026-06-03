@@ -22,6 +22,10 @@
 | Filter 模式 | 開啟後只保留命中的 commit（壓縮排列），關閉則只是變暗 | — |
 | **命令列自動開啟** | 啟動時帶 `-L <path> -R <path>` 可自動載入左右兩側 repro | — |
 | **手動連結** | 在未配對（紅）的 commit 上點節點 ◗，左右各點一個即可手動配對；顏色為**紫色**以區別 cherry 黃色；可斷開並自動暫存，重開相同 repro 會自動還原 | 紫色背景＋紫色實線 |
+| **單一 Repo 模式** | 工具列 **View** 切換 `⇄ Compare` / `◧ Left only` / `◨ Right only`；只看單邊時該欄放大佔滿整個視窗，隱藏 gutter 與連線；單欄模式下 commit 背景改為**正常（透明）**，強制顏色仍保留 | — |
+| **每列註記（Note）** | 右鍵任一 commit → 新增/編輯註記（浮動可拖曳編輯框，`Ctrl+Enter` 儲存）；有註記者顯示 📝 圖示，點圖示可檢視/編輯/刪除 | — |
+| **強制背景顏色** | 右鍵 commit → 選 綠 / 亮紅 / 藍 / 黃 強制覆蓋該列背景；可清除單列或一次清除全部 | 綠/亮紅/藍/黃 |
+| **Commit 詳情浮窗** | `Ctrl`+左鍵點 commit → 浮動視窗顯示 SHA / 作者 / 日期（清楚標示）＋ Markdown 渲染的 commit 內文；配對的 **Related item** 特別凸顯；可**移動、拖拉縮放**、依內容自動調整寬度；可**同時開多個**（重複點同一個不重開） | — |
 | 虛擬化 | 只渲染視窗內的列，支援大型倉庫（數千 commit）順暢捲動 | — |
 | 快取 | 解析結果以 HEAD SHA 為版本快取，重開同 repo 免重新解析 | — |
 | LOGO / 品牌 | 工具列左上角 LOGO ＋ `M2_GIT_DIFF` 名稱；視窗標題與 favicon 同步 | — |
@@ -31,6 +35,10 @@
 **手動連結**：把滑鼠移到未配對（紅）的 commit 上，靠中央側會出現一個圓形節點 ◗；先點左邊一個、再點右邊一個即建立紫色手動連線。再次點擊已連結的節點可斷開，或選取該連線後按 `Delete` / `Backspace` 移除。手動連結以兩側 repo 路徑為 key 存進 `localStorage`，**打開一模一樣的 repro 會自動 RESUME 還原**（以 SHA 記錄，新增 commit 後仍可還原）。
 
 **暫存位置**：手動連結存在 renderer 的 `localStorage`，key 為 `mlink:<左repo路徑>|<右repo路徑>`，value 為 `[{ leftSha, rightSha }, …]` 的 JSON。工具列上的紫色 **◗ Clear manual links** 按鈕（與手動連結同色）會一次取消目前 repro pair 的**所有手動連結並刪除該暫存**（有連結時顯示數量，無連結時 disabled）。
+
+**註記與強制顏色暫存**：每列註記與強制背景顏色同樣以兩側 repo 路徑為 key 存進 `localStorage`——註記為 `note:<左repo路徑>|<右repo路徑>`、顏色為 `color:<左repo路徑>|<右repo路徑>`，value 皆為 `{ "<side>:<sha>": <值> }` 物件。工具列另有 **📝 Clear notes**、**🎨 Clear colors** 按鈕可分別一次清空。
+
+**右鍵選單與詳情浮窗**：右鍵任一 commit 會跳出情境選單（新增/編輯註記、強制背景顏色綠/亮紅/藍/黃、清除顏色）。`Ctrl`+左鍵則開啟 commit 詳情浮窗：上方清楚標示 SHA / 作者 / 日期，內文以內建輕量 Markdown 渲染器（`src/lib/markdown.js`，先 HTML escape 再上標記，連結不導航以策安全）顯示；若該 commit 有配對，會以紫色高亮的 **Related item** 區塊顯示對側 commit，點擊可再開一個浮窗。浮窗可由標題拖曳移動、由任一邊/角拖拉縮放，初始寬度依內容長度自動估算，並可同時開啟多個（重複點同一 commit 不會重開），按 `Esc` 一次關閉全部。
 
 ### 左右對齊（align）如何運作
 
@@ -60,10 +68,14 @@ Renderer (React + Vite)
 ├─ src/lib/constants.js         版面常數（列高、gutter 寬、overscan…）
 ├─ src/assets/logo.svg          工具列 LOGO（青色 M2 字標）
 └─ src/components/
-   ├─ Toolbar.jsx          上方工具列：LOGO＋名稱、開啟 repo、branch 徽章、統計、搜尋、Filter
+   ├─ Toolbar.jsx          上方工具列：LOGO＋名稱、開啟 repo、branch 徽章、統計、View 模式切換、搜尋、Clear manual/notes/colors
    ├─ RepoColumn.jsx       單欄虛擬化渲染（只畫視窗內的列）
-   ├─ CommitRow.jsx        單一 commit 列（絕對定位 + 高亮）
-   └─ ConnectionLines.jsx  中央 gutter 的 SVG 連接線（端點同列時退化為水平線）
+   ├─ CommitRow.jsx        單一 commit 列（絕對定位 + 高亮 + 註記圖示 + 右鍵選單 + Ctrl點詳情）
+   ├─ ConnectionLines.jsx  中央 gutter 的 SVG 連接線（端點同列時退化為水平線）
+   ├─ SearchPanel.jsx      浮動可拖曳搜尋面板（可選搜尋範圍、上/下則、Filter）
+   ├─ NotePopup.jsx        浮動註記編輯/檢視器（可拖曳）
+   ├─ RowMenu.jsx          右鍵情境選單（註記 + 強制背景顏色）
+   └─ CommitDetail.jsx     Commit 詳情浮窗（Markdown 渲染、Related item、可移動縮放、可多開）
 ```
 
 另有 `public/icon.svg`（圓角深底圖示，作為 favicon 與 Electron 視窗 / 工作列圖示）。
@@ -211,7 +223,11 @@ npx electron . -L "D:\path\to\repoA" -R "D:\path\to\repoB"
 | 點擊有連線的列 / 點擊連接線 | 高亮該配對連線，其餘變淡；焦點移到比對區 |
 | 點擊空白處 | 取消選取與進行中的手動連結 |
 | 點擊節點 ◗（未配對列） | 開始 / 完成 / 斷開手動連結（左右各點一個） |
-| 工具列 ◗ Clear manual links | 一次取消目前 repro pair 的所有手動連結並清除 `localStorage` 暫存 |
+| `Ctrl` + 左鍵點 commit | 開啟該 commit 的詳情浮窗（可多開；重複點同一個不重開） |
+| 右鍵點 commit | 跳出情境選單：新增/編輯註記、強制背景顏色（綠/亮紅/藍/黃）、清除顏色 |
+| 點 commit 上的 📝 圖示 | 檢視 / 編輯 / 刪除該列註記 |
+| 工具列 View（Compare / Left only / Right only） | 切換雙邊比對或單邊放大模式 |
+| 工具列 ◗ Clear manual links / 📝 Clear notes / 🎨 Clear colors | 一次清除目前 repro pair 的手動連結 / 註記 / 強制顏色及其 `localStorage` 暫存 |
 
 > `F3` 的循環順序為顯示列由上到下、同列時左欄先於右欄；命中集合改變（修改搜尋字）時游標自動歸零。`Ctrl`+`F` 與 `F3` 在全域監聽，即使焦點在搜尋框內也有效。
 
@@ -230,7 +246,7 @@ npx electron . -L "D:\path\to\repoA" -R "D:\path\to\repoB"
 
 - 指定分支 / 標籤 / 日期範圍載入（`getCommits` 已支援 `branch`、`limit` 參數）。
 - 匯出比對結果（CSV / Markdown）。
-- 兩邊 commit 點選後顯示完整 diff 內容。
+- 兩邊 commit 點選後顯示完整 **diff 內容**（目前 Ctrl+點選已可顯示 commit 訊息與 metadata 詳情，尚未含逐行 diff）。
 
 ---
 
@@ -248,6 +264,11 @@ npx electron . -L "D:\path\to\repoA" -R "D:\path\to\repoB"
 | 連接線畫法（直角轉折 / 可點選） | `src/components/ConnectionLines.jsx` |
 | 選取 focus / Esc / 點空白取消 | `src/App.jsx`（`handleSelect` / `onBodyClick` / keydown） |
 | 快捷鍵（Ctrl+F / Esc / F3） | `src/App.jsx`（`cycleHit` / keydown / `onSearchKeyDown`） |
+| 浮動搜尋面板 | `src/components/SearchPanel.jsx` |
+| 註記（Note）浮窗 / 邏輯 | `src/components/NotePopup.jsx`、`src/App.jsx`（`openNote`/`saveNote`/`deleteNote`/`clearNotes`） |
+| 右鍵選單 / 強制顏色 | `src/components/RowMenu.jsx`、`src/App.jsx`（`openRowMenu`/`setColor`/`clearColors`）、`src/styles.css`（`.commit-row.force-*`） |
+| Commit 詳情浮窗 / Markdown | `src/components/CommitDetail.jsx`、`src/lib/markdown.js`、`src/App.jsx`（`openDetail`/`resolveDetail`/`details`） |
+| 單一 Repo（View）模式 | `src/App.jsx`（`single` 狀態、`view` useMemo）、`src/components/Toolbar.jsx`、`src/styles.css`（`.repo-column.plain`） |
 | 手動連結（節點 / 暫存 / RESUME / Clear） | `src/App.jsx`（`onNode` / `manualLinks` / `clearManualLinks` / localStorage）、`src/lib/diff.js`（manual 階段） |
 | 虛擬化渲染 | `src/components/RepoColumn.jsx` |
 | git log 解析欄位 / patch-id | `electron/git.js` |
