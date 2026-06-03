@@ -187,12 +187,33 @@ CSS 變數集中於 `:root`：
 
 ## 7. 開發與執行
 
+### 須預先安裝的程式
+
+| 程式 | 版本建議 | 用途 | 取得方式 |
+| --- | --- | --- | --- |
+| **Node.js**（內含 npm） | **18 LTS 以上**（建議 20/22 LTS） | 執行 Vite / Electron、安裝相依套件、產生 demo GIF | <https://nodejs.org/>（或 `winget install OpenJS.NodeJS.LTS`） |
+| **Git** | 任意近期版本 | 本工具透過 `git` CLI 讀取兩個 repo 的紀錄；需在 `PATH` 中 | <https://git-scm.com/>（或 `winget install Git.Git`） |
+| **PowerShell** | Windows 內建即可 | 執行下列指令與 `start.cmd` | 系統內建 |
+
+> 選用：**Visual Studio C++ 工具集（含 ClangCL）** 僅在要啟用 `better-sqlite3` 持久化快取時才需要；未安裝時會自動退回記憶體快取，不影響功能（見下方「環境注意事項」）。
+
+確認安裝：
+
+```powershell
+node -v      # 應顯示 v18 以上
+npm -v
+git --version
+```
+
+### 指令
+
 ```powershell
 npm install          # 安裝相依套件
 npm run dev          # 同時啟動 Vite (5173) 與 Electron（開發模式）
 npm run build        # 建置 renderer 到 dist/
 npm run dist         # electron-builder 打包（Windows NSIS）
 npm run rebuild      # 為當前 Electron ABI 重編 better-sqlite3
+npm run demo:gif     # 重新產生操作預覽動畫 public/demo.gif
 ```
 
 ### 啟動與自動開啟 repro（-L / -R）
@@ -210,6 +231,30 @@ npx electron . -L "D:\path\to\repoA" -R "D:\path\to\repoB"
 - `electron/main.js` 的 `parseRepoArgs()` 解析 argv；找不到時改讀環境變數 `REPRO_L` / `REPRO_R`。
 - `start.cmd` 走 dev 模式，參數無法穩定穿過 `concurrently → wait-on → electron`，所以改將 `-L`/`-R` 設成 `REPRO_L`/`REPRO_R` 環境變數轉傳。
 - 相對路徑以啟動目錄解析。修改 `src/` 程式碼後，production 啟動需先 `npm run build`。
+
+### Windows 檔案總管右鍵整合（類似 Beyond Compare）
+
+可在資料夾右鍵新增兩個選單項，達成「先選左邊、再選右邊比對」的兩段式流程，並自動帶入目錄啟動 M2 GIT DIFF：
+
+- **Select Folder for M2 GIT DIFF** — 記住此資料夾為左側（`-L`）。
+- **Compare in M2 GIT DIFF** — 以剛才記住的資料夾為 `-L`、目前資料夾為 `-R` 啟動比對。
+
+安裝 / 移除（**HKCU 寫入，免系統管理員**）：
+
+```powershell
+# 安裝右鍵選單
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\install-context-menu.ps1
+
+# 移除右鍵選單
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\uninstall-context-menu.ps1
+```
+
+運作方式：
+
+- 選單項註冊在 `HKCU\Software\Classes\Directory\shell`（在資料夾上右鍵）與 `Directory\Background\shell`（在資料夾空白處右鍵），故**不需管理員權限**。
+- 兩段式狀態由 `tools\m2gitdiff-launcher.ps1` 處理：「Select」會把左側路徑寫入 `%LOCALAPPDATA%\M2_GIT_DIFF\left-folder.txt`；「Compare」讀回該路徑，呼叫 `start.cmd -L <左> -R <目前>` 啟動，完成後清除狀態。
+- 若尚未選擇左側就按 Compare，會跳出提示訊息。
+- 選單會指向 `tools\` 內的腳本與專案根的 `start.cmd`，因此**請勿移動專案資料夾**；若移動了，重新執行 `install-context-menu.ps1` 即可更新路徑。
 
 ### 環境注意事項（本機已知狀況）
 
