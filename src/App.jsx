@@ -2,6 +2,7 @@ import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react'
 import Toolbar from './components/Toolbar.jsx';
 import RepoColumn from './components/RepoColumn.jsx';
 import ConnectionLines from './components/ConnectionLines.jsx';
+import SearchPanel from './components/SearchPanel.jsx';
 import { computeDiff, matchesQuery, alignLayout } from './lib/diff.js';
 import { ROW_HEIGHT, GUTTER_WIDTH, DEFAULT_LIMIT } from './lib/constants.js';
 
@@ -38,6 +39,24 @@ export default function App() {
   const searchRef = useRef(null);
   const [activeHit, setActiveHit] = useState(null); // row key currently focused
   const hitIdxRef = useRef(-1);
+
+  // Floating search panel: open/closed + which commit fields to search.
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [scopes, setScopes] = useState({
+    subject: true,
+    body: true,
+    sha: true,
+    author: true,
+    date: true
+  });
+  const toggleScope = useCallback((key) => {
+    setScopes((s) => {
+      const next = { ...s, [key]: !s[key] };
+      // Never allow zero scopes -> fall back to keeping the one just toggled on.
+      if (!Object.values(next).some(Boolean)) return s;
+      return next;
+    });
+  }, []);
 
   const onScroll = useCallback((e) => {
     setScrollTop(e.currentTarget.scrollTop);
@@ -264,19 +283,19 @@ export default function App() {
   const view = useMemo(() => {
     const prep = (rows) =>
       rows
-        .map((c) => ({ commit: c, isHit: query ? matchesQuery(c, query) : false }))
+        .map((c) => ({ commit: c, isHit: query ? matchesQuery(c, query, scopes) : false }))
         .filter((r) => !(filterActive && !r.isHit));
 
     return alignLayout(prep(diff.leftRows), prep(diff.rightRows), diff.links);
-  }, [diff, query, filterActive]);
+  }, [diff, query, filterActive, scopes]);
 
   const matchCount = useMemo(() => {
     if (!query) return 0;
     let n = 0;
-    diff.leftRows.forEach((c) => matchesQuery(c, query) && n++);
-    diff.rightRows.forEach((c) => matchesQuery(c, query) && n++);
+    diff.leftRows.forEach((c) => matchesQuery(c, query, scopes) && n++);
+    diff.rightRows.forEach((c) => matchesQuery(c, query, scopes) && n++);
     return n;
-  }, [query, diff]);
+  }, [query, diff, scopes]);
 
   // Flat list of matched rows in display order (top-to-bottom, left before
   // right) so F3 can cycle through them.
@@ -299,7 +318,7 @@ export default function App() {
   useEffect(() => {
     hitIdxRef.current = -1;
     setActiveHit(null);
-  }, [query]);
+  }, [query, scopes]);
 
   // Scroll the next (or previous) matched row into view and highlight it.
   const cycleHit = useCallback(
@@ -334,15 +353,24 @@ export default function App() {
     setPendingNode(null);
   }, []);
 
+  // Open (or re-focus) the floating search panel and select its text.
+  const openSearch = useCallback(() => {
+    setSearchOpen(true);
+    // Focus after the panel has mounted/rendered.
+    requestAnimationFrame(() => {
+      searchRef.current?.focus();
+      searchRef.current?.select();
+    });
+  }, []);
+
   // Esc clears the current selection / pending manual link. Delete removes the
-  // selected manual link. Ctrl+F focuses search, F3 cycles matches.
+  // selected manual link. Ctrl+F opens search, F3 cycles matches.
   useEffect(() => {
     const onKey = (e) => {
-      // Ctrl/Cmd+F -> jump to the search box.
+      // Ctrl/Cmd+F -> open the floating search panel.
       if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) {
         e.preventDefault();
-        searchRef.current?.focus();
-        searchRef.current?.select();
+        openSearch();
         return;
       }
       // F3 -> cycle through highlighted matches (Shift+F3 goes backwards).
@@ -371,19 +399,30 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [selectedMatch, cycleHit]);
+  }, [selectedMatch, cycleHit, openSearch]);
 
-  // Esc inside the search box clears the query (and its highlights) and leaves
-  // the field, returning focus to the diff body.
-  const onSearchKeyDown = useCallback((e) => {
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      e.stopPropagation();
-      setQuery('');
-      searchRef.current?.blur();
-      scrollRef.current?.focus();
-    }
+  // Close the floating search panel (clears query + highlights).
+  const closeSearch = useCallback(() => {
+    setSearchOpen(false);
+    setQuery('');
+    scrollRef.current?.focus();
   }, []);
+
+  // Esc inside the search box closes the panel, clearing the query and its
+  // highlights and returning focus to the diff body.
+  const onSearchKeyDown = useCallback(
+    (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        closeSearch();
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        cycleHit(e.shiftKey ? -1 : 1);
+      }
+    },
+    [closeSearch, cycleHit]
+  );
 
   return (
     <div className="app">
@@ -391,20 +430,31 @@ export default function App() {
         left={left}
         right={right}
         loading={loading}
-        query={query}
-        onQuery={setQuery}
         onPick={pick}
         onReload={reload}
         leftStats={diff.leftStats}
         rightStats={diff.rightStats}
-        matchCount={matchCount}
-        filterOnly={filterOnly}
-        onToggleFilter={() => setFilterOnly((v) => !v)}
-        searchRef={searchRef}
-        onSearchKeyDown={onSearchKeyDown}
+        onOpenSearch={openSearch}
         manualCount={manualLinks.length}
         onClearManualLinks={clearManualLinks}
       />
+
+      {searchOpen && (
+        <SearchPanel
+          query={query}
+          onQuery={setQuery}
+          scopes={scopes}
+          onToggleScope={toggleScope}
+          matchCount={matchCount}
+          filterOnly={filterOnly}
+          onToggleFilter={() => setFilterOnly((v) => !v)}
+          onPrev={() => cycleHit(-1)}
+          onNext={() => cycleHit(1)}
+          onClose={closeSearch}
+          inputRef={searchRef}
+          onInputKeyDown={onSearchKeyDown}
+        />
+      )}
 
       {error && <div className="error-bar">⚠ {error}</div>}
 

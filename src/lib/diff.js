@@ -282,16 +282,19 @@ export function alignLayout(Lrows, Rrows, allLinks) {
   };
 }
 
-// Returns true if a commit matches the search query across title/body/sha/date.
-export function matchesQuery(commit, query) {
+// Returns true if a commit matches the search query within the enabled scopes.
+// `scopes` is an object like { subject, body, sha, author, date }; when omitted
+// (null/undefined) every scope is searched (backward-compatible default).
+export function matchesQuery(commit, query, scopes = null) {
   if (!query) return true;
   const q = query.toLowerCase();
+  const on = (k) => !scopes || scopes[k];
   return (
-    commit.subject.toLowerCase().includes(q) ||
-    (commit.body && commit.body.toLowerCase().includes(q)) ||
-    commit.sha.toLowerCase().includes(q) ||
-    commit.short.toLowerCase().includes(q) ||
-    (commit.author && commit.author.toLowerCase().includes(q)) ||
-    (commit.authorDate && commit.authorDate.toLowerCase().includes(q))
+    (on('subject') && commit.subject.toLowerCase().includes(q)) ||
+    (on('body') && commit.body && commit.body.toLowerCase().includes(q)) ||
+    (on('sha') &&
+      (commit.sha.toLowerCase().includes(q) || commit.short.toLowerCase().includes(q))) ||
+    (on('author') && commit.author && commit.author.toLowerCase().includes(q)) ||
+    (on('date') && commit.authorDate && commit.authorDate.toLowerCase().includes(q))
   );
 }

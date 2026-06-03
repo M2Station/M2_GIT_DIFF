@@ -220,6 +220,87 @@ body {
   font-size: 11px;
 }
 
+/* ---------------- Floating search panel ---------------- */
+.search-panel {
+  position: fixed;
+  z-index: 50;
+  width: 320px;
+  background: var(--panel);
+  border: 1px solid var(--accent-dim);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(54, 214, 255, 0.08);
+  overflow: hidden;
+  user-select: none;
+}
+.sp-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  background: var(--bg-soft);
+  border-bottom: 1px solid var(--line);
+  cursor: move;
+}
+.sp-title {
+  font-size: 12px;
+  color: var(--text);
+  font-weight: 600;
+}
+.sp-spacer {
+  flex: 1;
+}
+.sp-close {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+.sp-close:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+}
+.sp-body {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.sp-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.search-panel .search {
+  width: 100%;
+}
+.sp-scopes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+.sp-scope {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.sp-scope input {
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.sp-scope:hover {
+  color: var(--text);
+}
+.sp-actions .match-count {
+  min-width: 48px;
+}
+
 .error-bar {
   background: rgba(235, 70, 80, 0.15);
   border-bottom: 1px solid var(--unique-bd);

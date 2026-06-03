@@ -44,17 +44,11 @@ export default function Toolbar({
   left,
   right,
   loading,
-  query,
-  onQuery,
   onPick,
   onReload,
   leftStats,
   rightStats,
-  matchCount,
-  filterOnly,
-  onToggleFilter,
-  searchRef,
-  onSearchKeyDown,
+  onOpenSearch,
   manualCount,
   onClearManualLinks
 }) {
@@ -69,27 +63,9 @@ export default function Toolbar({
       <RepoSlot side="R" repo={right} loading={loading.R} onPick={onPick} onReload={onReload} stats={rightStats} />
 
       <div className="search-block">
-        <input
-          ref={searchRef}
-          className="search"
-          type="text"
-          placeholder="Search title, body, SHA, author, date…  (Ctrl+F)"
-          value={query}
-          onChange={(e) => onQuery(e.target.value)}
-          onKeyDown={onSearchKeyDown}
-        />
-        {query && <span className="match-count">{matchCount} hits</span>}
-        <button
-          className={'btn toggle' + (filterOnly ? ' on' : '')}
-          onClick={onToggleFilter}
-          disabled={!query}
-          title="Show only matching commits"
-        >
-          {filterOnly ? '☑' : '☐'} Filter
+        <button className="btn" onClick={onOpenSearch} title="Search (Ctrl+F)">
+          🔍 Search
         </button>
-        {query && (
-          <button className="btn ghost" onClick={() => onQuery('')} title="Clear">✕</button>
-        )}
         <button
           className="btn clear-manual"
           onClick={onClearManualLinks}
