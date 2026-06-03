@@ -736,11 +736,18 @@ export default function App() {
   // aligned on the same display row so their connecting line is horizontal
   // ("左右對齊"). When the "filter to matches only" toggle is active,
   // non-matching rows are removed before the alignment pass.
-  const view = useMemo(() => {
+  //
+  // The structural alignment (the LIS-based `alignLayout`) is split from the
+  // per-row search highlighting. When the "filter to matches" toggle is OFF the
+  // layout does not depend on the query at all — only the `isHit` flags do — so
+  // we gate the query out of this memo's deps via `layoutQuery`. Typing in the
+  // search box then reuses the cached alignment instead of recomputing it.
+  const layoutQuery = filterActive ? query : '';
+  const layout = useMemo(() => {
     const prep = (rows) =>
       rows
-        .map((c) => ({ commit: c, isHit: query ? matchesQuery(c, query, scopes) : false }))
-        .filter((r) => !(filterActive && !r.isHit));
+        .map((c) => ({ commit: c, isHit: false }))
+        .filter((r) => !(filterActive && !matchesQuery(r.commit, layoutQuery, scopes)));
 
     // Single-repo mode: stack the chosen repo's commits sequentially, no
     // alignment gaps, no cross-links.
@@ -748,7 +755,7 @@ export default function App() {
       const rows = prep(single === 'L' ? diff.leftRows : diff.rightRows).map((r, i) => ({
         commit: r.commit,
         displayIndex: i,
-        isHit: r.isHit
+        isHit: false
       }));
       const sideData = { rows, count: rows.length };
       const empty = { rows: [], count: 0 };
@@ -761,7 +768,24 @@ export default function App() {
     }
 
     return alignLayout(prep(diff.leftRows), prep(diff.rightRows), diff.links);
-  }, [diff, query, filterActive, scopes, single]);
+  }, [diff, single, filterActive, layoutQuery, scopes]);
+
+  // Cheap overlay: stamp the per-row `isHit` flag for the current query without
+  // rebuilding the (potentially large) alignment above.
+  const view = useMemo(() => {
+    if (!query) return layout;
+    const annotate = (side) =>
+      side.rows.length
+        ? {
+            ...side,
+            rows: side.rows.map((r) => ({
+              ...r,
+              isHit: matchesQuery(r.commit, query, scopes)
+            }))
+          }
+        : side;
+    return { ...layout, L: annotate(layout.L), R: annotate(layout.R) };
+  }, [layout, query, scopes]);
   // Export the aligned diff (notes + forced colors + manual links) to a styled
   // .xlsx. Matched pairs already share a display row, so commits stay aligned;
   // alignment gaps become empty cells. Notes ride along as cell tooltips.
