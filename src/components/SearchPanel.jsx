@@ -24,7 +24,10 @@ export default function SearchPanel({
   onNext,
   onClose,
   inputRef,
-  onInputKeyDown
+  onInputKeyDown,
+  noteCount,
+  onPrevNote,
+  onNextNote
 }) {
   // Position is local so dragging never re-renders the rest of the app.
   const [pos, setPos] = useState({ x: window.innerWidth - 380, y: 70 });
@@ -127,6 +130,30 @@ export default function SearchPanel({
             title="Show only matching commits"
           >
             {filterOnly ? '☑' : '☐'} Filter
+          </button>
+        </div>
+
+        <div className="sp-sep" />
+
+        <div className="sp-row sp-notes">
+          <span className="sp-notes-label">📝 Notes</span>
+          <span className="match-count">{noteCount ? `${noteCount} notes` : '無註記'}</span>
+          <span className="sp-spacer" />
+          <button
+            className="btn ghost"
+            onClick={onPrevNote}
+            disabled={!noteCount}
+            title="Previous note"
+          >
+            ↑
+          </button>
+          <button
+            className="btn ghost"
+            onClick={onNextNote}
+            disabled={!noteCount}
+            title="Next note"
+          >
+            ↓
           </button>
         </div>
       </div>

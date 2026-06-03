@@ -63,6 +63,7 @@ export default function App() {
   const searchRef = useRef(null);
   const [activeHit, setActiveHit] = useState(null); // row key currently focused
   const hitIdxRef = useRef(-1);
+  const noteIdxRef = useRef(-1); // cursor for the note navigator
 
   // Floating search panel: open/closed + which commit fields to search.
   const [searchOpen, setSearchOpen] = useState(false);
@@ -590,6 +591,44 @@ export default function App() {
     [hits]
   );
 
+  // Flat list of rows that have a note, in display order, so the note
+  // navigator (separate from search) can jump between them.
+  const noteHits = useMemo(() => {
+    const collect = (rows, side) =>
+      rows
+        .filter((r) => r.displayIndex != null && noteShas[side].has(r.commit.sha))
+        .map((r) => ({
+          side,
+          displayIndex: r.displayIndex,
+          key: r.commit.sha + ':' + r.commit.index
+        }));
+    return [...collect(view.L.rows, 'L'), ...collect(view.R.rows, 'R')].sort(
+      (a, b) => a.displayIndex - b.displayIndex || (a.side < b.side ? -1 : 1)
+    );
+  }, [view, noteShas]);
+
+  // Reset the note cursor whenever the set of noted rows changes.
+  useEffect(() => {
+    noteIdxRef.current = -1;
+  }, [noteHits.length]);
+
+  // Scroll the next (or previous) noted row into view and highlight it.
+  const cycleNote = useCallback(
+    (dir) => {
+      if (noteHits.length === 0) return;
+      const next = (noteIdxRef.current + dir + noteHits.length) % noteHits.length;
+      noteIdxRef.current = next;
+      const hit = noteHits[next];
+      setActiveHit(hit.key);
+      const el = scrollRef.current;
+      if (el) {
+        const target = hit.displayIndex * ROW_HEIGHT - el.clientHeight / 2 + ROW_HEIGHT / 2;
+        el.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
+      }
+    },
+    [noteHits]
+  );
+
   const bodyHeight = view.totalRows * ROW_HEIGHT;
 
   // Select a match and move keyboard focus to the diff body so Esc / blank
@@ -616,6 +655,13 @@ export default function App() {
     });
   }, []);
 
+  // Close the floating search panel (clears query + highlights).
+  const closeSearch = useCallback(() => {
+    setSearchOpen(false);
+    setQuery('');
+    scrollRef.current?.focus();
+  }, []);
+
   // Esc clears the current selection / pending manual link. Delete removes the
   // selected manual link. Ctrl+F opens search, F3 cycles matches.
   useEffect(() => {
@@ -633,6 +679,9 @@ export default function App() {
         return;
       }
       if (e.key === 'Escape') {
+        if (searchOpen) {
+          closeSearch();
+        }
         setSelectedMatch(null);
         setPendingNode(null);
         setNotePopup(null);
@@ -655,14 +704,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [selectedMatch, cycleHit, openSearch]);
-
-  // Close the floating search panel (clears query + highlights).
-  const closeSearch = useCallback(() => {
-    setSearchOpen(false);
-    setQuery('');
-    scrollRef.current?.focus();
-  }, []);
+  }, [selectedMatch, cycleHit, openSearch, searchOpen, closeSearch]);
 
   // Esc inside the search box closes the panel, clearing the query and its
   // highlights and returning focus to the diff body.
@@ -715,6 +757,9 @@ export default function App() {
           onClose={closeSearch}
           inputRef={searchRef}
           onInputKeyDown={onSearchKeyDown}
+          noteCount={noteHits.length}
+          onPrevNote={() => cycleNote(-1)}
+          onNextNote={() => cycleNote(1)}
         />
       )}
 
@@ -770,6 +815,7 @@ export default function App() {
             related={data.related}
             x={d.x}
             y={d.y}
+            searchTerm={query}
             onClose={() => closeDetail(d.side, d.sha)}
             onOpenRelated={(side, sha) => openDetail(side, sha, d.x + 40, d.y + 40)}
           />

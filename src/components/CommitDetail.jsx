@@ -20,7 +20,7 @@ function initialWidth(commit) {
   return Math.max(MIN_W, Math.min(MAX_W, est));
 }
 
-export default function CommitDetail({ side, commit, related, x, y, onClose, onOpenRelated }) {
+export default function CommitDetail({ side, commit, related, x, y, searchTerm, onClose, onOpenRelated }) {
   const [size, setSize] = useState(() => {
     const w = initialWidth(commit);
     const h = Math.min(560, Math.round(window.innerHeight * 0.7));
@@ -30,7 +30,15 @@ export default function CommitDetail({ side, commit, related, x, y, onClose, onO
     x: Math.min(Math.max(12, x), window.innerWidth - 60),
     y: Math.min(Math.max(12, y), window.innerHeight - 60)
   }));
+  const [hl, setHl] = useState(searchTerm || '');
+  const scrollRef = useRef(null);
   const dragRef = useRef(null);
+
+  // Seed / sync the highlight term from the global search query, so content
+  // matching the active search is highlighted automatically inside the popup.
+  useEffect(() => {
+    setHl(searchTerm || '');
+  }, [searchTerm]);
 
   // Close on Escape. (Outside-click is intentionally NOT handled so multiple
   // detail windows can stay open and be interacted with independently.)
@@ -47,6 +55,64 @@ export default function CommitDetail({ side, commit, related, x, y, onClose, onO
       window.removeEventListener('keydown', onKey, true);
     };
   }, [onClose]);
+
+  // Highlight all text matching the `hl` term inside this popup's scroll area.
+  // Runs whenever the term or the rendered content changes. Existing marks are
+  // unwrapped first so the highlight always reflects the current term.
+  useEffect(() => {
+    const root = scrollRef.current;
+    if (!root) return;
+
+    const clear = () => {
+      const marks = root.querySelectorAll('mark.cd-hl');
+      marks.forEach((m) => {
+        const parent = m.parentNode;
+        if (!parent) return;
+        parent.replaceChild(document.createTextNode(m.textContent), m);
+        parent.normalize();
+      });
+    };
+
+    clear();
+    const term = hl.trim();
+    if (!term) return;
+
+    const lower = term.toLowerCase();
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode: (node) => {
+        if (!node.nodeValue || !node.nodeValue.toLowerCase().includes(lower)) {
+          return NodeFilter.FILTER_REJECT;
+        }
+        const p = node.parentNode;
+        if (p && (p.nodeName === 'SCRIPT' || p.nodeName === 'STYLE' || p.nodeName === 'MARK')) {
+          return NodeFilter.FILTER_REJECT;
+        }
+        return NodeFilter.FILTER_ACCEPT;
+      }
+    });
+
+    const targets = [];
+    let n;
+    while ((n = walker.nextNode())) targets.push(n);
+
+    targets.forEach((node) => {
+      const text = node.nodeValue;
+      const frag = document.createDocumentFragment();
+      let i = 0;
+      let idx;
+      const low = text.toLowerCase();
+      while ((idx = low.indexOf(lower, i)) !== -1) {
+        if (idx > i) frag.appendChild(document.createTextNode(text.slice(i, idx)));
+        const mark = document.createElement('mark');
+        mark.className = 'cd-hl';
+        mark.textContent = text.slice(idx, idx + term.length);
+        frag.appendChild(mark);
+        i = idx + term.length;
+      }
+      if (i < text.length) frag.appendChild(document.createTextNode(text.slice(i)));
+      node.parentNode.replaceChild(frag, node);
+    });
+  }, [hl, commit, related]);
 
   const onDragStart = (e) => {
     if (e.target.closest('button')) return;
@@ -142,12 +208,22 @@ export default function CommitDetail({ side, commit, related, x, y, onClose, onO
         <span className={'cd-side ' + side}>{sideName}</span>
         <span className={'cd-status ' + commit.status}>{statusLabel}</span>
         <span className="cd-spacer" />
+        <input
+          className="cd-hl-input"
+          type="text"
+          value={hl}
+          placeholder="HL…"
+          title="高亮符合的字"
+          onChange={(e) => setHl(e.target.value)}
+          onPointerDown={(e) => e.stopPropagation()}
+          onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setHl(''); } }}
+        />
         <button className="cd-close" onClick={onClose} title="Close (Esc)" aria-label="Close">
           ✕
         </button>
       </div>
 
-      <div className="cd-scroll">
+      <div className="cd-scroll" ref={scrollRef}>
       {/* prominent metadata block */}
       <div className="cd-meta">
         <div className="cd-meta-row">
