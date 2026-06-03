@@ -86,6 +86,7 @@ export default function App() {
   const scrollRef = useRef(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(800);
+  const scrollRafRef = useRef(0);
 
   // Search box ref (Ctrl+F focus) and F3 cycling through matched rows.
   const searchRef = useRef(null);
@@ -115,8 +116,22 @@ export default function App() {
   }, []);
 
   const onScroll = useCallback((e) => {
-    setScrollTop(e.currentTarget.scrollTop);
-    setViewportHeight(e.currentTarget.clientHeight);
+    // Coalesce high-frequency scroll events into one state update per frame so
+    // we don't rerun the virtualized render (and SVG redraw) on every pixel.
+    const el = e.currentTarget;
+    if (scrollRafRef.current) return;
+    scrollRafRef.current = requestAnimationFrame(() => {
+      scrollRafRef.current = 0;
+      // Read the latest position at frame time, not the (possibly stale)
+      // value from the event that scheduled this frame.
+      setScrollTop(el.scrollTop);
+      setViewportHeight(el.clientHeight);
+    });
+  }, []);
+
+  // Cancel any pending scroll frame on unmount.
+  useEffect(() => () => {
+    if (scrollRafRef.current) cancelAnimationFrame(scrollRafRef.current);
   }, []);
 
   // Measure the viewport on mount and whenever the window resizes so the
