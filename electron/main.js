@@ -140,6 +140,71 @@ ipcMain.handle('repo:gitOp', async (_evt, payload) => {
   return git.gitOp(repoPath, op);
 });
 
+// Resolve the VS Code launcher once. On Windows the `code` shim is `code.cmd`;
+// `where` returns its full path. Returns null when VS Code is not installed /
+// not on PATH so callers can surface a friendly message.
+let _codeCmd;
+function resolveCodeCommand() {
+  if (_codeCmd !== undefined) return _codeCmd;
+  try {
+    const { execFileSync } = require('node:child_process');
+    if (process.platform === 'win32') {
+      const out = execFileSync('where', ['code.cmd'], { windowsHide: true })
+        .toString()
+        .trim()
+        .split(/\r?\n/)[0];
+      _codeCmd = out || null;
+    } else {
+      execFileSync('which', ['code'], { windowsHide: true });
+      _codeCmd = 'code';
+    }
+  } catch {
+    _codeCmd = null;
+  }
+  return _codeCmd;
+}
+
+// Open the locally installed VS Code chat with a prepared prompt. The prompt is
+// streamed via stdin (never the command line), and every command-line token is
+// constant or whitelisted, so there is no shell-injection surface even though
+// shell:true is required to launch the `code.cmd` batch shim.
+ipcMain.handle('vscode:chat', async (_evt, payload) => {
+  const { repoPath, prompt, mode } = payload || {};
+  if (!prompt || typeof prompt !== 'string') throw new Error('prompt is required');
+
+  const codeCmd = resolveCodeCommand();
+  if (!codeCmd) {
+    // Sentinel the renderer maps to a friendly "VS Code not installed" message.
+    const err = new Error('VSCODE_NOT_FOUND');
+    err.code = 'VSCODE_NOT_FOUND';
+    throw err;
+  }
+
+  const { spawn } = require('node:child_process');
+  const fs = require('node:fs');
+  const chatMode = ['ask', 'edit', 'agent'].includes(mode) ? mode : 'agent';
+  const cwd = repoPath && fs.existsSync(repoPath) ? repoPath : undefined;
+
+  return await new Promise((resolve, reject) => {
+    let child;
+    try {
+      // Constant command string: only the validated chatMode and the trusted
+      // resolved code path are interpolated — no user content.
+      const cmdLine = `"${codeCmd}" chat -r -m ${chatMode} -`;
+      child = spawn(cmdLine, { cwd, windowsHide: true, shell: true });
+    } catch (e) {
+      reject(new Error('Failed to launch VS Code: ' + e.message));
+      return;
+    }
+    child.on('error', (e) => reject(new Error('Failed to launch VS Code: ' + e.message)));
+    child.on('spawn', () => {
+      child.stdin.write(prompt, 'utf8');
+      child.stdin.end();
+      resolve({ ok: true });
+    });
+  });
+});
+
 async function safeHead(repoPath) {
   try {
     const { execFileSync } = require('node:child_process');

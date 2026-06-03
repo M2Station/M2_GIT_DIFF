@@ -20,7 +20,7 @@ function initialWidth(commit) {
   return Math.max(MIN_W, Math.min(MAX_W, est));
 }
 
-export default function CommitDetail({ side, commit, related, x, y, searchTerm, onClose, onOpenRelated }) {
+export default function CommitDetail({ side, commit, related, repoPath, x, y, searchTerm, onClose, onOpenRelated }) {
   const [size, setSize] = useState(() => {
     const w = initialWidth(commit);
     const h = Math.min(560, Math.round(window.innerHeight * 0.7));
@@ -31,6 +31,7 @@ export default function CommitDetail({ side, commit, related, x, y, searchTerm, 
     y: Math.min(Math.max(12, y), window.innerHeight - 60)
   }));
   const [hl, setHl] = useState(searchTerm || '');
+  const [toast, setToast] = useState(null);
   const scrollRef = useRef(null);
   const dragRef = useRef(null);
 
@@ -197,6 +198,46 @@ export default function CommitDetail({ side, commit, related, x, y, searchTerm, 
     unique: 'Unique · 單側獨有'
   }[commit.status] || commit.status;
 
+  // Hand the commit off to the locally installed VS Code chat. The prompt is
+  // streamed to `code chat` via stdin by the main process, and the repo is used
+  // as the workspace so the agent can run `git show <sha>` for the full diff.
+  // The prompt is kept in English so it survives any stdin encoding quirks.
+  const openInChat = async () => {
+    if (!window.api?.openInVSCodeChat) {
+      setToast('VS Code 整合僅在桌面版 (Electron) 可用。');
+      return;
+    }
+    const prompt = [
+      'Explain the following Git commit: summarize what it changes, its purpose, and any potential risks.',
+      `You can run \`git show ${commit.sha}\` in this repo to inspect the full diff.`,
+      '',
+      `Repo: ${repoPath || '(unknown)'}`,
+      `Commit: ${commit.sha}`,
+      `Author: ${commit.author}${commit.authorEmail ? ` <${commit.authorEmail}>` : ''}`,
+      `Date: ${commit.authorDate}`,
+      `Subject: ${commit.subject}`,
+      '',
+      'Commit message:',
+      commit.body || '(no body)'
+    ].join('\n');
+    try {
+      await window.api.openInVSCodeChat({ repoPath, prompt, mode: 'agent' });
+    } catch (e) {
+      if (e && (e.code === 'VSCODE_NOT_FOUND' || /VSCODE_NOT_FOUND/.test(e.message || ''))) {
+        setToast('找不到 VS Code，請先安裝並確認 `code` 指令已加入 PATH。');
+      } else {
+        setToast('開啟 VS Code Chat 失敗：' + (e?.message || e));
+      }
+    }
+  };
+
+  // Auto-dismiss the toast after a few seconds.
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 5000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
   return (
     <div
       ref={rootRef}
@@ -218,10 +259,26 @@ export default function CommitDetail({ side, commit, related, x, y, searchTerm, 
           onPointerDown={(e) => e.stopPropagation()}
           onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setHl(''); } }}
         />
+        <button
+          className="cd-chat"
+          onClick={openInChat}
+          onPointerDown={(e) => e.stopPropagation()}
+          title="用 VS Code Copilot Chat 解說此 Commit"
+          aria-label="Open in VS Code Chat"
+        >
+          💬 Chat
+        </button>
         <button className="cd-close" onClick={onClose} title="Close (Esc)" aria-label="Close">
           ✕
         </button>
       </div>
+
+      {toast && (
+        <div className="cd-toast" role="alert" onPointerDown={(e) => e.stopPropagation()}>
+          <span>{toast}</span>
+          <button className="cd-toast-x" onClick={() => setToast(null)} aria-label="Dismiss">✕</button>
+        </div>
+      )}
 
       <div className="cd-scroll" ref={scrollRef}>
       {/* prominent metadata block */}

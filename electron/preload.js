@@ -7,5 +7,6 @@ contextBridge.exposeInMainWorld('api', {
   loadRepo: (opts) => ipcRenderer.invoke('repo:load', opts),
   getPatchIds: (opts) => ipcRenderer.invoke('repo:patchIds', opts),
   gitOp: (opts) => ipcRenderer.invoke('repo:gitOp', opts),
-  getInitialRepos: () => ipcRenderer.invoke('app:getInitialRepos')
+  getInitialRepos: () => ipcRenderer.invoke('app:getInitialRepos'),
+  openInVSCodeChat: (opts) => ipcRenderer.invoke('vscode:chat', opts)
 });

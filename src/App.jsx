@@ -892,6 +892,7 @@ export default function App() {
             side={d.side}
             commit={data.commit}
             related={data.related}
+            repoPath={d.side === 'L' ? left.path : right.path}
             x={d.x}
             y={d.y}
             searchTerm={query}
