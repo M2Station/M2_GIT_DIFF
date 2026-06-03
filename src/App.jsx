@@ -1013,6 +1013,54 @@ export default function App() {
   const stageEmpty =
     !noRepos && !loading.L && !loading.R && view.totalRows === 0;
 
+  // Keyboard row navigation: a flat, display-ordered list of every visible
+  // commit row (both sides, left before right on shared rows). ArrowUp/Down
+  // walk this list, reusing `activeHit` as the cursor so the highlight, the
+  // search navigator, and the note navigator all share one focused row.
+  const navRows = useMemo(() => {
+    const collect = (rows, side) =>
+      rows
+        .filter((r) => r.commit && r.displayIndex != null)
+        .map((r) => ({
+          side,
+          sha: r.commit.sha,
+          displayIndex: r.displayIndex,
+          key: r.commit.sha + ':' + r.commit.index
+        }));
+    return [...collect(view.L.rows, 'L'), ...collect(view.R.rows, 'R')].sort(
+      (a, b) => a.displayIndex - b.displayIndex || (a.side < b.side ? -1 : 1)
+    );
+  }, [view]);
+
+  // Move the focused row up (dir -1) or down (dir +1) and scroll it into view.
+  const moveCursor = useCallback(
+    (dir) => {
+      if (navRows.length === 0) return;
+      let cur = navRows.findIndex((r) => r.key === activeHit);
+      if (cur < 0) cur = dir > 0 ? -1 : 0;
+      const next = (cur + dir + navRows.length) % navRows.length;
+      const row = navRows[next];
+      setActiveHit(row.key);
+      const el = scrollRef.current;
+      if (el) {
+        const target =
+          row.displayIndex * ROW_HEIGHT - el.clientHeight / 2 + ROW_HEIGHT / 2;
+        el.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
+      }
+    },
+    [navRows, activeHit]
+  );
+
+  // Enter opens the commit-detail popup for the currently focused row.
+  const openCursorDetail = useCallback(() => {
+    const row = navRows.find((r) => r.key === activeHit);
+    if (!row) return;
+    const rect = scrollRef.current?.getBoundingClientRect();
+    const x = (rect ? rect.left : 80) + (row.side === 'L' ? 90 : 420);
+    const y = (rect ? rect.top : 80) + 110;
+    openDetail(row.side, row.sha, x, y);
+  }, [navRows, activeHit, openDetail]);
+
   // Select a match and move keyboard focus to the diff body so Esc / blank
   // clicks can clear it. Passing null clears the selection.
   const handleSelect = useCallback((id) => {
@@ -1048,6 +1096,10 @@ export default function App() {
   // selected manual link. Ctrl+F opens search, Alt+F opens a repo, F3 cycles.
   useEffect(() => {
     const onKey = (e) => {
+      // Don't hijack typing in the search box (or any input / editable field).
+      const tag = e.target?.tagName;
+      const typing =
+        tag === 'INPUT' || tag === 'TEXTAREA' || e.target?.isContentEditable;
       // Alt+F -> open a repo via the folder picker. Left first; once the left
       // side is set, Alt+F targets the right side (so when neither or only-left
       // is chosen it fills the next empty slot, and when both are already
@@ -1069,6 +1121,25 @@ export default function App() {
         cycleHit(e.shiftKey ? -1 : 1);
         return;
       }
+      // ArrowUp/ArrowDown -> walk the focused commit row up/down; Enter opens
+      // the detail popup for it. Skipped while typing in a field.
+      if (!typing && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          moveCursor(1);
+          return;
+        }
+        if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          moveCursor(-1);
+          return;
+        }
+        if (e.key === 'Enter' && activeHit) {
+          e.preventDefault();
+          openCursorDetail();
+          return;
+        }
+      }
       if (e.key === 'Escape') {
         if (searchOpen) {
           closeSearch();
@@ -1078,6 +1149,7 @@ export default function App() {
         setNotePopup(null);
         setRowMenu(null);
         setDetails([]);
+        setActiveHit(null);
       } else if (
         (e.key === 'Delete' || e.key === 'Backspace') &&
         typeof selectedMatch === 'string' &&
@@ -1095,7 +1167,20 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [selectedMatch, cycleHit, openSearch, searchOpen, closeSearch, pick, left.path, loading.L, loading.R]);
+  }, [
+    selectedMatch,
+    cycleHit,
+    openSearch,
+    searchOpen,
+    closeSearch,
+    pick,
+    left.path,
+    loading.L,
+    loading.R,
+    moveCursor,
+    openCursorDetail,
+    activeHit
+  ]);
 
   // Esc inside the search box closes the panel, clearing the query and its
   // highlights and returning focus to the diff body.
