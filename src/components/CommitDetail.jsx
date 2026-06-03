@@ -20,7 +20,39 @@ function initialWidth(commit) {
   return Math.max(MIN_W, Math.min(MAX_W, est));
 }
 
-export default function CommitDetail({ side, commit, related, repoPath, x, y, searchTerm, onClose, onOpenRelated }) {
+// Turn a git remote URL into the host's web base URL (no trailing slash).
+// Handles https and scp-style SSH (git@host:org/repo.git) for the common
+// hosts. Returns '' when the remote can't be mapped to a web URL.
+function remoteWebBase(remoteUrl) {
+  if (!remoteUrl) return '';
+  let url = remoteUrl.trim();
+  // scp-style SSH: git@github.com:org/repo.git -> https://github.com/org/repo
+  const scp = url.match(/^[\w.-]+@([^:]+):(.+)$/);
+  if (scp) {
+    url = `https://${scp[1]}/${scp[2]}`;
+  } else if (url.startsWith('ssh://')) {
+    url = 'https://' + url.slice('ssh://'.length).replace(/^[^@]+@/, '');
+  }
+  url = url.replace(/\.git$/, '').replace(/\/$/, '');
+  return url;
+}
+
+// Build the web URL that shows a single commit for the detected host.
+function commitWebUrl(remoteUrl, sha) {
+  const base = remoteWebBase(remoteUrl);
+  if (!base || !sha) return '';
+  // Azure DevOps / VSTS use a query-string commit view.
+  if (/dev\.azure\.com|visualstudio\.com/.test(base)) {
+    return `${base}/commit/${sha}`;
+  }
+  if (/bitbucket\.org/.test(base)) {
+    return `${base}/commits/${sha}`;
+  }
+  // GitHub, GitLab, Gitea and most others use /commit/<sha>.
+  return `${base}/commit/${sha}`;
+}
+
+export default function CommitDetail({ side, commit, related, repoPath, remoteUrl, x, y, searchTerm, onClose, onOpenRelated }) {
   const [size, setSize] = useState(() => {
     const w = initialWidth(commit);
     const h = Math.min(560, Math.round(window.innerHeight * 0.7));
@@ -240,6 +272,25 @@ export default function CommitDetail({ side, commit, related, repoPath, x, y, se
     return () => clearTimeout(t);
   }, [toast]);
 
+  // Web URL for this commit on the repo's remote host (GitHub / ADO / GitLab /
+  // Bitbucket). Empty when the repo has no http(s)-mappable remote.
+  const webUrl = commitWebUrl(remoteUrl, commit.sha);
+
+  // Open the commit's web page in the default browser via the main process.
+  const openCommitOnWeb = async () => {
+    if (!webUrl) return;
+    if (window.api?.openExternal) {
+      try {
+        await window.api.openExternal(webUrl);
+        return;
+      } catch (e) {
+        setToast('開啟網頁失敗：' + (e?.message || e));
+        return;
+      }
+    }
+    window.open(webUrl, '_blank', 'noopener');
+  };
+
   return (
     <div
       ref={rootRef}
@@ -289,6 +340,18 @@ export default function CommitDetail({ side, commit, related, repoPath, x, y, se
           <span className="cd-key">SHA</span>
           <span className="cd-sha" title={commit.sha}>{commit.short}</span>
           <span className="cd-sha-full">{commit.sha}</span>
+          {webUrl && (
+            <button
+              type="button"
+              className="cd-sha-link"
+              onClick={openCommitOnWeb}
+              onPointerDown={(e) => e.stopPropagation()}
+              title={'在瀏覽器開啟此 Commit 網頁\n' + webUrl}
+              aria-label="Open commit on web"
+            >
+              🔗 Web
+            </button>
+          )}
         </div>
         <div className="cd-meta-row">
           <span className="cd-key">作者</span>

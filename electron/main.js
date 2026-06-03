@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('node:path');
 const git = require('./git');
 const db = require('./db');
@@ -156,6 +156,23 @@ ipcMain.handle('excel:export', async (_evt, payload) => {
   const buf = await excel.buildWorkbook(data);
   await fs.promises.writeFile(result.filePath, buf);
   return { ok: true, path: result.filePath };
+});
+
+// Open an external URL in the user's default browser. Only http(s) URLs are
+// allowed so the renderer can never launch arbitrary protocols / executables.
+ipcMain.handle('shell:openExternal', async (_evt, url) => {
+  if (typeof url !== 'string') throw new Error('url is required');
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error('invalid url');
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error('unsupported protocol');
+  }
+  await shell.openExternal(parsed.href);
+  return { ok: true };
 });
 
 // Resolve the VS Code launcher once. On Windows the `code` shim is `code.cmd`;

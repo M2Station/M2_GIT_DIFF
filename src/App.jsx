@@ -732,8 +732,10 @@ export default function App() {
         const rc = diff.rightRows[l.rightIndex];
         return {
           leftShort: lc?.short || '',
+          leftSha: lc?.sha || '',
           leftSubject: lc?.subject || '',
           rightShort: rc?.short || '',
+          rightSha: rc?.sha || '',
           rightSubject: rc?.subject || ''
         };
       });
@@ -774,6 +776,8 @@ export default function App() {
         const res = await window.api.exportExcel({
           leftName: left.name || 'LEFT',
           rightName: right.name || 'RIGHT',
+          leftRemoteUrl: left.remoteUrl || '',
+          rightRemoteUrl: right.remoteUrl || '',
           defaultName,
           rows,
           manualLinks
@@ -1082,6 +1086,7 @@ export default function App() {
             commit={data.commit}
             related={data.related}
             repoPath={d.side === 'L' ? left.path : right.path}
+            remoteUrl={d.side === 'L' ? left.remoteUrl : right.remoteUrl}
             x={d.x}
             y={d.y}
             searchTerm={query}

@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('api', {
   getPatchIds: (opts) => ipcRenderer.invoke('repo:patchIds', opts),
   gitOp: (opts) => ipcRenderer.invoke('repo:gitOp', opts),
   exportExcel: (opts) => ipcRenderer.invoke('excel:export', opts),
+  openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
   getInitialRepos: () => ipcRenderer.invoke('app:getInitialRepos'),
   openInVSCodeChat: (opts) => ipcRenderer.invoke('vscode:chat', opts)
 });

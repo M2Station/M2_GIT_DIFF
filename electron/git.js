@@ -62,6 +62,26 @@ async function getHeadSha(cwd) {
   }
 }
 
+// Best-effort fetch of the `origin` remote URL (falls back to the first remote
+// found). Returns '' when the repo has no remote configured.
+async function getRemoteUrl(cwd) {
+  try {
+    const out = (await run(['remote', 'get-url', 'origin'], cwd)).trim();
+    if (out) return out;
+  } catch {
+    // origin missing — try any remote
+  }
+  try {
+    const remotes = (await run(['remote'], cwd)).split(/\r?\n/).filter(Boolean);
+    if (remotes.length) {
+      return (await run(['remote', 'get-url', remotes[0]], cwd)).trim();
+    }
+  } catch {
+    /* no remotes */
+  }
+  return '';
+}
+
 /**
  * Parse `git log` output into structured commits.
  * @param {string} cwd repo path
@@ -135,16 +155,18 @@ async function getPatchIds(cwd, shas) {
 }
 
 async function loadRepo(cwd, opts = {}) {
-  const [branch, head, commits] = await Promise.all([
+  const [branch, head, commits, remoteUrl] = await Promise.all([
     getCurrentBranch(cwd),
     getHeadSha(cwd),
-    getCommits(cwd, opts)
+    getCommits(cwd, opts),
+    getRemoteUrl(cwd)
   ]);
   return {
     path: cwd,
     name: path.basename(cwd),
     branch,
     head,
+    remoteUrl,
     commits
   };
 }

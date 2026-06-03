@@ -59,6 +59,41 @@ const LINK_SYMBOL = {
   manual: '🔗'
 };
 
+// Turn a git remote URL into the host's web base URL (no trailing slash).
+// Handles https and scp-style SSH (git@host:org/repo.git). Returns '' when the
+// remote can't be mapped to a web URL.
+function remoteWebBase(remoteUrl) {
+  if (!remoteUrl) return '';
+  let url = String(remoteUrl).trim();
+  const scp = url.match(/^[\w.-]+@([^:]+):(.+)$/);
+  if (scp) {
+    url = `https://${scp[1]}/${scp[2]}`;
+  } else if (url.startsWith('ssh://')) {
+    url = 'https://' + url.slice('ssh://'.length).replace(/^[^@]+@/, '');
+  }
+  url = url.replace(/\.git$/, '').replace(/\/$/, '');
+  return /^https?:\/\//.test(url) ? url : '';
+}
+
+// Build the web URL that shows a single commit for the detected host.
+function commitWebUrl(remoteUrl, sha) {
+  const base = remoteWebBase(remoteUrl);
+  if (!base || !sha) return '';
+  if (/bitbucket\.org/.test(base)) return `${base}/commits/${sha}`;
+  // GitHub, GitLab, Gitea, Azure DevOps and most others use /commit/<sha>.
+  return `${base}/commit/${sha}`;
+}
+
+// Turn a cell into a clickable hyperlink while preserving any existing fill /
+// font color. Keeps the displayed text (short SHA) but points at the commit URL.
+function applyHyperlink(cell, url) {
+  if (!url) return;
+  const text = cell.value == null ? '' : String(cell.value);
+  cell.value = { text, hyperlink: url, tooltip: url };
+  const prevColor = cell.font && cell.font.color;
+  cell.font = { ...(cell.font || {}), underline: true, color: prevColor || { argb: 'FF1155CC' } };
+}
+
 /**
  * Build a styled .xlsx buffer from the aligned diff export payload.
  * @param {object} data
@@ -71,6 +106,8 @@ const LINK_SYMBOL = {
  */
 async function buildWorkbook(data) {
   const { leftName = 'LEFT', rightName = 'RIGHT', rows = [], manualLinks = [] } = data || {};
+  const leftRemoteUrl = (data && data.leftRemoteUrl) || '';
+  const rightRemoteUrl = (data && data.rightRemoteUrl) || '';
 
   const wb = new ExcelJS.Workbook();
   wb.creator = 'M2_GIT_DIFF';
@@ -128,12 +165,14 @@ async function buildWorkbook(data) {
       applyFill(row.getCell('lsha'), hex);
       applyFill(row.getCell('lsub'), hex);
       applyNote(row.getCell('lsub'), L.note);
+      applyHyperlink(row.getCell('lsha'), commitWebUrl(leftRemoteUrl, L.sha));
     }
     if (R) {
       const hex = toHex6(R.color);
       applyFill(row.getCell('rsha'), hex);
       applyFill(row.getCell('rsub'), hex);
       applyNote(row.getCell('rsub'), R.note);
+      applyHyperlink(row.getCell('rsha'), commitWebUrl(rightRemoteUrl, R.sha));
     }
 
     // Manual links get a distinct purple connector so they stand out.
@@ -162,12 +201,14 @@ async function buildWorkbook(data) {
       };
     }
     manualLinks.forEach((m) => {
-      ml.addRow({
+      const mrow = ml.addRow({
         lsha: m.leftShort || '',
         lsub: m.leftSubject || '',
         rsha: m.rightShort || '',
         rsub: m.rightSubject || ''
       });
+      applyHyperlink(mrow.getCell('lsha'), commitWebUrl(leftRemoteUrl, m.leftSha));
+      applyHyperlink(mrow.getCell('rsha'), commitWebUrl(rightRemoteUrl, m.rightSha));
     });
   }
 
