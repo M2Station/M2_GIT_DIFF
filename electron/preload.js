@@ -16,6 +16,8 @@ contextBridge.exposeInMainWorld('api', {
   getPatchIds: (opts) => ipcRenderer.invoke('repo:patchIds', opts),
   getDiffTexts: (opts) => ipcRenderer.invoke('repo:diffTexts', opts),
   gitOp: (opts) => ipcRenderer.invoke('repo:gitOp', opts),
+  listBranches: (opts) => ipcRenderer.invoke('repo:listBranches', opts),
+  switchBranch: (opts) => ipcRenderer.invoke('repo:switchBranch', opts),
   exportExcel: (opts) => ipcRenderer.invoke('excel:export', opts),
   openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
   getInitialRepos: () => ipcRenderer.invoke('app:getInitialRepos'),

@@ -158,6 +158,18 @@ ipcMain.handle('repo:gitOp', async (_evt, payload) => {
   return git.gitOp(repoPath, op);
 });
 
+ipcMain.handle('repo:listBranches', async (_evt, payload) => {
+  const { repoPath } = payload || {};
+  if (!repoPath) throw new Error('repoPath is required');
+  return git.listBranches(repoPath);
+});
+
+ipcMain.handle('repo:switchBranch', async (_evt, payload) => {
+  const { repoPath, branch, isRemote } = payload || {};
+  if (!repoPath) throw new Error('repoPath is required');
+  return git.switchBranch(repoPath, branch, !!isRemote);
+});
+
 // Export the aligned diff (with notes, forced colors, and manual links) to a
 // styled .xlsx via a save dialog. Returns { ok, path } or { canceled: true }.
 ipcMain.handle('excel:export', async (_evt, payload) => {

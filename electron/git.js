@@ -228,6 +228,74 @@ async function loadRepo(cwd, opts = {}) {
   };
 }
 
+/**
+ * List local and remote-tracking branches for a repo. Remote `HEAD` pointers
+ * (e.g. `origin/HEAD`) are dropped. Returns the current branch plus the two
+ * sorted name lists so the renderer can render a tree.
+ * @param {string} cwd repo path
+ * @returns {Promise<{current:string, local:string[], remote:string[]}>}
+ */
+async function listBranches(cwd) {
+  if (!isGitRepo(cwd)) throw new Error(`Not a git repository: ${cwd}`);
+  const current = await getCurrentBranch(cwd);
+  const [localOut, remoteOut] = await Promise.all([
+    run(['for-each-ref', '--sort=refname', '--format=%(refname:short)', 'refs/heads'], cwd),
+    run(['for-each-ref', '--sort=refname', '--format=%(refname:short)', 'refs/remotes'], cwd)
+  ]);
+  const clean = (s) => s.split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
+  const local = clean(localOut);
+  const remote = clean(remoteOut).filter((n) => !/\/HEAD$/.test(n));
+  return { current, local, remote };
+}
+
+// Run a git command capturing both stdout and stderr into a single transcript,
+// resolving to the same shape the renderer's git-terminal popup consumes.
+function runCombined(args, cwd) {
+  const command = 'git ' + args.join(' ');
+  return new Promise((resolve) => {
+    execFile(
+      'git',
+      args,
+      { cwd, maxBuffer: 1024 * 1024 * 256, windowsHide: true },
+      (err, stdout, stderr) => {
+        const out = [stdout?.toString() || '', stderr?.toString() || '']
+          .filter(Boolean)
+          .join('\n')
+          .trim();
+        resolve({
+          ok: !err,
+          command,
+          output: out || (err ? err.message : ''),
+          exitCode: err && typeof err.code === 'number' ? err.code : err ? 1 : 0
+        });
+      }
+    );
+  });
+}
+
+/**
+ * Switch the working tree to another branch. For a remote-tracking ref like
+ * `origin/feature`, the remote prefix is stripped and `git switch <name>` lets
+ * git's DWIM create/checkout the matching local tracking branch. The branch
+ * name is validated to contain no option-like or shell-meaningful characters
+ * so the renderer can never inject arbitrary git arguments.
+ * @param {string} cwd repo path
+ * @param {string} branch branch ref (local short name or `remote/name`)
+ * @param {boolean} isRemote whether `branch` is a remote-tracking ref
+ */
+async function switchBranch(cwd, branch, isRemote = false) {
+  if (!isGitRepo(cwd)) throw new Error(`Not a git repository: ${cwd}`);
+  const name = String(branch || '').trim();
+  if (!name || name.startsWith('-') || /[\s~^:?*\[\\]/.test(name)) {
+    throw new Error(`Invalid branch name: ${branch}`);
+  }
+  // For a remote ref strip the first path segment (the remote name) so DWIM
+  // checks out the local tracking branch instead of a detached HEAD.
+  const target = isRemote ? name.replace(/^[^/]+\//, '') : name;
+  if (!target) throw new Error(`Invalid branch name: ${branch}`);
+  return runCombined(['switch', target], cwd);
+}
+
 // Whitelisted git operations the per-repo toolbar can trigger. Each maps to a
 // fixed argument list so the renderer can never inject arbitrary git commands.
 const GIT_OPS = {
@@ -276,5 +344,7 @@ module.exports = {
   getPatchIds,
   getDiffTexts,
   loadRepo,
-  gitOp
+  gitOp,
+  listBranches,
+  switchBranch
 };
