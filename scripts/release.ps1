@@ -155,7 +155,7 @@ $sizeMB = [math]::Round((Get-Item $installer).Length / 1MB, 1)
 Write-Host "Built: $installer ($sizeMB MB)" -ForegroundColor Green
 
 if ($SkipPush) {
-    Write-Step 'SkipPush set — stopping before tag/publish'
+    Write-Step 'SkipPush set - stopping before tag/publish'
     Write-Host "Local build ready. Installer: $installer" -ForegroundColor Green
     exit 0
 }
@@ -171,12 +171,12 @@ if ($LASTEXITCODE -ne 0) { Fail 'Pushing tag failed.' }
 Write-Step "Creating GitHub release $tag"
 if (-not $Notes) {
     $Notes = @"
-Release $tag of M2_GIT_DIFF — side-by-side commit history comparison for two local Git repositories.
+Release $tag of M2_GIT_DIFF - side-by-side commit history comparison for two local Git repositories.
 
 ## Install
 Download and run **M2_GIT_DIFF Setup $Version.exe** (Windows x64).
 
-> The installer is not code-signed, so Windows SmartScreen may warn on first run — choose *More info -> Run anyway*.
+> The installer is not code-signed, so Windows SmartScreen may warn on first run - choose *More info -> Run anyway*.
 "@
 }
 
@@ -184,4 +184,4 @@ gh release create $tag $installer --title "M2_GIT_DIFF $tag" --notes $Notes
 if ($LASTEXITCODE -ne 0) { Fail 'gh release create failed.' }
 
 Write-Step 'Done'
-Write-Host "Released $tag — https://github.com/M2Station/M2_GIT_DIFF/releases/tag/$tag" -ForegroundColor Green
+Write-Host "Released $tag - https://github.com/M2Station/M2_GIT_DIFF/releases/tag/$tag" -ForegroundColor Green
