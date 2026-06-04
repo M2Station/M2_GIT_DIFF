@@ -1,392 +1,393 @@
 
+> 🌐 **English** (you are reading this version) ｜ [中文（繁體）／Traditional Chinese](README_TW.md)
 
-# M2_GIT_DIFF（雙倉庫 Git 紀錄並排比對工具）
+# M2_GIT_DIFF (Side-by-Side Git History Comparison Tool for Two Repos)
 
-一個專門用來**比較兩個本機 Git 倉庫（local repro）提交歷史**的桌面工具，採用類似 GitLens / GenLen 的 HUD 深色風格。左右並排顯示兩個倉庫的 commit，並用顏色與連接線標示差異。應用程式名稱與 LOGO 為 **M2_GIT_DIFF**，顯示於工具列、視窗標題與工作列圖示。
+A desktop tool dedicated to **comparing the commit history of two local Git repositories (local repros)**, using a GitLens / GenLen–style HUD dark theme. The two repos are shown side by side, with colours and connection lines highlighting their differences. The application name and LOGO are **M2_GIT_DIFF**, shown in the toolbar, window title, and taskbar icon.
 
-> 原始需求摘要：左右並排顯示兩個 local repo 的 git 紀錄與 branch；兩邊相同的 commit 用灰色背景，獨有的用紅色背景，標題相同疑似 cherry-pick 的用黃色背景並用線左右對齊連結；可搜尋標題 / 內文 / SHA / 日期。
+> Original requirement summary: show the git history and branches of two local repos side by side; commits identical on both sides get a grey background, commits unique to one side get a red background, commits with the same title (suspected cherry-picks) get a yellow background and are linked left-to-right with aligned lines; searchable by title / body / SHA / date.
 
-## 操作預覽
+## Preview
 
-![操作預覽動畫](public/demo.gif)
+![Operation preview animation](public/demo.gif)
 
-> 上方為合成示意動畫（非實機錄影），依序展示：雙欄比對與連接線、點選連線、搜尋高亮、右鍵強制背景顏色、**Fuzzy Match 內容相似度模糊配對（粉紅粗虛線）**、`Ctrl`+點選詳情浮窗與 HL 高亮、**詳情浮窗的 🌐 Web 連結（以瀏覽器開遠端 commit 頁面）**、註記導航。
-> 動畫由 `scripts/make-demo-gif.mjs` 以與 `src/styles.css` 相同的配色繪製，執行 `npm run demo:gif` 可重新產生 `public/demo.gif`。
+> Above is a synthetic illustrative animation (not a real screen recording), showing in order: dual-column comparison with connection lines, clicking a link, search highlighting, right-click forced background colour, **Fuzzy Match content-similarity matching (thick pink dashed line)**, `Ctrl`+click detail popup with HL highlighting, **the detail popup's 🌐 Web link (opens the remote commit page in a browser)**, and note navigation.
+> The animation is drawn by `scripts/make-demo-gif.mjs` using the same palette as `src/styles.css`. Run `npm run demo:gif` to regenerate `public/demo.gif`.
 
 ---
 
-## 1. 功能總覽
+## 1. Feature Overview
 
-| 功能 | 說明 | 顏色 |
+| Feature | Description | Colour |
 | --- | --- | --- |
-| 並排雙欄 | 左右各開一個本機 repo，分別顯示其 branch 與 commit 列表 | — |
-| 相同 commit | 兩邊 **SHA 完全相同** | 灰色背景 |
-| 各自獨有 | 只存在於單一邊的 commit | 紅色背景 |
-| Cherry-pick（標題） | **標題相同但 SHA 不同**，並用線左右對齊連接 | 黃色背景＋黃色虛線 |
-| Cherry-pick（內容 / patch-id） | 標題**不同**但 `git patch-id`（實際變更內容指紋）相同 → 標題被改寫的 cherry-pick 也能配對 | 黃色背景＋黃色點線 |
-| **Fuzzy Match（內容相似度）** | 工具列可開關的模糊配對：當 SHA / 標題 / patch-id **都比對不上**時，比較兩個 commit **實際變更的程式碼行**，相似度（包含率）≥ 門檻（預設 **80%**，可調 0–100%）即配對。適合「TOT 把多個專案一起改、personal branch 只改其中一個專案」這種**子集**情境 | 粉紅色背景＋粉紅色粗虛線 |
-| **左右對齊版面** | 配對成功的列（灰＋黃＋粉）會被排到**同一個顯示列**，連接線變成水平直線；無法配對者填補空檔 | — |
-| 搜尋 | 可搜尋 標題 / 內文 / SHA / 作者 / 日期，命中高亮、其餘變暗，顯示命中數量 | — |
-| Filter 模式 | 開啟後只保留命中的 commit（壓縮排列），關閉則只是變暗 | — |
-| **命令列自動開啟** | 啟動時帶 `-L <path> -R <path>` 可自動載入左右兩側 repro | — |
-| **手動連結** | 在未配對（紅）的 commit 上點節點 ◗，左右各點一個即可手動配對；顏色為**紫色**以區別 cherry 黃色；可斷開並自動暫存，重開相同 repro 會自動還原 | 紫色背景＋紫色實線 |
-| **單一 Repo 模式** | 工具列 **View** 切換 `⇄ Compare` / `◧ Left only` / `◨ Right only`；只看單邊時該欄放大佔滿整個視窗，隱藏 gutter 與連線；單欄模式下 commit 背景改為**正常（透明）**，強制顏色仍保留 | — |
-| **每列註記（Note）** | 右鍵任一 commit → 新增/編輯註記（浮動可拖曳編輯框，`Ctrl+Enter` 儲存）；有註記者顯示 📝 圖示，點圖示可檢視/編輯/刪除 | — |
-| **強制背景顏色** | 右鍵 commit → 選 綠 / 亮紅 / 藍 / 黃 強制覆蓋該列背景；可清除單列或一次清除全部 | 綠/亮紅/藍/黃 |
-| **自訂顏色（第五色）** | 右鍵選單最後一個色票為 `<input type="color">` 取色器，選色後即套用該列，並把該色記成全域第五個「快速」色票（存 `localStorage` 的 `customSwatch`），之後右鍵選單會多出一格自訂色可重複使用 | 任意 HEX |
-| **Git 操作浮窗（terminal）** | 工具列每側的 Git bar 執行 pull / fetch 等操作後，跳出可拖曳的浮動視窗顯示該次 `git` 指令與完整 stdout/stderr 與 exit code；成功為綠框、失敗為紅框；只有成功才重新載入該 repo | 綠/紅框 |
-| **匯出 Excel（.xlsx）** | 工具列右上 **⬇ Export Excel**：把左右對齊後的 commit、強制顏色、註記與手動連結一併輸出成 styled `.xlsx`（ExcelJS）。儲存格底色對應強制顏色、註記以 cell 註解（像 tip）呈現、配對 commit 以空白 cell 對齊；另含一張 **Manual Links** 工作表列出所有手動連結 | 與畫面同色 |
-| **匯出筆數確認** | 按下匯出前先跳出對話框詢問要輸出多少筆（預設 **全部 ALL**，或指定前 N 筆），資料量大時提醒，避免一次輸出過多造成卡頓 | — |
-| **Commit 詳情浮窗** | `Ctrl`+左鍵點 commit → 浮動視窗顯示 SHA / 作者 / 日期（清楚標示）＋ Markdown 渲染的 commit 內文；配對的 **Related item** 特別凸顯；右上 **HL** 輸入格可即時高亮符合文字（開啟時自動帶入目前搜尋字）；可**移動、拖拉縮放**、依內容自動調整寬度；可**同時開多個**（重複點同一個不重開） | — |
-| **可點擊的 commit 連結** | Commit 詳情浮窗在 SHA 旁顯示 **🌐 Web** 連結，以系統預設瀏覽器開啟該 commit 的遠端頁面（自動辨識 GitHub / GitLab / Gitea / ADO / Bitbucket）；Excel 匯出時 SHA 儲存格也會超連結到同一遠端 URL | — |
-| **VS Code Chat 整合** | Commit 詳情浮窗的 **💬 Chat** 按鈕，呼叫本機安裝的 VS Code（`code chat`）並以該 repo 為工作區開啟 Copilot Chat（agent 模式），自動帶入該 commit 的英文說明 prompt（可在 chat 內執行 `git show <sha>` 看完整 diff）；未安裝 VS Code 時於浮窗顯示提示 | — |
-| 虛擬化 | 只渲染視窗內的列，支援大型倉庫（數千 commit）順暢捲動 | — |
-| **快捷鍵說明（Help）** | 工具列右上 **❓ Help** 開啟置中彈窗，列出全部快捷鍵（鍵帽樣式）；底部含可點擊的 `Powered by OA Hsiao` 徽章連到作者 GitHub。背景點擊 / ✕ / `Esc` 皆可關閉 | — |
-| **多國語言（i18n）** | 工具列右上 **⚙ Settings** 開啟設定彈窗，可切換介面語言（目前內建 **English** 與 **中文（繁體）**）。語系字串放在 `src/locales/*.json`，程式以 Vite `import.meta.glob` **自動掃描該目錄**決定支援哪些語言——新增一個 `xx.json` 即自動出現在語言清單，無需改程式。選擇存於 `localStorage` 的 `appLang`，重開仍記住 | — |
-| **多主題配色（Theme）** | 同一個 **⚙ Settings** 彈窗可切換配色主題（內建 **Low Key**（預設深色）、**Daylight**（淺色）、**Solarized**、**Matrix**、**Army**（軍綠／沙漠棕／水泥灰））。主題定義放在 `src/themes/*.json`，每個檔以 `vars` 物件對應 CSS 自訂屬性（如 `--accent`、`--bg`）；程式以 Vite `import.meta.glob` **自動掃描該目錄**——丟一個 `xx.json` 進去即自動出現在主題清單，無需改程式。切換時把 `vars` 寫到 `<html>` 並設 `data-theme` 屬性。選擇存於 `localStorage` 的 `appTheme`，且在 React 渲染前即套用以避免閃爍（FOUC） | — |
-| 快取 | 解析結果以 HEAD SHA 為版本快取，重開同 repo 免重新解析 | — |
-| LOGO / 品牌 | 工具列左上角 LOGO ＋ `M2_GIT_DIFF` 名稱；視窗標題與 favicon 同步 | — |
+| Side-by-side columns | Open one local repo on each side, each showing its branches and commit list | — |
+| Identical commit | **SHA exactly matches** on both sides | Grey background |
+| Unique to each side | Commit existing on only one side | Red background |
+| Cherry-pick (title) | **Same title but different SHA**, connected left-to-right with an aligned line | Yellow background + yellow dashed line |
+| Cherry-pick (content / patch-id) | **Different** title but identical `git patch-id` (fingerprint of the actual changes) → matches even cherry-picks whose title was rewritten | Yellow background + yellow dotted line |
+| **Fuzzy Match (content similarity)** | Toggleable fuzzy matching in the toolbar: when SHA / title / patch-id **all fail to match**, it compares the **actual changed lines of code** of the two commits; if the similarity (containment) ≥ threshold (default **80%**, adjustable 0–100%) they are matched. Suited to the **subset** scenario where "TOT changed multiple projects together, but the personal branch only changed one of them" | Pink background + thick pink dashed line |
+| **Left-right alignment** | Successfully matched rows (grey + yellow + pink) are placed on the **same display row**, making the connection line a horizontal straight line; unmatched commits fill the gaps | — |
+| Search | Search by title / body / SHA / author / date; hits are highlighted, the rest dimmed, with a hit count shown | — |
+| Filter mode | When on, keep only matching commits (compacted layout); when off, just dim the rest | — |
+| **Command-line auto-open** | Launch with `-L <path> -R <path>` to auto-load the left and right repros | — |
+| **Manual links** | On an unmatched (red) commit, click the node ◗; click one on each side to manually link them; the colour is **purple** to distinguish from cherry yellow; can be detached and is auto-saved, so reopening the same repros auto-restores them | Purple background + purple solid line |
+| **Single-repo mode** | Toolbar **View** toggles `⇄ Compare` / `◧ Left only` / `◨ Right only`; in single-side view that column expands to fill the whole window, hiding the gutter and lines; in single-column mode the commit background becomes **normal (transparent)**, while forced colours are still kept | — |
+| **Per-row notes** | Right-click any commit → add/edit a note (a floating draggable editor, `Ctrl+Enter` to save); commits with notes show a 📝 icon, click it to view/edit/delete | — |
+| **Forced background colour** | Right-click a commit → choose green / bright red / blue / yellow to force-override that row's background; clear a single row or all at once | Green/Bright red/Blue/Yellow |
+| **Custom colour (5th colour)** | The last swatch in the context menu is an `<input type="color">` picker; after picking, it applies to that row and is recorded as the global 5th "quick" swatch (stored in `localStorage` as `customSwatch`); thereafter the context menu shows an extra custom swatch for reuse | Any HEX |
+| **Git operation popup (terminal)** | After the per-side Git bar runs pull / fetch etc., a draggable floating window pops up showing that `git` command with full stdout/stderr and exit code; green border on success, red on failure; only a successful op reloads that repo | Green/Red border |
+| **Excel export (.xlsx)** | Toolbar top-right **⬇ Export Excel**: outputs the aligned commits, forced colours, notes, and manual links together into a styled `.xlsx` (ExcelJS). Cell fill colours map to forced colours, notes appear as cell comments (like tooltips), matched commits are aligned with blank cells; also includes a **Manual Links** worksheet listing all manual links | Same colours as the screen |
+| **Export count confirmation** | Before exporting, a dialog asks how many rows to output (default **ALL**, or the first N); it warns on large data sets to avoid lag from exporting too much at once | — |
+| **Commit detail popup** | `Ctrl`+left-click a commit → a floating window shows SHA / author / date (clearly labelled) plus the Markdown-rendered commit body; the matched **Related item** is specially emphasised; a top-right **HL** input live-highlights matching text (auto-filled with the current search term when opened); movable, drag-resizable, auto-sized to content; **multiple can be open at once** (clicking the same one does not reopen it) | — |
+| **Clickable commit links** | The commit detail popup shows a **🌐 Web** link next to the SHA, opening that commit's remote page in the system default browser (auto-detects GitHub / GitLab / Gitea / ADO / Bitbucket); on Excel export the SHA cell is also hyperlinked to the same remote URL | — |
+| **VS Code Chat integration** | The detail popup's **💬 Chat** button invokes the locally installed VS Code (`code chat`), opening Copilot Chat (agent mode) with that repo as the workspace, auto-passing an English prompt describing the commit (you can run `git show <sha>` inside chat to see the full diff); if VS Code is not installed, a hint is shown in the popup | — |
+| Virtualization | Renders only the rows within the viewport, supporting smooth scrolling of large repos (thousands of commits) | — |
+| **Keyboard shortcuts help** | Toolbar top-right **❓ Help** opens a centred modal listing all shortcuts (keycap style); the bottom has a clickable `Powered by OA Hsiao` badge linking to the author's GitHub. Click the backdrop / ✕ / `Esc` to close | — |
+| **Internationalization (i18n)** | Toolbar top-right **⚙ Settings** opens a settings popup to switch the UI language (currently **English** and **中文（繁體）** built in). Locale strings live in `src/locales/*.json`; the app uses Vite `import.meta.glob` to **auto-scan that directory** and decide which languages are supported—adding an `xx.json` makes it appear in the language list automatically, no code changes. The choice is stored in `localStorage` as `appLang` and remembered across restarts | — |
+| **Multiple themes (Theme)** | The same **⚙ Settings** popup can switch the colour theme (**Low Key** (default dark), **Daylight** (light), **Solarized**, **Matrix**, **Army** (olive green / desert tan / concrete grey) built in). Theme definitions live in `src/themes/*.json`, each file mapping a `vars` object to CSS custom properties (such as `--accent`, `--bg`); the app uses Vite `import.meta.glob` to **auto-scan that directory**—drop an `xx.json` in and it appears in the theme list automatically, no code changes. On switching it writes `vars` to `<html>` and sets the `data-theme` attribute. The choice is stored in `localStorage` as `appTheme` and applied before React renders to avoid a flash of the wrong theme (FOUC) | — |
+| Cache | Parsing results are cached versioned by HEAD SHA, so reopening the same repo skips re-parsing | — |
+| LOGO / branding | LOGO + `M2_GIT_DIFF` name at the toolbar top-left; window title and favicon stay in sync | — |
 
-點擊任一有連線的列（灰/黃/粉），或**直接點擊連接線**，會高亮其對應的連接線、其餘連線變淡。連接線採**直角轉折（orthogonal）**走線，並有 hover 變粗、selected 加粗發光的效果。選取後焦點移到比對區，**按 `Esc` 或點擊空白處**即可取消選取。
+Click any row with a link (grey/yellow/pink), or **click the connection line directly**, to highlight its corresponding line and dim the rest. Connection lines use **orthogonal (right-angle)** routing, and thicken on hover, with a bold glow when selected. After selecting, focus moves to the comparison area; press `Esc` or click an empty area to deselect.
 
-**Fuzzy Match（內容相似度模糊配對）**：工具列 Swap 左側的 **≈ Fuzzy Match** 按鈕（關閉時灰階、開啟時亮粉紅）可切換模糊配對，旁邊的數字框是相似度門檻（0–100%，**預設 80%**）。開啟後，對於 SHA / 標題 / patch-id 都配不上的 commit，會透過 IPC 抓取兩側 commit 的**實際變更行**（diff 的 `+`/`-` 內容，去除檔頭、去重），以**包含率** $\frac{|A\cap B|}{\min(|A|,|B|)}$ 計分；分數 ≥ 門檻即以**粉紅色粗虛線**配對，每個 commit 最多配一次（取分數高者優先）。用 min 當分母代表**子集也能高分**：例如 TOT 的某次提交同時改了兩個專案，而 personal branch 只改其中一個專案，共同專案的變更行被完全包含 → 接近 100%，仍會連起來。為避免極小 diff 誤判，少於 3 行變更的 commit 不參與。
+**Fuzzy Match (content-similarity fuzzy matching)**: the **≈ Fuzzy Match** button to the left of Swap in the toolbar (greyscale when off, bright pink when on) toggles fuzzy matching, and the adjacent number box is the similarity threshold (0–100%, **default 80%**). When on, for commits that fail to match by SHA / title / patch-id, it fetches via IPC the **actual changed lines** of the commits on both sides (the `+`/`-` content of the diff, with headers stripped and deduplicated), and scores by **containment** $\frac{|A\cap B|}{\min(|A|,|B|)}$; a score ≥ threshold matches them with a **thick pink dashed line**, each commit matching at most once (higher scores prioritised). Using min as the denominator means a **subset can still score high**: for example, a TOT commit that changed two projects at once while the personal branch changed only one—the shared project's changed lines are fully contained → near 100%, and they still link up. To avoid false positives on tiny diffs, commits with fewer than 3 changed lines are excluded.
 
-**手動連結**：把滑鼠移到未配對（紅）的 commit 上，靠中央側會出現一個圓形節點 ◗；先點左邊一個、再點右邊一個即建立紫色手動連線。再次點擊已連結的節點可斷開，或選取該連線後按 `Delete` / `Backspace` 移除。手動連結以兩側 repo 路徑為 key 存進 `localStorage`，**打開一模一樣的 repro 會自動 RESUME 還原**（以 SHA 記錄，新增 commit 後仍可還原）。
+**Manual links**: move the mouse over an unmatched (red) commit; a circular node ◗ appears on the centre side. Click one on the left, then one on the right to create a purple manual link. Click a linked node again to detach, or select the link and press `Delete` / `Backspace` to remove it. Manual links are stored in `localStorage` keyed by both repo paths, so **opening the exact same repros auto-RESUMEs and restores them** (recorded by SHA, still restorable after new commits are added).
 
-**暫存位置**：手動連結存在 renderer 的 `localStorage`，key 為 `mlink:<左repo路徑>|<右repo路徑>`，value 為 `[{ leftSha, rightSha }, …]` 的 JSON。工具列上的紫色 **◗ Clear manual links** 按鈕（與手動連結同色）會一次取消目前 repro pair 的**所有手動連結並刪除該暫存**（有連結時顯示數量，無連結時 disabled）。
+**Storage location**: manual links live in the renderer's `localStorage`, with key `mlink:<left repo path>|<right repo path>` and value a JSON of `[{ leftSha, rightSha }, …]`. The purple **◗ Clear manual links** button in the toolbar (same colour as manual links) cancels **all manual links for the current repro pair and deletes that storage** at once (shows a count when links exist, disabled when none).
 
-**註記與強制顏色暫存**：每列註記與強制背景顏色同樣以兩側 repo 路徑為 key 存進 `localStorage`——註記為 `note:<左repo路徑>|<右repo路徑>`、顏色為 `color:<左repo路徑>|<右repo路徑>`，value 皆為 `{ "<side>:<sha>": <值> }` 物件。工具列另有 **📝 Clear notes**、**🎨 Clear colors** 按鈕可分別一次清空。
+**Notes & forced-colour storage**: per-row notes and forced background colours are likewise stored in `localStorage` keyed by both repo paths—notes as `note:<left repo path>|<right repo path>` and colours as `color:<left repo path>|<right repo path>`, both values being `{ "<side>:<sha>": <value> }` objects. The toolbar also has **📝 Clear notes** and **🎨 Clear colors** buttons to clear each at once.
 
-**右鍵選單與詳情浮窗**：右鍵任一 commit 會跳出情境選單（新增/編輯註記、強制背景顏色綠/亮紅/藍/黃、清除顏色）。`Ctrl`+左鍵則開啟 commit 詳情浮窗：上方清楚標示 SHA / 作者 / 日期，內文以內建輕量 Markdown 渲染器（`src/lib/markdown.js`，先 HTML escape 再上標記，連結不導航以策安全）顯示；若該 commit 有配對，會以紫色高亮的 **Related item** 區塊顯示對側 commit，點擊可再開一個浮窗。浮窗右上角有 **HL** 輸入格，輸入字串會在該浮窗內即時高亮所有符合的文字（不區大小寫），且開啟時會自動帶入目前的全域搜尋字。浮窗可由標題拖曳移動、由任一邊/角拖拉縮放，初始寬度依內容長度自動估算，並可同時開啟多個（重複點同一 commit 不會重開），按 `Esc` 一次關閉全部。
+**Context menu & detail popup**: right-clicking any commit opens a context menu (add/edit note, forced background colour green/bright red/blue/yellow, clear colour). `Ctrl`+left-click opens the commit detail popup: SHA / author / date are clearly labelled at the top, and the body is shown with a built-in lightweight Markdown renderer (`src/lib/markdown.js`, HTML-escaped first then marked up, with links not navigating for safety); if the commit has a match, a purple-highlighted **Related item** block shows the opposite-side commit, clickable to open another popup. The popup's top-right **HL** input live-highlights all matching text within that popup (case-insensitive), auto-filled with the current global search term when opened. The popup can be dragged by its title bar, resized from any edge/corner, with initial width auto-estimated from content length, and multiple can be open at once (clicking the same commit does not reopen it); press `Esc` to close all at once.
 
-**搜尋面板與註記導航**：`Ctrl`+`F` 開啟浮動可拖曳的搜尋面板，可選搜尋範圍（Title / Body / SHA / Author / Date）、以 ↑ / ↓ 或 `F3` / `Shift`+`F3` 循環命中項、以 Filter 只顯示命中列。面板下方另有一個與搜尋分開的 **📝 Notes** 導航區，以 ↑ / ↓ 在每個有註記的 commit 間跳躍（顯示列順序、左欄先於右欄），捲動置中並高亮。只要搜尋面板開啟，按 `Esc`（不論焦點在哪裡）即關閉面板並清空字串與高亮。
+**Search panel & note navigation**: `Ctrl`+`F` opens a floating draggable search panel where you can choose the search scope (Title / Body / SHA / Author / Date), cycle hits with ↑ / ↓ or `F3` / `Shift`+`F3`, and use Filter to show only matching rows. Below the panel is a separate **📝 Notes** navigation area (distinct from search) that jumps between every commit with a note using ↑ / ↓ (display-row order, left column before right), scrolling it to centre and highlighting it. While the search panel is open, pressing `Esc` (regardless of focus) closes the panel and clears the term and highlights.
 
-### 左右對齊（align）如何運作
+### How left-right alignment works
 
-配對線本身可能彼此交叉（非單調），若全部硬對齊會造成連線打結。因此 `alignLayout()` 會：
+The match lines themselves may cross each other (non-monotonic); forcing everything to align would tangle the lines. So `alignLayout()`:
 
-1. 把所有配對（common＋cherry）依左欄位置排序。
-2. 取右欄位置的**最長遞增子序列（LIS）**作為「錨點」——只有這組單調的配對會被排到同一列，連線水平。
-3. 其餘非單調的配對仍保留連線，但維持斜線。
-4. 錨點之間的空檔，用兩邊各自未配對的 commit 依序填補（盡量共用同一列以縮短總高度）。
+1. Sorts all matches (common + cherry) by left-column position.
+2. Takes the **longest increasing subsequence (LIS)** of right-column positions as "anchors"—only this monotonic set of matches is placed on the same row, with horizontal lines.
+3. The remaining non-monotonic matches keep their lines but stay diagonal.
+4. Gaps between anchors are filled by each side's unmatched commits in order (sharing the same row where possible to shorten total height).
 
 ---
 
-## 2. 技術架構
+## 2. Technical Architecture
 
 ```
-Electron (主行程)
-├─ electron/main.js      視窗建立、IPC handler、資料夾選擇對話框、Excel 匯出存檔對話框
-├─ electron/preload.js   contextBridge 安全橋接，暴露 window.api（含 exportExcel）
-├─ electron/git.js       呼叫系統 git，解析 git log → 結構化 commit；getPatchIds / getDiffTexts（Fuzzy 變更行）；gitOp 回傳完整 stdout/stderr 與 exit code
-├─ electron/excel.js     ExcelJS 產生 styled .xlsx（顏色填滿、註記 cell 註解、SHA 超連結到遠端 commit URL、Manual Links 工作表）
-└─ electron/db.js        better-sqlite3 快取層（缺少時自動退回記憶體快取）
+Electron (main process)
+├─ electron/main.js      Window creation, IPC handlers, folder picker dialog, Excel export save dialog
+├─ electron/preload.js   contextBridge secure bridge, exposes window.api (incl. exportExcel)
+├─ electron/git.js       Calls system git, parses git log → structured commits; getPatchIds / getDiffTexts (Fuzzy changed lines); gitOp returns full stdout/stderr and exit code
+├─ electron/excel.js     ExcelJS generates styled .xlsx (colour fills, note cell comments, SHA hyperlink to remote commit URL, Manual Links worksheet)
+└─ electron/db.js        better-sqlite3 cache layer (auto-falls back to in-memory cache when absent)
 
 Renderer (React + Vite)
-├─ src/main.jsx                 React 入口
-├─ src/App.jsx                  狀態管理、diff 計算、虛擬化捲動、過濾邏輯
-├─ src/styles.css               HUD 深色主題樣式
-├─ src/lib/diff.js              核心比對演算法（灰/紅/黃分類、連線、搜尋、左右對齊 alignLayout）
-├─ src/lib/constants.js         版面常數（列高、gutter 寬、overscan…）
-├─ src/assets/logo.svg          工具列 LOGO（青色 M2 字標）
+├─ src/main.jsx                 React entry
+├─ src/App.jsx                  State management, diff computation, virtualized scrolling, filter logic
+├─ src/styles.css               HUD dark-theme styles
+├─ src/lib/diff.js              Core comparison algorithm (grey/red/yellow classification, links, search, left-right alignment alignLayout)
+├─ src/lib/constants.js         Layout constants (row height, gutter width, overscan…)
+├─ src/assets/logo.svg          Toolbar LOGO (cyan M2 wordmark)
 └─ src/components/
-   ├─ Toolbar.jsx          上方工具列：LOGO＋名稱、開啟 repo、branch 徽章、統計、Fuzzy Match 開關＋門檻、View 模式切換、搜尋、Clear manual/notes/colors、Export Excel
-   ├─ RepoColumn.jsx       單欄虛擬化渲染（只畫視窗內的列）
-   ├─ CommitRow.jsx        單一 commit 列（絕對定位 + 高亮 + 註記圖示 + 右鍵選單 + Ctrl點詳情）
-   ├─ ConnectionLines.jsx  中央 gutter 的 SVG 連接線（端點同列時退化為水平線）
-   ├─ SearchPanel.jsx      浮動可拖曳搜尋面板（可選搜尋範圍、上/下則、Filter，並含獨立的 📝 Notes 導航區）
-   ├─ NotePopup.jsx        浮動註記編輯/檢視器（可拖曳）
-   ├─ RowMenu.jsx          右鍵情境選單（註記 + 強制背景顏色 + 自訂取色第五色）
-   ├─ RepoGitBar.jsx       每側 Git 操作列（pull / fetch…）
-   ├─ GitTerminalPopup.jsx Git 操作結果浮窗（可拖曳，顯示指令/輸出/exit code，成功綠框失敗紅框）
-   ├─ ExportPrompt.jsx     匯出前的筆數確認對話框（預設 ALL，或前 N 筆）
-   ├─ HelpPopup.jsx       快捷鍵說明彈窗（置中 Modal、鍵帽列表、OA Hsiao 徽章，`Esc`/背景關閉）
-   ├─ SettingsPopup.jsx   設定彈窗（語言選擇器 + 主題選擇器；語系由 `src/locales`、主題由 `src/themes` 自動掃描）
-   └─ CommitDetail.jsx     Commit 詳情浮窗（Markdown 渲染、Related item、SHA 旁 🌐 Web 連結開遠端頁面、可移動縮放、可多開、💬 Chat 開 VS Code）
+   ├─ Toolbar.jsx          Top toolbar: LOGO + name, open repo, branch badges, stats, Fuzzy Match toggle + threshold, View mode toggle, search, Clear manual/notes/colors, Export Excel
+   ├─ RepoColumn.jsx       Single-column virtualized rendering (only draws rows in the viewport)
+   ├─ CommitRow.jsx        Single commit row (absolute positioning + highlight + note icon + context menu + Ctrl-click detail)
+   ├─ ConnectionLines.jsx  SVG connection lines in the central gutter (degenerate to a horizontal line when endpoints share a row)
+   ├─ SearchPanel.jsx      Floating draggable search panel (scope selection, next/prev, Filter, plus a separate 📝 Notes navigation area)
+   ├─ NotePopup.jsx        Floating note editor/viewer (draggable)
+   ├─ RowMenu.jsx          Right-click context menu (notes + forced background colour + custom 5th colour picker)
+   ├─ RepoGitBar.jsx       Per-side Git operation bar (pull / fetch…)
+   ├─ GitTerminalPopup.jsx Git operation result popup (draggable, shows command/output/exit code, green border on success red on failure)
+   ├─ ExportPrompt.jsx     Pre-export count confirmation dialog (default ALL, or first N)
+   ├─ HelpPopup.jsx       Keyboard shortcuts help popup (centred modal, keycap list, OA Hsiao badge, `Esc`/backdrop to close)
+   ├─ SettingsPopup.jsx   Settings popup (language selector + theme selector; locales from `src/locales`, themes from `src/themes`, both auto-scanned)
+   └─ CommitDetail.jsx     Commit detail popup (Markdown rendering, Related item, 🌐 Web link next to SHA opens remote page, movable/resizable, multi-open, 💬 Chat opens VS Code)
 ```
 
-**多主題配色（Theme）**：主題定義存於 `src/themes/*.json`（每個檔案一個主題，檔名去掉 `.json` 即主題 id，檔內 `_meta.name` 為顯示名稱，`vars` 為 CSS 自訂屬性對應表）。`src/lib/theme.js` 以 Vite `import.meta.glob('../themes/*.json', { eager: true })` 在建置時**自動掃描**該目錄，掃到幾個檔就提供幾種主題——新增 `xx.json` 即自動出現於設定清單，無需改程式。`ThemeProvider` 包住 `App`（`src/main.jsx`）；切換時 `applyTheme()` 把該主題的 `vars` 逐一寫到 `document.documentElement` 的 inline style 並設 `data-theme` 屬性，`src/styles.css` 內所有顏色皆以 `var(--…)` 引用，因此即時換膚。選擇存於 `localStorage` 的 `appTheme`（預設：已存值 → `low_key` → 掃描到的第一個），且模組載入時即先套用一次以避免畫面閃爍（FOUC）。內建 **Low Key**（原生深色）、**Daylight**（淺色）、**Solarized**、**Matrix**、**Army**（軍綠／沙漠棕／水泥灰）五種。
+**Multiple themes (Theme)**: theme definitions live in `src/themes/*.json` (one theme per file; the filename minus `.json` is the theme id, the file's `_meta.name` is the display name, and `vars` is the CSS custom-property map). `src/lib/theme.js` uses Vite `import.meta.glob('../themes/*.json', { eager: true })` to **auto-scan** that directory at build time, providing as many themes as files found—adding an `xx.json` makes it appear in the settings list automatically, no code changes. `ThemeProvider` wraps `App` (`src/main.jsx`); on switching, `applyTheme()` writes the theme's `vars` one by one to `document.documentElement`'s inline style and sets the `data-theme` attribute, and since every colour in `src/styles.css` is referenced via `var(--…)`, the skin changes instantly. The choice is stored in `localStorage` as `appTheme` (default: stored value → `low_key` → the first one scanned), and is applied once at module load to avoid a flash of the wrong theme (FOUC). Five themes are built in: **Low Key** (native dark), **Daylight** (light), **Solarized**, **Matrix**, **Army** (olive green / desert tan / concrete grey).
 
-**多國語言（i18n）**：語系字串存於 `src/locales/*.json`（每個檔案一個語言，檔名去掉 `.json` 即 locale 代碼，檔內 `_meta.name` 為顯示名稱）。`src/lib/i18n.js` 以 Vite `import.meta.glob('../locales/*.json', { eager: true })` 在建置時**自動掃描**該目錄，掃到幾個檔就提供幾種語言——新增 `ja.json` 日文即自動出現於設定清單，無需改程式。`I18nProvider` 包住 `App`（`src/main.jsx`），各元件以 `useT()` 取得翻譯函式 `t(key, vars)`（點路徑查表、找不到退回 `en` 再退回 key本身、以 `{var}` 內插）。選擇存於 `localStorage` 的 `appLang`（預設：已存值 → `zh-TW` → `en` → 掃描到的第一個）。
+**Internationalization (i18n)**: locale strings live in `src/locales/*.json` (one language per file; the filename minus `.json` is the locale code, the file's `_meta.name` is the display name). `src/lib/i18n.js` uses Vite `import.meta.glob('../locales/*.json', { eager: true })` to **auto-scan** that directory at build time, providing as many languages as files found—adding a `ja.json` for Japanese makes it appear in the settings list automatically, no code changes. `I18nProvider` wraps `App` (`src/main.jsx`), and each component gets the translation function `t(key, vars)` via `useT()` (dot-path lookup, falling back to `en` then to the key itself, with `{var}` interpolation). The choice is stored in `localStorage` as `appLang` (default: stored value → `zh-TW` → `en` → the first one scanned).
 
-另有 `public/icon.svg`（透明背景、漸層 M 字標圖示，作為 favicon 與 Electron 視窗 / 工作列圖示）。執行 `node scripts/make-icon.mjs` 會由它產生多尺寸的 `public/icon.ico`，供 Windows 檔案總管右鍵選單與打包後的應用程式圖示使用。
+There is also `public/icon.svg` (a transparent-background, gradient M wordmark icon, used as the favicon and the Electron window / taskbar icon). Running `node scripts/make-icon.mjs` generates a multi-size `public/icon.ico` from it, for use in the Windows Explorer context menu and the packaged application icon.
 
-**VS Code Chat 整合**：`CommitDetail.jsx` 的 💬 Chat 按鈕透過 `window.api.openInVSCodeChat` → 主行程 `vscode:chat` IPC，以 `where code.cmd` 解析 VS Code 路徑後執行 `code chat -r -m agent -`，commit 說明 prompt 經 **stdin**（非命令列，避免注入）串入；找不到 VS Code 時丟出 `VSCODE_NOT_FOUND`，由浮窗顯示提示。prompt 全程使用英文以避免 stdin 編碼造成的亂碼。
+**VS Code Chat integration**: `CommitDetail.jsx`'s 💬 Chat button goes through `window.api.openInVSCodeChat` → the main process `vscode:chat` IPC, which resolves the VS Code path with `where code.cmd` then runs `code chat -r -m agent -`, piping the commit description prompt via **stdin** (not the command line, to avoid injection); if VS Code is not found it throws `VSCODE_NOT_FOUND`, shown as a hint in the popup. The prompt is entirely in English to avoid garbled text from stdin encoding.
 
-**技術選型**：Electron + React + Vite + better-sqlite3（快取，選用）。
+**Tech stack**: Electron + React + Vite + better-sqlite3 (cache, optional).
 
 ---
 
-## 3. 資料流程
+## 3. Data Flow
 
-1. 使用者按「Open repo…」→ `main.js` 的 `dialog:pickFolder` 開啟資料夾選擇。
-2. `repo:load` IPC：
-   - 檢查是否為 git 倉庫（`.git` 是否存在）。
-   - 以 `repoPath::branch::limit` 為 key、HEAD SHA 為版本，查快取（`db.js`）。
-   - 未命中則呼叫 `git.js` 的 `git log` 解析後寫入快取。
-3. `App.jsx` 拿到兩邊 repo → `computeDiff()` 計算分類與連線 → `view` 依搜尋/Filter 建立顯示列 → 各欄虛擬化渲染。
+1. User presses "Open repo…" → `main.js`'s `dialog:pickFolder` opens the folder picker.
+2. `repo:load` IPC:
+   - Checks whether it is a git repository (whether `.git` exists).
+   - Looks up the cache (`db.js`) keyed by `repoPath::branch::limit`, versioned by HEAD SHA.
+   - On a miss, calls `git.js`'s `git log`, parses it, and writes to the cache.
+3. `App.jsx` gets both repos → `computeDiff()` computes classification and links → `view` builds display rows by search/Filter → each column renders virtualized.
 
-### git log 解析（electron/git.js）
+### git log parsing (electron/git.js)
 
-使用自訂分隔符（`\x1f` 欄位、`\x1e` 紀錄）避免 commit 訊息撞分隔符：
+Uses custom delimiters (`\x1f` for fields, `\x1e` for records) to avoid commit messages colliding with delimiters:
 
 ```
 %H %h %P %an %ae %ad %cd %s %b
 ```
 
-對應欄位：`sha / short / parents / author / authorEmail / authorDate / commitDate / subject / body`。
-預設 `limit = 2000`（見 `DEFAULT_LIMIT`）。
+Corresponding fields: `sha / short / parents / author / authorEmail / authorDate / commitDate / subject / body`.
+Default `limit = 2000` (see `DEFAULT_LIMIT`).
 
 ---
 
-## 4. 比對演算法（src/lib/diff.js）
+## 4. Comparison Algorithm (src/lib/diff.js)
 
-`computeDiff(left, right, patchIds, manualLinks, fuzzy)` 多階段：
+`computeDiff(left, right, patchIds, manualLinks, fuzzy)` is multi-stage:
 
-1. **相同 commit（灰）**：以 SHA 建集合，兩邊都有同一 SHA → `status = 'common'`，建立 `type: 'common'` 連線。
-2. **Cherry-pick — 標題（黃，虛線）**：把尚未被 SHA 配對的 commit 依「正規化標題」（`normalizeSubject`：去頭尾、小寫、空白壓縮）分組，左右同標題者依序配對 → `status = 'cherry'`，建立 `type: 'cherry'` 連線。
-3. **Cherry-pick — 內容 / patch-id（黃，點線）**：對前兩步仍為 unique 的 commit，依 `git patch-id`（實際 diff 內容指紋）分組配對 → `status = 'cherry'`，建立 `type: 'patch'` 連線。即使標題被改寫，內容相同的 cherry-pick 也能配上。
-4. **手動連結（紫）**：套用使用者建立的 `manualLinks`（見 §1），建立 `type: 'manual'` 連線。
-5. **Fuzzy Match — 內容相似度（粉，粗虛線）**：僅在 `fuzzy.enabled` 時執行。對仍為 unique 的 commit，用 `fuzzy.diffTexts`（每個 sha 的變更行集合）兩兩計算**包含率** `inter / min(|A|,|B|)`，分數 ≥ `fuzzy.threshold` 即配對 → `status = 'fuzzy'`，建立 `type: 'fuzzy'` 連線；分數高者優先、每個 commit 最多配一次、少於 3 行者略過。
-6. **獨有（紅）**：其餘維持 `status = 'unique'`。
+1. **Identical commit (grey)**: build a set by SHA; a SHA present on both sides → `status = 'common'`, creating a `type: 'common'` link.
+2. **Cherry-pick — title (yellow, dashed)**: group commits not yet matched by SHA by "normalized title" (`normalizeSubject`: trim, lowercase, collapse whitespace), and pair same-title left/right in order → `status = 'cherry'`, creating a `type: 'cherry'` link.
+3. **Cherry-pick — content / patch-id (yellow, dotted)**: for commits still unique after the first two steps, group and pair by `git patch-id` (the actual diff content fingerprint) → `status = 'cherry'`, creating a `type: 'patch'` link. Even with a rewritten title, content-identical cherry-picks still match.
+4. **Manual links (purple)**: apply the user-created `manualLinks` (see §1), creating `type: 'manual'` links.
+5. **Fuzzy Match — content similarity (pink, thick dashed)**: only runs when `fuzzy.enabled`. For still-unique commits, use `fuzzy.diffTexts` (the changed-line set per sha) to compute pairwise **containment** `inter / min(|A|,|B|)`; a score ≥ `fuzzy.threshold` matches → `status = 'fuzzy'`, creating a `type: 'fuzzy'` link; higher scores prioritised, each commit matches at most once, and those with fewer than 3 lines are skipped.
+6. **Unique (red)**: the rest remain `status = 'unique'`.
 
-回傳：`leftRows / rightRows`（每列含 `status`、`matchId`、`index`）、`links`、以及各邊統計 `{ common, cherry, unique, fuzzy }`。
+Returns: `leftRows / rightRows` (each row carries `status`, `matchId`, `index`), `links`, and per-side stats `{ common, cherry, unique, fuzzy }`.
 
-`matchesQuery(commit, query)`：在 subject / body / sha / short / author / authorDate 做不分大小寫子字串比對。
+`matchesQuery(commit, query)`: case-insensitive substring match across subject / body / sha / short / author / authorDate.
 
-### patch-id（內容）配對資料流
+### patch-id (content) matching data flow
 
-- `App.jsx` 第一輪 `computeDiff` 完成 SHA + 標題比對後，收集兩邊仍為 `unique` 的 commit，透過 IPC `repo:patchIds` 向主行程要 `git patch-id`。
-- `electron/git.js` 的 `getPatchIds()` 採**批次**：整批 `git show` 一次 pipe 給 `git patch-id --stable`，總共僅兩次 git 呼叫（非每個 commit 兩次）。
-- 取回的 `sha → patchId` 對應表回填後重算 `computeDiff`，把內容相同者補成黃色配對。全程 best-effort，失敗則退回標題比對。每個 sha 只查一次。
+- After `App.jsx`'s first `computeDiff` finishes SHA + title matching, it collects commits still `unique` on both sides and requests `git patch-id` from the main process via IPC `repo:patchIds`.
+- `electron/git.js`'s `getPatchIds()` is **batched**: the whole batch of `git show` is piped at once to `git patch-id --stable`, for only two git calls total (not two per commit).
+- The returned `sha → patchId` map is backfilled and `computeDiff` is recomputed, completing content-identical commits as yellow matches. Best-effort throughout; on failure it falls back to title matching. Each sha is queried only once.
 
-### Fuzzy Match（內容相似度）資料流
+### Fuzzy Match (content similarity) data flow
 
-- 只有在工具列開啟 **≈ Fuzzy Match** 時才啟動。`App.jsx` 收集兩側仍為 `unique` 的 commit，透過 IPC `repo:diffTexts` 向主行程要各 commit 的變更行。
-- `electron/git.js` 的 `getDiffTexts()` 以**單次** `git show`（NUL 分隔格式）抓回所有指定 sha 的 diff，僅保留 `+`/`-` 的內容行（排除 `+++`/`---` 檔頭），去重、保留正負號、每個 commit 最多 4000 行，回傳 `sha → string[]`。
-- 取回的變更行快取在 `diffTexts`（per-sha，門檻調整不需重抓），連同門檻傳入 `computeDiff` 的 `fuzzy` 參數重算，把相似度 ≥ 門檻者補成**粉紅色**配對。全程 best-effort。
+- Only activated when **≈ Fuzzy Match** is on in the toolbar. `App.jsx` collects commits still `unique` on both sides and requests each commit's changed lines from the main process via IPC `repo:diffTexts`.
+- `electron/git.js`'s `getDiffTexts()` fetches the diffs of all specified shas in a **single** `git show` (NUL-delimited format), keeping only `+`/`-` content lines (excluding `+++`/`---` headers), deduplicated, signs preserved, up to 4000 lines per commit, returning `sha → string[]`.
+- The returned changed lines are cached in `diffTexts` (per-sha, so adjusting the threshold needs no refetch), and passed with the threshold into `computeDiff`'s `fuzzy` parameter to recompute, completing similarity ≥ threshold as **pink** matches. Best-effort throughout.
 
-### 左右對齊版面（`alignLayout`）
+### Left-right alignment layout (`alignLayout`)
 
-`alignLayout(Lrows, Rrows, links)` 負責把配對列排到同一個顯示列：
+`alignLayout(Lrows, Rrows, links)` is responsible for placing matched rows on the same display row:
 
-- `longestIncreasingByPr()`：對「依左欄位置排序的配對」取右欄位置的 LIS（二分搜尋 + 前驅回溯），得到單調錨點集合。
-- 逐段在錨點之間填入兩邊未配對列（`Math.max(gapL, gapR)` 列高，盡量共用），錨點本身落在共用列上 → 連線水平。
-- 回傳 `{ L, R, links, totalRows }`，其中每列帶 `displayIndex`，連線座標已重映射到顯示列。
+- `longestIncreasingByPr()`: takes the LIS of right-column positions over "matches sorted by left-column position" (binary search + predecessor backtracking), yielding the monotonic anchor set.
+- Fills unmatched rows from both sides between anchors segment by segment (`Math.max(gapL, gapR)` rows high, sharing where possible), with anchors themselves landing on shared rows → horizontal lines.
+- Returns `{ L, R, links, totalRows }`, where each row carries a `displayIndex` and link coordinates are remapped to display rows.
 
-> patch-id 強化已實作：對標題比對不到的 commit，會用 `git patch-id --stable` 以內容指紋配對（見上方 patch-id 資料流）。
-
----
-
-## 5. 版面與虛擬化
-
-- 固定列高 `ROW_HEIGHT = 36px`，讓 SVG 連線的 y 座標計算簡單。
-- 每列帶 `displayIndex`，以 `position: absolute; top = displayIndex * ROW_HEIGHT` 定位，左右欄與連線完全對齊。
-- `RepoColumn` 只渲染 `scrollTop ~ scrollTop + viewportHeight` 範圍（加 `OVERSCAN = 8` 列）內的列。
-- 捲動容器為 `.diff-body`，`App.jsx` 透過 `onScroll` 與 `resize` 監聽更新 `scrollTop / viewportHeight`。
-- 顯示列由 `alignLayout` 產生（見 §4）：配對列共用同一 `displayIndex`，故連線在 `ConnectionLines.jsx` 中退化為水平直線。
-
-### 左右欄位排版（重要修正）
-
-兩欄的 DOM 子元素順序固定為 `sha → date → subject → author`。右欄為了鏡像顯示（`author | subject | date | sha`）使用 CSS Grid `130px 1fr 92px 78px`。
-
-- **問題**：`1fr` 會落在 DOM 第二個子元素（date）上，導致日期欄被撐很寬，把標題與後續欄位擠到看不見。
-- **修正**：右欄對四個子元素加上 `order: 1~4`（author→subject→date→sha），讓彈性的 `1fr` 正確落在 subject 上，date 回到固定 92px。
-
-### Filter 模式與連線重映射
-
-- **未開 Filter**：保留全部 commit，送入 `alignLayout` 後依配對結果決定 `displayIndex`；不命中者變暗（`dimmed`）。
-- **開啟 Filter（且有搜尋字）**：先移除不命中列，再送入 `alignLayout` 重新對齊與連號。
-- `alignLayout` 內部以左右欄位置建表，任一端被隱藏（過濾掉）的連線會被丟棄，其餘連線座標一律重映射到 `displayIndex`。
+> patch-id enhancement is implemented: for commits the title match misses, `git patch-id --stable` matches by content fingerprint (see the patch-id data flow above).
 
 ---
 
-## 6. 顏色與主題（src/styles.css）
+## 5. Layout and Virtualization
 
-CSS 變數集中於 `:root`：
+- Fixed row height `ROW_HEIGHT = 36px`, keeping the SVG link y-coordinate math simple.
+- Each row carries a `displayIndex`, positioned with `position: absolute; top = displayIndex * ROW_HEIGHT`, keeping the left/right columns and lines perfectly aligned.
+- `RepoColumn` renders only rows within `scrollTop ~ scrollTop + viewportHeight` (plus `OVERSCAN = 8` rows).
+- The scroll container is `.diff-body`; `App.jsx` updates `scrollTop / viewportHeight` via `onScroll` and `resize` listeners.
+- Display rows are produced by `alignLayout` (see §4): matched rows share the same `displayIndex`, so lines degenerate to horizontal in `ConnectionLines.jsx`.
 
-| 變數 | 用途 |
+### Left/right column layout (important fix)
+
+Both columns' DOM child order is fixed as `sha → date → subject → author`. The right column, to mirror the display (`author | subject | date | sha`), uses CSS Grid `130px 1fr 92px 78px`.
+
+- **Problem**: `1fr` would land on the second DOM child (date), making the date column very wide and squeezing the title and later columns out of view.
+- **Fix**: the right column applies `order: 1~4` to the four children (author→subject→date→sha), so the flexible `1fr` correctly lands on subject and date returns to a fixed 92px.
+
+### Filter mode and link remapping
+
+- **Filter off**: keep all commits, feed into `alignLayout`, and decide `displayIndex` by match result; non-matches are dimmed (`dimmed`).
+- **Filter on (with a search term)**: first remove non-matching rows, then feed into `alignLayout` to re-align and renumber.
+- `alignLayout` internally builds a table by left/right column position; any link with one end hidden (filtered out) is dropped, and all other link coordinates are remapped to `displayIndex`.
+
+---
+
+## 6. Colours and Theme (src/styles.css)
+
+CSS variables are centralized in `:root`:
+
+| Variable | Purpose |
 | --- | --- |
-| `--common-bg / --common-bd` | 灰：相同 commit |
-| `--cherry-bg / --cherry-bd` | 黃：cherry-pick |
-| `--unique-bg / --unique-bd` | 紅：獨有 commit |
-| `--manual-bd` | 紫：手動連結 |
-| `--fuzzy-bg / --fuzzy-bd` | 粉紅：Fuzzy Match 內容相似度配對 |
-| `--accent` | 青色強調色（HUD 發光） |
-| `--row-h` | 列高 |
+| `--common-bg / --common-bd` | Grey: identical commit |
+| `--cherry-bg / --cherry-bd` | Yellow: cherry-pick |
+| `--unique-bg / --unique-bd` | Red: unique commit |
+| `--manual-bd` | Purple: manual link |
+| `--fuzzy-bg / --fuzzy-bd` | Pink: Fuzzy Match content-similarity match |
+| `--accent` | Cyan accent colour (HUD glow) |
+| `--row-h` | Row height |
 
-連線樣式：`.link.common`（灰實線）、`.link.cherry`（黃虛線）、`.link.patch`（黃點線，內容/patch-id 配對）、`.link.manual`（紫實線，手動連結）、`.link.fuzzy`（粉紅粗虛線，內容相似度配對）、`.link.selected`（加粗發光）、`.link.faded`（其餘變淡）。連線為**直角轉折**走線（`ConnectionLines.jsx`），並以透明加寬的 `.link-hit` 路徑承接點擊。
+Line styles: `.link.common` (grey solid), `.link.cherry` (yellow dashed), `.link.patch` (yellow dotted, content/patch-id match), `.link.manual` (purple solid, manual link), `.link.fuzzy` (thick pink dashed, content-similarity match), `.link.selected` (bold glow), `.link.faded` (the rest dimmed). Lines use **right-angle (orthogonal)** routing (`ConnectionLines.jsx`), with a transparent widened `.link-hit` path catching clicks.
 
 ---
 
-## 7. 開發與執行
+## 7. Development and Running
 
-### 須預先安裝的程式
+### Prerequisites to install
 
-| 程式 | 版本建議 | 用途 | 取得方式 |
+| Program | Recommended version | Purpose | How to get it |
 | --- | --- | --- | --- |
-| **Node.js**（內含 npm） | **18 LTS 以上**（建議 20/22 LTS） | 執行 Vite / Electron、安裝相依套件、產生 demo GIF | <https://nodejs.org/>（或 `winget install OpenJS.NodeJS.LTS`） |
-| **Git** | 任意近期版本 | 本工具透過 `git` CLI 讀取兩個 repo 的紀錄；需在 `PATH` 中 | <https://git-scm.com/>（或 `winget install Git.Git`） |
-| **PowerShell** | Windows 內建即可 | 執行下列指令與 `start.cmd` | 系統內建 |
+| **Node.js** (incl. npm) | **18 LTS or above** (20/22 LTS recommended) | Run Vite / Electron, install dependencies, generate the demo GIF | <https://nodejs.org/> (or `winget install OpenJS.NodeJS.LTS`) |
+| **Git** | Any recent version | This tool reads the two repos' history via the `git` CLI; must be on `PATH` | <https://git-scm.com/> (or `winget install Git.Git`) |
+| **PowerShell** | Built into Windows | Run the commands below and `start.cmd` | Built into the system |
 
-> 選用：**Visual Studio C++ 工具集（含 ClangCL）** 僅在要啟用 `better-sqlite3` 持久化快取時才需要；未安裝時會自動退回記憶體快取，不影響功能（見下方「環境注意事項」）。
+> Optional: **Visual Studio C++ tools (incl. ClangCL)** are only needed to enable `better-sqlite3` persistent caching; when not installed it auto-falls back to in-memory caching, with no functional impact (see "Environment notes" below).
 
-確認安裝：
+Verify the installation:
 
 ```powershell
-node -v      # 應顯示 v18 以上
+node -v      # should show v18 or above
 npm -v
 git --version
 ```
 
-### 指令
+### Commands
 
 ```powershell
-npm install          # 安裝相依套件
-npm run dev          # 同時啟動 Vite (5173) 與 Electron（開發模式）
-npm run build        # 建置 renderer 到 dist/
-npm run dist         # electron-builder 打包（Windows NSIS）
-npm run rebuild      # 為當前 Electron ABI 重編 better-sqlite3
-npm run demo:gif     # 重新產生操作預覽動畫 public/demo.gif
+npm install          # install dependencies
+npm run dev          # start Vite (5173) and Electron together (dev mode)
+npm run build        # build the renderer into dist/
+npm run dist         # electron-builder packaging (Windows NSIS)
+npm run rebuild      # rebuild better-sqlite3 for the current Electron ABI
+npm run demo:gif     # regenerate the preview animation public/demo.gif
 ```
 
-> 產生應用程式圖示：`node scripts/make-icon.mjs` 會把 `public/icon.svg` 轉成多尺寸（16~256px、透明背景）的 `public/icon.ico`，供右鍵選單與打包圖示使用；改了 `icon.svg` 後重跑即可。
+> Generate the app icon: `node scripts/make-icon.mjs` converts `public/icon.svg` into a multi-size (16–256px, transparent) `public/icon.ico` for the context menu and packaged icon; rerun after editing `icon.svg`.
 
-### 啟動與自動開啟 repro（-L / -R）
+### Launch and auto-open repros (-L / -R)
 
-啟動時可帶入 `-L <path>` / `-R <path>`（亦接受 `--left` / `--right`）自動載入左右兩側 repro：
+At launch you can pass `-L <path>` / `-R <path>` (also accepts `--left` / `--right`) to auto-load the left and right repros:
 
 ```powershell
-# 一般模式（start.cmd：先 npm run build 再以 production 載入 dist/，啟動較快、無 dev server）
+# Normal mode (start.cmd: npm run build first, then load dist/ in production—faster startup, no dev server)
 .\start.cmd -L "D:\path\to\repoA" -R "D:\path\to\repoB"
 
-# 開發模式（start_dev.cmd：Vite dev server + Electron，含 HMR）
+# Dev mode (start_dev.cmd: Vite dev server + Electron, with HMR)
 .\start_dev.cmd -L "D:\path\to\repoA" -R "D:\path\to\repoB"
 
-# 已建置（production）或打包後的 exe
+# Already built (production) or packaged exe
 npx electron . -L "D:\path\to\repoA" -R "D:\path\to\repoB"
 ```
 
-- **`start.cmd`（一般/production 模式）**：檢查 NPM / 修復 Electron → `npm run build` → `npm run start:prod`（`NODE_ENV=production`，載入 `dist/index.html`，無 Vite dev server）。
-- **`start_dev.cmd`（開發模式）**：同樣的前置檢查後跑 `npm run dev`（Vite dev server + Electron，含 HMR）。
-- `electron/main.js` 的 `parseRepoArgs()` 解析 argv；找不到時改讀環境變數 `REPRO_L` / `REPRO_R`。
-- 兩個啟動腳本因參數無法穩定穿過 `concurrently → wait-on → electron`，皆改將 `-L`/`-R` 設成 `REPRO_L`/`REPRO_R` 環境變數轉傳。
-- 相對路徑以啟動目錄解析。
+- **`start.cmd` (normal/production mode)**: checks NPM / repairs Electron → `npm run build` → `npm run start:prod` (`NODE_ENV=production`, loads `dist/index.html`, no Vite dev server).
+- **`start_dev.cmd` (dev mode)**: after the same pre-checks, runs `npm run dev` (Vite dev server + Electron, with HMR).
+- `electron/main.js`'s `parseRepoArgs()` parses argv; when not found it reads the environment variables `REPRO_L` / `REPRO_R` instead.
+- Because arguments cannot reliably pass through `concurrently → wait-on → electron`, both launch scripts set `-L`/`-R` as the `REPRO_L`/`REPRO_R` environment variables to forward them.
+- Relative paths are resolved against the launch directory.
 
-### Windows 檔案總管右鍵整合（類似 Beyond Compare）
+### Windows Explorer context-menu integration (Beyond Compare–style)
 
-可在資料夾右鍵新增兩個選單項，達成「先選左邊、再選右邊比對」的兩段式流程，並自動帶入目錄啟動 M2 GIT DIFF：
+You can add two menu items on folder right-click for a two-step "select left first, then select right to compare" flow, auto-passing the directories to launch M2 GIT DIFF:
 
-- **Select Folder for M2 GIT DIFF** — 記住此資料夾為左側（`-L`）。
-- **Compare in M2 GIT DIFF** — 以剛才記住的資料夾為 `-L`、目前資料夾為 `-R` 啟動比對。
+- **Select Folder for M2 GIT DIFF** — remember this folder as the left side (`-L`).
+- **Compare in M2 GIT DIFF** — launch the comparison with the just-remembered folder as `-L` and the current folder as `-R`.
 
-安裝 / 移除（**HKCU 寫入，免系統管理員**）：
+Install / remove (**writes to HKCU, no administrator needed**):
 
 ```powershell
-# 安裝右鍵選單
+# Install context menu
 powershell -NoProfile -ExecutionPolicy Bypass -File tools\install-context-menu.ps1
 
-# 移除右鍵選單
+# Remove context menu
 powershell -NoProfile -ExecutionPolicy Bypass -File tools\uninstall-context-menu.ps1
 ```
 
-運作方式：
+How it works:
 
-- 選單項註冊在 `HKCU\Software\Classes\Directory\shell`（在資料夾上右鍵）與 `Directory\Background\shell`（在資料夾空白處右鍵），故**不需管理員權限**。
-- 兩段式狀態由 `tools\m2gitdiff-launcher.ps1` 處理：「Select」會把左側路徑寫入 `%LOCALAPPDATA%\M2_GIT_DIFF\left-folder.txt`；「Compare」讀回該路徑，呼叫 `start.cmd -L <左> -R <目前>` 啟動，完成後清除狀態。
-- 若尚未選擇左側就按 Compare，會跳出提示訊息。
-- 選單會指向 `tools\` 內的腳本與專案根的 `start.cmd`，因此**請勿移動專案資料夾**；若移動了，重新執行 `install-context-menu.ps1` 即可更新路徑。
-- 選單圖示使用 `public\icon.ico`（由 `node scripts/make-icon.mjs` 自 `public/icon.svg` 產生）；若該檔不存在則退回 PowerShell 內建圖示。Windows 右鍵選單僅支援 `.ico` / `.exe` / `.dll` 圖示，不吃 SVG/PNG，故需先轉檔。
+- The menu items are registered under `HKCU\Software\Classes\Directory\shell` (right-click on a folder) and `Directory\Background\shell` (right-click on a folder's empty area), so **no administrator privileges are needed**.
+- The two-step state is handled by `tools\m2gitdiff-launcher.ps1`: "Select" writes the left path to `%LOCALAPPDATA%\M2_GIT_DIFF\left-folder.txt`; "Compare" reads it back and calls `start.cmd -L <left> -R <current>` to launch, clearing the state afterward.
+- If you press Compare before selecting a left side, a prompt is shown.
+- The menu points to the scripts in `tools\` and the project root's `start.cmd`, so **do not move the project folder**; if you moved it, rerun `install-context-menu.ps1` to update the paths.
+- The menu icon uses `public\icon.ico` (generated from `public/icon.svg` by `node scripts/make-icon.mjs`); if that file is missing it falls back to PowerShell's built-in icon. The Windows context menu only supports `.ico` / `.exe` / `.dll` icons, not SVG/PNG, so conversion is needed first.
 
-### 環境注意事項（本機已知狀況）
+### Environment notes (known local conditions)
 
-1. **better-sqlite3 無法編譯**：本機缺少 Visual Studio 的 *ClangCL* 工具集，原生模組編不過。已將其設為 `optionalDependencies`，`db.js` 偵測不到時會自動退回**記憶體快取**，功能不受影響。若要啟用持久化快取：安裝 ClangCL（或在 VS 安裝程式勾選對應工具集）後執行 `npm run rebuild`。
-2. **Electron 二進位在 `Z:` 網路磁碟解壓失敗**：安裝後的 postinstall 在 `Z:` 上靜默失敗。處置方式：用 PowerShell `Expand-Archive` 把快取中的 `electron-vXX-win32-x64.zip` 解到 `node_modules/electron/dist`，並建立 `node_modules/electron/path.txt`（內容 `electron.exe`）。重裝 `node_modules` 後需重做，或執行 `node node_modules/electron/install.js`。
-3. DevTools 的 `Autofill.enable` / GPU 警告為無害雜訊，可忽略。
+1. **better-sqlite3 cannot compile**: this machine lacks Visual Studio's *ClangCL* toolset, so the native module fails to build. It is set as an `optionalDependency`, and when `db.js` does not detect it, it auto-falls back to **in-memory caching** with no functional impact. To enable persistent caching: install ClangCL (or tick the corresponding toolset in the VS installer) then run `npm run rebuild`.
+2. **Electron binary fails to extract on the `Z:` network drive**: the post-install silently fails on `Z:`. Workaround: use PowerShell `Expand-Archive` to extract the cached `electron-vXX-win32-x64.zip` into `node_modules/electron/dist`, and create `node_modules/electron/path.txt` (content `electron.exe`). After reinstalling `node_modules` you must redo this, or run `node node_modules/electron/install.js`.
+3. The DevTools `Autofill.enable` / GPU warnings are harmless noise and can be ignored.
 
 ---
 
-## 8. 快捷鍵與互動操作
+## 8. Keyboard Shortcuts and Interactions
 
-| 按鍵 / 操作 | 作用 |
+| Key / action | Effect |
 | --- | --- |
-| `Ctrl` + `F` | 跳到搜尋框並全選現有字串（開始搜尋） |
-| `Alt` + `F` | 開啟資料夾選擇器載入 repo：左側未載入時先選**左邊**，左側已載入則選**右邊**（兩邊都載入時仍重選右邊） |
-| `Esc`（搜尋面板開啟時，任何焦點） | 關閉搜尋面板，同時清空搜尋字與高亮、焦點回到比對區 |
-| `F3` | 循環跳到**下一個**搜尋命中的 commit，捲動置中並以青色外框高亮 |
-| `Shift` + `F3` | 循環跳到**上一個**搜尋命中的 commit |
-| `↑` / `↓` | 在**目前所在欄位**內把焦點游標移到上一筆 / 下一筆 commit（捲動置中） |
-| `←` / `→` | 把焦點游標切換到左欄 / 右欄，落在 displayIndex 最接近的 commit |
-| `Enter`（焦點在比對區時） | 開啟目前焦點 commit 的詳情浮窗 |
-| 搜尋面板 📝 Notes  ↑ / ↓ | 在每個有註記的 commit 間跳躍（與搜尋功能分開），捲動置中並高亮 |
-| Commit 詳情浮窗右上 HL 輸入格 | 在該浮窗內即時高亮符合的文字；開啟時自動帶入目前搜尋字 |
-| `Esc`（焦點在比對區時） | 取消目前選取的連線、取消進行中的手動連結、關閉所有詳情浮窗
-| `Delete` / `Backspace` | 刪除目前選取的**手動連結** |
-| 點擊有連線的列 / 點擊連接線 | 高亮該配對連線，其餘變淡；焦點移到比對區，並把**鍵盤游標同步**到該列（之後 ↑↓←→ 由此列起算） |
-| 點擊空白處 | 取消選取與進行中的手動連結 |
-| 點擊節點 ◗（未配對列） | 開始 / 完成 / 斷開手動連結（左右各點一個） |
-| `Ctrl` + 左鍵點 commit | 開啟該 commit 的詳情浮窗（可多開；重複點同一個不重開） |
-| 右鍵點 commit | 跳出情境選單：新增/編輯註記、強制背景顏色（綠/亮紅/藍/黃）、清除顏色 |
-| 點 commit 上的 📝 圖示 | 檢視 / 編輯 / 刪除該列註記 |
-| 工具列 ≈ Fuzzy Match 開關 / 門檻框 | 開關內容相似度模糊配對；門檻框設定相似度百分比（0–100%，預設 80%） |
-| 工具列 View（Compare / Left only / Right only） | 切換雙邊比對或單邊放大模式 |
-| 工具列 ◗ Clear manual links / 📝 Clear notes / 🎨 Clear colors | 一次清除目前 repro pair 的手動連結 / 註記 / 強制顏色及其 `localStorage` 暫存 |
-| 工具列 ⬇ Export Excel | 匯出對齊後的 commit＋顏色＋註記＋手動連結為 `.xlsx`（先詢問筆數，預設 ALL） |
-| 工具列 ❓ Help | 開啟快捷鍵說明彈窗（列出全部快捷鍵；`Esc` / ✕ / 點背景關閉） |
-| 工具列 ⚙ Settings | 開啟設定彈窗切換介面語言（English / 中文；`Esc` / ✕ / 點背景關閉） |
-| 右鍵選單最後的取色器 | 自訂任意顏色套用該列，並記成全域第五個快速色票 |
+| `Ctrl` + `F` | Jump to the search box and select the existing text (start searching) |
+| `Alt` + `F` | Open the folder picker to load a repo: if the left is not loaded, pick the **left** first; if the left is loaded, pick the **right** (still picks the right again when both are loaded) |
+| `Esc` (when the search panel is open, any focus) | Close the search panel, clear the search term and highlights, and return focus to the comparison area |
+| `F3` | Cycle to the **next** search-hit commit, scrolling to centre and highlighting it with a cyan outline |
+| `Shift` + `F3` | Cycle to the **previous** search-hit commit |
+| `↑` / `↓` | Move the focus cursor to the previous / next commit **within the current column** (scroll to centre) |
+| `←` / `→` | Switch the focus cursor to the left / right column, landing on the commit with the closest displayIndex |
+| `Enter` (when focus is in the comparison area) | Open the detail popup for the currently focused commit |
+| Search panel 📝 Notes ↑ / ↓ | Jump between every commit with a note (separate from search), scrolling to centre and highlighting |
+| Commit detail popup top-right HL input | Live-highlight matching text within that popup; auto-filled with the current search term when opened |
+| `Esc` (when focus is in the comparison area) | Deselect the current line, cancel an in-progress manual link, close all detail popups |
+| `Delete` / `Backspace` | Delete the currently selected **manual link** |
+| Click a row with a link / click the connection line | Highlight that match line and dim the rest; move focus to the comparison area and **sync the keyboard cursor** to that row (subsequent ↑↓←→ start from it) |
+| Click an empty area | Deselect and cancel an in-progress manual link |
+| Click the node ◗ (unmatched row) | Start / complete / detach a manual link (one click on each side) |
+| `Ctrl` + left-click a commit | Open that commit's detail popup (multi-open; clicking the same one does not reopen) |
+| Right-click a commit | Open the context menu: add/edit note, forced background colour (green/bright red/blue/yellow), clear colour |
+| Click the 📝 icon on a commit | View / edit / delete that row's note |
+| Toolbar ≈ Fuzzy Match toggle / threshold box | Toggle content-similarity fuzzy matching; the threshold box sets the similarity percentage (0–100%, default 80%) |
+| Toolbar View (Compare / Left only / Right only) | Switch between dual-side comparison and single-side enlarged mode |
+| Toolbar ◗ Clear manual links / 📝 Clear notes / 🎨 Clear colors | Clear the current repro pair's manual links / notes / forced colours and their `localStorage` storage at once |
+| Toolbar ⬇ Export Excel | Export the aligned commits + colours + notes + manual links as `.xlsx` (asks for a count first, default ALL) |
+| Toolbar ❓ Help | Open the keyboard shortcuts help popup (lists all shortcuts; `Esc` / ✕ / click backdrop to close) |
+| Toolbar ⚙ Settings | Open the settings popup to switch the UI language (English / 中文; `Esc` / ✕ / click backdrop to close) |
+| The colour picker at the end of the context menu | Apply any custom colour to that row and record it as the global 5th quick swatch |
 
-> `F3` 的循環順序為顯示列由上到下、同列時左欄先於右欄；命中集合改變（修改搜尋字）時游標自動歸零。`Ctrl`+`F` 與 `F3` 在全域監聽，即使焦點在搜尋框內也有效。`Esc` 在全域監聽：只要搜尋面板開啟，不論焦點在哪裡都會關閉它。搜尋面板下方的 **📝 Notes** 區塊與搜尋完全分開，以 ↑ / ↓ 在所有有註記的 commit 間跳躍（顯示列順序、左欄先於右欄）。
-
----
-
-## 9. 安全性
-
-- `contextIsolation: true`、`nodeIntegration: false`，renderer 僅透過 preload 的 `window.api` 取得受限介面。
-- `index.html` 設有 CSP。
-- git 指令一律用 `execFile`（陣列參數，非 shell 字串），避免命令注入。
-- VS Code Chat 整合的 commit 內容一律經 **stdin** 串給 `code chat`（命令列僅含固定/白名單參數），避免 shell 注入。
+> `F3`'s cycle order is display rows top-to-bottom, left column before right within a row; the cursor resets when the hit set changes (editing the search term). `Ctrl`+`F` and `F3` are listened globally and work even when focus is in the search box. `Esc` is listened globally: whenever the search panel is open, it closes regardless of focus. The **📝 Notes** section below the search panel is entirely separate from search, jumping between all commits with a note using ↑ / ↓ (display-row order, left column before right).
 
 ---
 
-## 10. 後續可擴充方向
+## 9. Security
 
-
-- 指定分支 / 標籤 / 日期範圍載入（`getCommits` 已支援 `branch`、`limit` 參數）。
-- 匯出比對結果（CSV / Markdown）。Excel（.xlsx）匯出**已實作**（顏色、註記、手動連結，見 §1）。
-- 兩邊 commit 點選後顯示完整 **diff 內容**（目前 Ctrl+點選已可顯示 commit 訊息與 metadata 詳情，尚未含逐行 diff；亦可用 💬 Chat 交給 VS Code Copilot 解說）。
+- `contextIsolation: true`, `nodeIntegration: false`; the renderer only gets a restricted interface through preload's `window.api`.
+- `index.html` has a CSP.
+- git commands always use `execFile` (array arguments, not a shell string) to avoid command injection.
+- The VS Code Chat integration's commit content is always piped to `code chat` via **stdin** (the command line contains only fixed/allow-listed arguments) to avoid shell injection.
 
 ---
 
-## 11. 檔案速查表
+## 10. Possible Future Extensions
 
-| 我想改… | 去這裡 |
+- Load by specified branch / tag / date range (`getCommits` already supports the `branch`, `limit` parameters).
+- Export comparison results (CSV / Markdown). Excel (.xlsx) export is **already implemented** (colours, notes, manual links, see §1).
+- Show the full **diff content** when clicking commits on both sides (currently Ctrl+click already shows the commit message and metadata detail, but not per-line diff yet; you can also use 💬 Chat to have VS Code Copilot explain it).
+
+---
+
+## 11. File Quick Reference
+
+| I want to change… | Go here |
 | --- | --- |
-| 顏色 / 分類規則 | `src/lib/diff.js`（`computeDiff`） |
-| Fuzzy Match（相似度配對 / 包含率） | `src/lib/diff.js`（`computeDiff` 第 5 階段、`containment`）、`electron/git.js`（`getDiffTexts`）、`src/App.jsx`（`fuzzyEnabled`/`fuzzyThreshold`/`diffTexts`）、`src/components/Toolbar.jsx`（`fuzzy-toggle`） |
-| 左右對齊邏輯 | `src/lib/diff.js`（`alignLayout` / `longestIncreasingByPr`） |
-| 顏色數值 / 主題 | `src/styles.css`（`:root` 變數） |
-| 列高 / overscan / 預設筆數 | `src/lib/constants.js` |
-| 工具列 / 搜尋 / Filter 按鈕 | `src/components/Toolbar.jsx` |
-| LOGO 圖樣 | `src/assets/logo.svg`、`public/icon.svg` |
-| 左右欄欄位排版（order） | `src/styles.css`（`.repo-column[data-side='R']`） |
-| 連接線畫法（直角轉折 / 可點選） | `src/components/ConnectionLines.jsx` |
-| 選取 focus / Esc / 點空白取消 | `src/App.jsx`（`handleSelect` / `onBodyClick` / keydown） |
-| 快捷鍵（Ctrl+F / Esc / F3） | `src/App.jsx`（`cycleHit` / keydown / `onSearchKeyDown` / `closeSearch`） |
-| 鍵盤游標導覽（↑↓←→ / Enter） | `src/App.jsx`（`navRows` / `moveCursor` / `moveCursorSide` / `openCursorDetail` / `activeHit`） |
-| 快捷鍵說明彈窗（Help） | `src/components/HelpPopup.jsx`、`src/components/Toolbar.jsx`（`onOpenHelp`）、`src/App.jsx`（`helpOpen`） |
-| 多國語言（i18n / 語系字串 / 自動掃描） | `src/locales/*.json`、`src/lib/i18n.js`（`I18nProvider`/`useT`/`makeT`/`import.meta.glob`）、`src/components/SettingsPopup.jsx`、`src/main.jsx`（`I18nProvider` 包覆） |
-| 浮動搜尋面板 / 📝 Notes 導航 | `src/components/SearchPanel.jsx`、`src/App.jsx`（`noteHits` / `cycleNote`） |
-| 註記（Note）浮窗 / 邏輯 | `src/components/NotePopup.jsx`、`src/App.jsx`（`openNote`/`saveNote`/`deleteNote`/`clearNotes`） |
-| 右鍵選單 / 強制顏色 | `src/components/RowMenu.jsx`、`src/App.jsx`（`openRowMenu`/`setColor`/`clearColors`）、`src/styles.css`（`.commit-row.force-*`） |
-| Commit 詳情浮窗 / Markdown / HL 高亮 | `src/components/CommitDetail.jsx`、`src/lib/markdown.js`、`src/App.jsx`（`openDetail`/`resolveDetail`/`details`） |
-| 可點擊 commit 連結（🌐 Web / 遠端 URL） | `src/components/CommitDetail.jsx`、`electron/git.js`（`getRemoteUrl` / `loadRepo` remoteUrl）、`electron/main.js`（`shell:openExternal`）、`electron/excel.js`（SHA 超連結） |
-| VS Code Chat 整合（💬 Chat） | `src/components/CommitDetail.jsx`（`openInChat`）、`electron/preload.js`（`openInVSCodeChat`）、`electron/main.js`（`vscode:chat` / `resolveCodeCommand`） |
-| 應用程式圖示產生（SVG→ICO） | `scripts/make-icon.mjs`、`public/icon.svg`、`public/icon.ico` |
-| 單一 Repo（View）模式 | `src/App.jsx`（`single` 狀態、`view` useMemo）、`src/components/Toolbar.jsx`、`src/styles.css`（`.repo-column.plain`） |
-| 手動連結（節點 / 暫存 / RESUME / Clear） | `src/App.jsx`（`onNode` / `manualLinks` / `clearManualLinks` / localStorage）、`src/lib/diff.js`（manual 階段） |
-| 虛擬化渲染 | `src/components/RepoColumn.jsx` |
-| git log 解析欄位 / patch-id | `electron/git.js` |
-| 快取邏輯 | `electron/db.js` |
-| 視窗 / IPC / CLI 參數 / App 名稱與圖示 | `electron/main.js` |
-| 啟動檢查 / Electron 修復 / -L -R 轉傳 | `start.cmd`（一般/production）、`start_dev.cmd`（開發）、`repair-electron.ps1` |
+| Colours / classification rules | `src/lib/diff.js` (`computeDiff`) |
+| Fuzzy Match (similarity matching / containment) | `src/lib/diff.js` (`computeDiff` stage 5, `containment`), `electron/git.js` (`getDiffTexts`), `src/App.jsx` (`fuzzyEnabled`/`fuzzyThreshold`/`diffTexts`), `src/components/Toolbar.jsx` (`fuzzy-toggle`) |
+| Left-right alignment logic | `src/lib/diff.js` (`alignLayout` / `longestIncreasingByPr`) |
+| Colour values / theme | `src/styles.css` (`:root` variables) |
+| Row height / overscan / default count | `src/lib/constants.js` |
+| Toolbar / search / Filter buttons | `src/components/Toolbar.jsx` |
+| LOGO artwork | `src/assets/logo.svg`, `public/icon.svg` |
+| Left/right column field layout (order) | `src/styles.css` (`.repo-column[data-side='R']`) |
+| Connection line drawing (orthogonal / clickable) | `src/components/ConnectionLines.jsx` |
+| Select focus / Esc / click-empty deselect | `src/App.jsx` (`handleSelect` / `onBodyClick` / keydown) |
+| Shortcuts (Ctrl+F / Esc / F3) | `src/App.jsx` (`cycleHit` / keydown / `onSearchKeyDown` / `closeSearch`) |
+| Keyboard cursor navigation (↑↓←→ / Enter) | `src/App.jsx` (`navRows` / `moveCursor` / `moveCursorSide` / `openCursorDetail` / `activeHit`) |
+| Shortcuts help popup (Help) | `src/components/HelpPopup.jsx`, `src/components/Toolbar.jsx` (`onOpenHelp`), `src/App.jsx` (`helpOpen`) |
+| Internationalization (i18n / locale strings / auto-scan) | `src/locales/*.json`, `src/lib/i18n.js` (`I18nProvider`/`useT`/`makeT`/`import.meta.glob`), `src/components/SettingsPopup.jsx`, `src/main.jsx` (`I18nProvider` wrapper) |
+| Multiple themes (Theme / theme files / auto-scan) | `src/themes/*.json`, `src/lib/theme.js` (`ThemeProvider`/`useTheme`/`applyTheme`/`import.meta.glob`), `src/components/SettingsPopup.jsx`, `src/main.jsx` (`ThemeProvider` wrapper) |
+| Floating search panel / 📝 Notes navigation | `src/components/SearchPanel.jsx`, `src/App.jsx` (`noteHits` / `cycleNote`) |
+| Note popup / logic | `src/components/NotePopup.jsx`, `src/App.jsx` (`openNote`/`saveNote`/`deleteNote`/`clearNotes`) |
+| Context menu / forced colours | `src/components/RowMenu.jsx`, `src/App.jsx` (`openRowMenu`/`setColor`/`clearColors`), `src/styles.css` (`.commit-row.force-*`) |
+| Commit detail popup / Markdown / HL highlight | `src/components/CommitDetail.jsx`, `src/lib/markdown.js`, `src/App.jsx` (`openDetail`/`resolveDetail`/`details`) |
+| Clickable commit links (🌐 Web / remote URL) | `src/components/CommitDetail.jsx`, `electron/git.js` (`getRemoteUrl` / `loadRepo` remoteUrl), `electron/main.js` (`shell:openExternal`), `electron/excel.js` (SHA hyperlink) |
+| VS Code Chat integration (💬 Chat) | `src/components/CommitDetail.jsx` (`openInChat`), `electron/preload.js` (`openInVSCodeChat`), `electron/main.js` (`vscode:chat` / `resolveCodeCommand`) |
+| App icon generation (SVG→ICO) | `scripts/make-icon.mjs`, `public/icon.svg`, `public/icon.ico` |
+| Single-repo (View) mode | `src/App.jsx` (`single` state, `view` useMemo), `src/components/Toolbar.jsx`, `src/styles.css` (`.repo-column.plain`) |
+| Manual links (nodes / storage / RESUME / Clear) | `src/App.jsx` (`onNode` / `manualLinks` / `clearManualLinks` / localStorage), `src/lib/diff.js` (manual stage) |
+| Virtualized rendering | `src/components/RepoColumn.jsx` |
+| git log parsing fields / patch-id | `electron/git.js` |
+| Cache logic | `electron/db.js` |
+| Window / IPC / CLI args / app name and icon | `electron/main.js` |
+| Launch checks / Electron repair / -L -R forwarding | `start.cmd` (normal/production), `start_dev.cmd` (dev), `repair-electron.ps1` |
