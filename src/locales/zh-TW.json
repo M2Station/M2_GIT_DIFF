@@ -56,7 +56,9 @@
   "settings": {
     "title": "⚙ 設定 / Settings",
     "language": "語言 / Language",
-    "languageHint": "選擇介面語言，設定會自動儲存。"
+    "languageHint": "選擇介面語言，設定會自動儲存。",
+    "theme": "主題 / Theme",
+    "themeHint": "選擇配色主題，設定會自動儲存。"
   },
   "search": {
     "title": "🔍 Search",
