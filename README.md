@@ -31,6 +31,7 @@ A desktop tool dedicated to **comparing the commit history of two local Git repo
 | Filter mode | When on, keep only matching commits (compacted layout); when off, just dim the rest | — |
 | **Command-line auto-open** | Launch with `-L <path> -R <path>` to auto-load the left and right repros | — |
 | **Manual links** | On an unmatched (red) commit, click the node ◗; click one on each side to manually link them; the colour is **purple** to distinguish from cherry yellow; can be detached and is auto-saved, so reopening the same repros auto-restores them | Purple background + purple solid line |
+| **Swap sides (⇆ Swap)** | Toolbar **⇆ Swap** button mirrors the left and right repos—swapping not just the displayed repos but also all their side-keyed annotations (manual links, notes, forced colours). The swapped data is written under the new repo-pair key before the flip, so persistence resumes correctly after the swap | — |
 | **Single-repo mode** | Toolbar **View** toggles `⇄ Compare` / `◧ Left only` / `◨ Right only`; in single-side view that column expands to fill the whole window, hiding the gutter and lines; in single-column mode the commit background becomes **normal (transparent)**, while forced colours are still kept | — |
 | **Per-row notes** | Right-click any commit → add/edit a note (a floating draggable editor, `Ctrl+Enter` to save); commits with notes show a 📝 icon, click it to view/edit/delete | — |
 | **Forced background colour** | Right-click a commit → choose green / bright red / blue / yellow to force-override that row's background; clear a single row or all at once | Green/Bright red/Blue/Yellow |
@@ -56,11 +57,13 @@ Click any row with a link (grey/yellow/pink), or **click the connection line dir
 
 **Storage location**: manual links live in the renderer's `localStorage`, with key `mlink:<left repo path>|<right repo path>` and value a JSON of `[{ leftSha, rightSha }, …]`. The purple **◗ Clear manual links** button in the toolbar (same colour as manual links) cancels **all manual links for the current repro pair and deletes that storage** at once (shows a count when links exist, disabled when none).
 
-**Notes & forced-colour storage**: per-row notes and forced background colours are likewise stored in `localStorage` keyed by both repo paths—notes as `note:<left repo path>|<right repo path>` and colours as `color:<left repo path>|<right repo path>`, both values being `{ "<side>:<sha>": <value> }` objects. The toolbar also has **📝 Clear notes** and **🎨 Clear colors** buttons to clear each at once.
+**Notes & forced-colour storage**: per-row notes and forced background colours are likewise stored in `localStorage` keyed by both repo paths—notes as `note:<left repo path>|<right repo path>` and colours as `color:<left repo path>|<right repo path>`, both values being `{ "<side>:<sha>": <value> }` objects. The toolbar also has **📝 Clear notes** and **🎨 Clear colors** buttons to clear each at once (each shows a count in parentheses when there is at least one note / forced colour, and is disabled when none).
 
 **Context menu & detail popup**: right-clicking any commit opens a context menu (add/edit note, forced background colour green/bright red/blue/yellow, clear colour). `Ctrl`+left-click opens the commit detail popup: SHA / author / date are clearly labelled at the top, and the body is shown with a built-in lightweight Markdown renderer (`src/lib/markdown.js`, HTML-escaped first then marked up, with links not navigating for safety); if the commit has a match, a purple-highlighted **Related item** block shows the opposite-side commit, clickable to open another popup. The popup's top-right **HL** input live-highlights all matching text within that popup (case-insensitive), auto-filled with the current global search term when opened. The popup can be dragged by its title bar, resized from any edge/corner, with initial width auto-estimated from content length, and multiple can be open at once (clicking the same commit does not reopen it); press `Esc` to close all at once.
 
 **Search panel & note navigation**: `Ctrl`+`F` opens a floating draggable search panel where you can choose the search scope (Title / Body / SHA / Author / Date), cycle hits with ↑ / ↓ or `F3` / `Shift`+`F3`, and use Filter to show only matching rows. Below the panel is a separate **📝 Notes** navigation area (distinct from search) that jumps between every commit with a note using ↑ / ↓ (display-row order, left column before right), scrolling it to centre and highlighting it. While the search panel is open, pressing `Esc` (regardless of focus) closes the panel and clears the term and highlights.
+
+**Legend bar**: a permanent bar at the very bottom of the window shows five colour chips—■ Common (same SHA) · ■ Cherry-pick (same title) · ■ Unique (one side only) · ■ Manual link · ■ Fuzzy match (similar content)—followed by a context-sensitive hint line: normally "Click a row node ◗ to link two commits · Del removes a selected manual link"; switches to "Pick a node on the other side to link · Esc to cancel" while a manual-link endpoint is pending. A "Powered by OA Hsiao ↗" credit link appears at the right end.
 
 ### How left-right alignment works
 
@@ -91,7 +94,7 @@ Renderer (React + Vite)
 ├─ src/lib/constants.js         Layout constants (row height, gutter width, overscan…)
 ├─ src/assets/logo.svg          Toolbar LOGO (cyan M2 wordmark)
 └─ src/components/
-   ├─ Toolbar.jsx          Top toolbar: LOGO + name, open repo, branch badges, stats, Fuzzy Match toggle + threshold, View mode toggle, search, Clear manual/notes/colors, Export Excel
+   ├─ Toolbar.jsx          Top toolbar: LOGO + name, open repo, branch badges, stats, Fuzzy Match toggle + threshold, ⇆ Swap sides, View mode toggle, search, Clear manual/notes/colors, Export Excel
    ├─ RepoColumn.jsx       Single-column virtualized rendering (only draws rows in the viewport)
    ├─ CommitRow.jsx        Single commit row (absolute positioning + highlight + note icon + context menu + Ctrl-click detail)
    ├─ ConnectionLines.jsx  SVG connection lines in the central gutter (degenerate to a horizontal line when endpoints share a row)
@@ -330,6 +333,7 @@ How it works:
 | Right-click a commit | Open the context menu: add/edit note, forced background colour (green/bright red/blue/yellow), clear colour |
 | Click the 📝 icon on a commit | View / edit / delete that row's note |
 | Toolbar ≈ Fuzzy Match toggle / threshold box | Toggle content-similarity fuzzy matching; the threshold box sets the similarity percentage (0–100%, default 80%) |
+| Toolbar ⇆ Swap | Swap the left and right repos (and all their side-keyed annotations: manual links, notes, forced colours) |
 | Toolbar View (Compare / Left only / Right only) | Switch between dual-side comparison and single-side enlarged mode |
 | Toolbar ◗ Clear manual links / 📝 Clear notes / 🎨 Clear colors | Clear the current repro pair's manual links / notes / forced colours and their `localStorage` storage at once |
 | Toolbar ⬇ Export Excel | Export the aligned commits + colours + notes + manual links as `.xlsx` (asks for a count first, default ALL) |
@@ -385,6 +389,7 @@ How it works:
 | VS Code Chat integration (💬 Chat) | `src/components/CommitDetail.jsx` (`openInChat`), `electron/preload.js` (`openInVSCodeChat`), `electron/main.js` (`vscode:chat` / `resolveCodeCommand`) |
 | App icon generation (SVG→ICO) | `scripts/make-icon.mjs`, `public/icon.svg`, `public/icon.ico` |
 | Single-repo (View) mode | `src/App.jsx` (`single` state, `view` useMemo), `src/components/Toolbar.jsx`, `src/styles.css` (`.repo-column.plain`) |
+| Swap sides (⇆ Swap) | `src/App.jsx` (`swapSides`), `src/components/Toolbar.jsx` (`onSwapSides`) |
 | Manual links (nodes / storage / RESUME / Clear) | `src/App.jsx` (`onNode` / `manualLinks` / `clearManualLinks` / localStorage), `src/lib/diff.js` (manual stage) |
 | Virtualized rendering | `src/components/RepoColumn.jsx` |
 | git log parsing fields / patch-id | `electron/git.js` |

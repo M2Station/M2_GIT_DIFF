@@ -32,6 +32,7 @@
 | Filter 模式 | 開啟後只保留命中的 commit（壓縮排列），關閉則只是變暗 | — |
 | **命令列自動開啟** | 啟動時帶 `-L <path> -R <path>` 可自動載入左右兩側 repro | — |
 | **手動連結** | 在未配對（紅）的 commit 上點節點 ◗，左右各點一個即可手動配對；顏色為**紫色**以區別 cherry 黃色；可斷開並自動暫存，重開相同 repro 會自動還原 | 紫色背景＋紫色實線 |
+| **左右對調（⇆ Swap）** | 工具列 **⇆ Swap** 按鈕將左右兩側 repo 對調，同時把所有與側別關聯的標記（手動連結、註記、強制顏色）一起鏡像翻轉並以新的 repo pair key 持久化，對調後仍可繼續 RESUME | — |
 | **單一 Repo 模式** | 工具列 **View** 切換 `⇄ Compare` / `◧ Left only` / `◨ Right only`；只看單邊時該欄放大佔滿整個視窗，隱藏 gutter 與連線；單欄模式下 commit 背景改為**正常（透明）**，強制顏色仍保留 | — |
 | **每列註記（Note）** | 右鍵任一 commit → 新增/編輯註記（浮動可拖曳編輯框，`Ctrl+Enter` 儲存）；有註記者顯示 📝 圖示，點圖示可檢視/編輯/刪除 | — |
 | **強制背景顏色** | 右鍵 commit → 選 綠 / 亮紅 / 藍 / 黃 強制覆蓋該列背景；可清除單列或一次清除全部 | 綠/亮紅/藍/黃 |
@@ -57,11 +58,13 @@
 
 **暫存位置**：手動連結存在 renderer 的 `localStorage`，key 為 `mlink:<左repo路徑>|<右repo路徑>`，value 為 `[{ leftSha, rightSha }, …]` 的 JSON。工具列上的紫色 **◗ Clear manual links** 按鈕（與手動連結同色）會一次取消目前 repro pair 的**所有手動連結並刪除該暫存**（有連結時顯示數量，無連結時 disabled）。
 
-**註記與強制顏色暫存**：每列註記與強制背景顏色同樣以兩側 repo 路徑為 key 存進 `localStorage`——註記為 `note:<左repo路徑>|<右repo路徑>`、顏色為 `color:<左repo路徑>|<右repo路徑>`，value 皆為 `{ "<side>:<sha>": <值> }` 物件。工具列另有 **📝 Clear notes**、**🎨 Clear colors** 按鈕可分別一次清空。
+**註記與強制顏色暫存**：每列註記與強制背景顏色同樣以兩側 repo 路徑為 key 存進 `localStorage`——註記為 `note:<左repo路徑>|<右repo路徑>`、顏色為 `color:<左repo路徑>|<右repo路徑>`，value 皆為 `{ "<side>:<sha>": <值> }` 物件。工具列另有 **📝 Clear notes**、**🎨 Clear colors** 按鈕可分別一次清空（各自在有筆記/顏色時括號內顯示數量，無資料時 disabled）。
 
 **右鍵選單與詳情浮窗**：右鍵任一 commit 會跳出情境選單（新增/編輯註記、強制背景顏色綠/亮紅/藍/黃、清除顏色）。`Ctrl`+左鍵則開啟 commit 詳情浮窗：上方清楚標示 SHA / 作者 / 日期，內文以內建輕量 Markdown 渲染器（`src/lib/markdown.js`，先 HTML escape 再上標記，連結不導航以策安全）顯示；若該 commit 有配對，會以紫色高亮的 **Related item** 區塊顯示對側 commit，點擊可再開一個浮窗。浮窗右上角有 **HL** 輸入格，輸入字串會在該浮窗內即時高亮所有符合的文字（不區大小寫），且開啟時會自動帶入目前的全域搜尋字。浮窗可由標題拖曳移動、由任一邊/角拖拉縮放，初始寬度依內容長度自動估算，並可同時開啟多個（重複點同一 commit 不會重開），按 `Esc` 一次關閉全部。
 
 **搜尋面板與註記導航**：`Ctrl`+`F` 開啟浮動可拖曳的搜尋面板，可選搜尋範圍（Title / Body / SHA / Author / Date）、以 ↑ / ↓ 或 `F3` / `Shift`+`F3` 循環命中項、以 Filter 只顯示命中列。面板下方另有一個與搜尋分開的 **📝 Notes** 導航區，以 ↑ / ↓ 在每個有註記的 commit 間跳躍（顯示列順序、左欄先於右欄），捲動置中並高亮。只要搜尋面板開啟，按 `Esc`（不論焦點在哪裡）即關閉面板並清空字串與高亮。
+
+**圖例列（Legend bar）**：視窗最底部有一條永久可見的圖例列，顯示五個顏色色票——■ Common（同 SHA）·■ Cherry-pick（同標題）·■ Unique（只存在一側）·■ Manual link（手動連結）·■ Fuzzy match（相似內容）——後面跟著一行情境提示文字：平時顯示「Click a row node ◗ to link two commits · Del removes a selected manual link」；正在等待選擇第二端點時切換為「Pick a node on the other side to link · Esc to cancel」。最右端有可點擊的「Powered by OA Hsiao ↗」版權連結。
 
 ### 左右對齊（align）如何運作
 
@@ -92,7 +95,7 @@ Renderer (React + Vite)
 ├─ src/lib/constants.js         版面常數（列高、gutter 寬、overscan…）
 ├─ src/assets/logo.svg          工具列 LOGO（青色 M2 字標）
 └─ src/components/
-   ├─ Toolbar.jsx          上方工具列：LOGO＋名稱、開啟 repo、branch 徽章、統計、Fuzzy Match 開關＋門檻、View 模式切換、搜尋、Clear manual/notes/colors、Export Excel
+   ├─ Toolbar.jsx          上方工具列：LOGO＋名稱、開啟 repo、branch 徽章、統計、Fuzzy Match 開關＋門檻、⇆ Swap 左右對調、View 模式切換、搜尋、Clear manual/notes/colors、Export Excel
    ├─ RepoColumn.jsx       單欄虛擬化渲染（只畫視窗內的列）
    ├─ CommitRow.jsx        單一 commit 列（絕對定位 + 高亮 + 註記圖示 + 右鍵選單 + Ctrl點詳情）
    ├─ ConnectionLines.jsx  中央 gutter 的 SVG 連接線（端點同列時退化為水平線）
@@ -331,6 +334,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\uninstall-context-menu
 | 右鍵點 commit | 跳出情境選單：新增/編輯註記、強制背景顏色（綠/亮紅/藍/黃）、清除顏色 |
 | 點 commit 上的 📝 圖示 | 檢視 / 編輯 / 刪除該列註記 |
 | 工具列 ≈ Fuzzy Match 開關 / 門檻框 | 開關內容相似度模糊配對；門檻框設定相似度百分比（0–100%，預設 80%） |
+| 工具列 ⇆ Swap | 左右兩側 repo 對調，同時鏡像翻轉所有手動連結、註記、強制顏色 |
 | 工具列 View（Compare / Left only / Right only） | 切換雙邊比對或單邊放大模式 |
 | 工具列 ◗ Clear manual links / 📝 Clear notes / 🎨 Clear colors | 一次清除目前 repro pair 的手動連結 / 註記 / 強制顏色及其 `localStorage` 暫存 |
 | 工具列 ⬇ Export Excel | 匯出對齊後的 commit＋顏色＋註記＋手動連結為 `.xlsx`（先詢問筆數，預設 ALL） |
@@ -386,6 +390,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\uninstall-context-menu
 | VS Code Chat 整合（💬 Chat） | `src/components/CommitDetail.jsx`（`openInChat`）、`electron/preload.js`（`openInVSCodeChat`）、`electron/main.js`（`vscode:chat` / `resolveCodeCommand`） |
 | 應用程式圖示產生（SVG→ICO） | `scripts/make-icon.mjs`、`public/icon.svg`、`public/icon.ico` |
 | 單一 Repo（View）模式 | `src/App.jsx`（`single` 狀態、`view` useMemo）、`src/components/Toolbar.jsx`、`src/styles.css`（`.repo-column.plain`） |
+| 左右對調（⇆ Swap） | `src/App.jsx`（`swapSides`）、`src/components/Toolbar.jsx`（`onSwapSides`） |
 | 手動連結（節點 / 暫存 / RESUME / Clear） | `src/App.jsx`（`onNode` / `manualLinks` / `clearManualLinks` / localStorage）、`src/lib/diff.js`（manual 階段） |
 | 虛擬化渲染 | `src/components/RepoColumn.jsx` |
 | git log 解析欄位 / patch-id | `electron/git.js` |
