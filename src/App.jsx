@@ -62,7 +62,7 @@ export default function App() {
 
   // Fuzzy (approximate content) matching: opt-in pass that pairs still-unmatched
   // commits by how much their CHANGED LINES overlap. `fuzzyThreshold` is a 0-100
-  // percent (default 70%); computeDiff receives it as a 0-1 ratio. `diffTexts`
+  // percent (default 80%); computeDiff receives it as a 0-1 ratio. `diffTexts`
   // caches each commit's changed-line list (sha -> string[]), fetched lazily
   // from the main process only while fuzzy matching is enabled.
   const [fuzzyEnabled, setFuzzyEnabled] = useState(false);

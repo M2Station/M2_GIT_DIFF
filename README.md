@@ -30,6 +30,7 @@ A desktop tool dedicated to **comparing the commit history of two local Git repo
 | Search | Search by title / body / SHA / author / date; hits are highlighted, the rest dimmed, with a hit count shown | — |
 | Filter mode | When on, keep only matching commits (compacted layout); when off, just dim the rest | — |
 | **Command-line auto-open** | Launch with `-L <path> -R <path>` to auto-load the left and right repros | — |
+| **In-app repo picker** | "Open repo…" / `Alt`+`F` open a built-in keyboard-driven folder browser (instead of the OS dialog) that scans each level for git repositories (including nested submodules) and marks them, with a live name filter and a **repos-only** toggle (`Ctrl`+`G`); it remembers the last visited folder per side. Keys: `↑`/`↓` move, `Enter` open repo or descend, `→` descend (even into a repo, for submodules), `←`/`Backspace` go up, `Ctrl`+`Enter` select a non-repo folder, `Esc` cancel | — |
 | **Manual links** | On an unmatched (red) commit, click the node ◗; click one on each side to manually link them; the colour is **purple** to distinguish from cherry yellow; can be detached and is auto-saved, so reopening the same repros auto-restores them | Purple background + purple solid line |
 | **Single-repo mode** | Toolbar **View** toggles `⇄ Compare` / `◧ Left only` / `◨ Right only`; in single-side view that column expands to fill the whole window, hiding the gutter and lines; in single-column mode the commit background becomes **normal (transparent)**, while forced colours are still kept | — |
 | **Per-row notes** | Right-click any commit → add/edit a note (a floating draggable editor, `Ctrl+Enter` to save); commits with notes show a 📝 icon, click it to view/edit/delete | — |
@@ -40,7 +41,7 @@ A desktop tool dedicated to **comparing the commit history of two local Git repo
 | **Excel export (.xlsx)** | Toolbar top-right **⬇ Export Excel**: outputs the aligned commits, forced colours, notes, and manual links together into a styled `.xlsx` (ExcelJS). Cell fill colours map to forced colours, notes appear as cell comments (like tooltips), matched commits are aligned with blank cells; also includes a **Manual Links** worksheet listing all manual links | Same colours as the screen |
 | **Export count confirmation** | Before exporting, a dialog asks how many rows to output (default **ALL**, or the first N); it warns on large data sets to avoid lag from exporting too much at once | — |
 | **Commit detail popup** | `Ctrl`+left-click a commit → a floating window shows SHA / author / date (clearly labelled) plus the Markdown-rendered commit body (the identifying numbers of a **Merged PR** and each id under **Related work items** are underlined in the accent colour for quick scanning); the matched **Related item** is specially emphasised; a top-right **HL** input live-highlights matching text (auto-filled with the current search term when opened); movable, drag-resizable, auto-sized to content; **multiple can be open at once** (clicking the same one does not reopen it) | — |
-| **Clickable commit links** | The commit detail popup shows a **🌐 Web** link next to the SHA, opening that commit's remote page in the system default browser (auto-detects GitHub / GitLab / Gitea / ADO / Bitbucket); on Excel export the SHA cell is also hyperlinked to the same remote URL | — |
+| **Clickable commit links** | The commit detail popup shows links next to the SHA: **🔗 Web** opens that commit's remote page in the system default browser (auto-detects GitHub / GitLab / Gitea / ADO / Bitbucket); **🔀 PR {n}** opens each Merged PR's page; **🔍 #{n}** opens a host code-search for each related work-item id. On Excel export the SHA cell is also hyperlinked to the same remote URL | — |
 | **VS Code Chat integration** | The detail popup's **💬 Chat** button invokes the locally installed VS Code (`code chat`), opening Copilot Chat (agent mode) with that repo as the workspace, auto-passing an English prompt describing the commit (you can run `git show <sha>` inside chat to see the full diff); if VS Code is not installed, a hint is shown in the popup | — |
 | Virtualization | Renders only the rows within the viewport, supporting smooth scrolling of large repos (thousands of commits) | — |
 | **Keyboard shortcuts help** | Toolbar top-right **❓ Help** opens a centred modal listing all shortcuts (keycap style); the bottom has a clickable `Powered by OA Hsiao` badge linking to the author's GitHub. Click the backdrop / ✕ / `Esc` to close | — |
@@ -82,6 +83,7 @@ Electron (main process)
 ├─ electron/preload.js   contextBridge secure bridge, exposes window.api (incl. exportExcel)
 ├─ electron/git.js       Calls system git, parses git log → structured commits; getPatchIds / getDiffTexts (Fuzzy changed lines); gitOp returns full stdout/stderr and exit code
 ├─ electron/excel.js     ExcelJS generates styled .xlsx (colour fills, note cell comments, SHA hyperlink to remote commit URL, Manual Links worksheet)
+├─ electron/fsdialog.js  Directory listing for the in-app FolderPicker (dialog:listDir / dialog:rememberDir)
 └─ electron/db.js        better-sqlite3 cache layer (auto-falls back to in-memory cache when absent)
 
 Renderer (React + Vite)
@@ -101,10 +103,12 @@ Renderer (React + Vite)
    ├─ RowMenu.jsx          Right-click context menu (notes + forced background colour + custom 5th colour picker)
    ├─ RepoGitBar.jsx       Per-side Git operation bar (pull / fetch…)
    ├─ GitTerminalPopup.jsx Git operation result popup (draggable, shows command/output/exit code, green border on success red on failure)
+   ├─ BranchSwitchPopup.jsx Branch picker (draggable/resizable, collapsible local + per-remote tree, search box, full keyboard nav, runs git switch via IPC)
+   ├─ FolderPicker.jsx     In-app keyboard-driven repo/folder picker (replaces the OS dialog; scans for git repos incl. submodules, repos-only filter, remembers the last visited folder)
    ├─ ExportPrompt.jsx     Pre-export count confirmation dialog (default ALL, or first N)
    ├─ HelpPopup.jsx       Keyboard shortcuts help popup (centred modal, keycap list, OA Hsiao badge, `Esc`/backdrop to close)
    ├─ SettingsPopup.jsx   Settings popup (language selector + theme selector; locales from `src/locales`, themes from `src/themes`, both auto-scanned)
-   └─ CommitDetail.jsx     Commit detail popup (Markdown rendering, Related item, 🌐 Web link next to SHA opens remote page, movable/resizable, multi-open, 💬 Chat opens VS Code)
+   └─ CommitDetail.jsx     Commit detail popup (Markdown rendering, Related item, 🔗 Web / 🔀 PR / 🔍 code-search links next to SHA, movable/resizable, multi-open, 💬 Chat opens VS Code)
 ```
 
 **Multiple themes (Theme)**: theme definitions live in `src/themes/*.json` (one theme per file; the filename minus `.json` is the theme id, the file's `_meta.name` is the display name, and `vars` is the CSS custom-property map). `src/lib/theme.js` uses Vite `import.meta.glob('../themes/*.json', { eager: true })` to **auto-scan** that directory at build time, providing as many themes as files found—adding an `xx.json` makes it appear in the settings list automatically, no code changes. `ThemeProvider` wraps `App` (`src/main.jsx`); on switching, `applyTheme()` writes the theme's `vars` one by one to `document.documentElement`'s inline style and sets the `data-theme` attribute, and since every colour in `src/styles.css` is referenced via `var(--…)`, the skin changes instantly. The choice is stored in `localStorage` as `appTheme` (default: stored value → `low_key` → the first one scanned), and is applied once at module load to avoid a flash of the wrong theme (FOUC). Five themes are built in: **Low Key** (native dark), **Daylight** (light), **Solarized**, **Matrix**, **Army** (olive green / desert tan / concrete grey).
@@ -121,7 +125,7 @@ There is also `public/icon.svg` (a transparent-background, gradient M wordmark i
 
 ## 3. Data Flow
 
-1. User presses "Open repo…" → `main.js`'s `dialog:pickFolder` opens the folder picker.
+1. User presses "Open repo…" (or `Alt`+`F`) → the in-app `FolderPicker` opens, listing directories via the `dialog:listDir` IPC (`electron/fsdialog.js`) and remembering the chosen folder via `dialog:rememberDir`.
 2. `repo:load` IPC:
    - Checks whether it is a git repository (whether `.git` exists).
    - Looks up the cache (`db.js`) keyed by `repoPath::branch::limit`, versioned by HEAD SHA.
