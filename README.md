@@ -254,36 +254,70 @@ npm run build        # build the renderer into dist/
 npm run dist         # electron-builder packaging (Windows NSIS)
 npm run rebuild      # rebuild better-sqlite3 for the current Electron ABI
 npm run demo:gif     # regenerate the preview animation public/demo.gif
-npm run release      # automated release: bump + build installer + tag + GitHub Release (see below)
+npm run release      # local verification build only (no publish); CI publishes on tag push (see below)
 ```
 
 > Generate the app icon: `node scripts/make-icon.mjs` converts `public/icon.svg` into a multi-size (16–256px, transparent) `public/icon.ico` for the context menu and packaged icon; rerun after editing `icon.svg`.
 
-### Cutting a release (`npm run release` / Release Manager agent)
+### Cutting a release (CI on tag push)
 
-Releases are fully automated by `scripts/release.ps1` (exposed as `npm run release`). One command bumps the version, builds the Windows NSIS installer (handling the winCodeSign symlink workaround and the `better-sqlite3` ABI rebuild), creates the `vX.Y.Z` git tag, and publishes a GitHub Release with the installer attached.
+The **canonical release path is CI**: push a `vX.Y.Z` tag and
+[`.github/workflows/release.yml`](.github/workflows/release.yml) builds the
+Windows NSIS installer and publishes the GitHub Release with the installer
+attached. This keeps every published build reproducible and independent of any
+one developer's machine (Electron builds are never byte-for-byte identical
+across machines, so a single source of truth matters).
 
 ```powershell
-npm run release                              # re-publish the current version in package.json
-npm run release -- -Bump patch               # 0.1.0 → 0.1.1
-npm run release -- -Bump minor               # 0.1.0 → 0.2.0
-npm run release -- -Bump major               # 0.1.0 → 1.0.0
-npm run release -- -Version 1.0.0 -Notes "First stable release."
-npm run release -- -SkipPush -Bump patch     # dry run: build + tag locally only, do NOT publish
-npm run release -- -Bump minor -Branch main  # release from a specific branch (default: main)
+# 1. (optional) verify the build locally first — builds the installer, publishes nothing
+npm run release
+
+# 2. bump the version, commit, and push the tag — CI takes over from here
+npm version patch                 # 0.1.0 -> 0.1.1 (also: minor | major | 1.2.3)
+git push --follow-tags            # pushes the commit AND the vX.Y.Z tag
+```
+
+Pushing the `vX.Y.Z` tag triggers the workflow, which runs `npm ci`, builds,
+rebuilds `better-sqlite3`, packages with `electron-builder --publish never`, and
+then publishes the release via `softprops/action-gh-release` using the
+built-in `GITHUB_TOKEN` (no PAT needed). You can also trigger it manually from
+**Actions → Release → Run workflow**.
+
+#### `scripts/release.ps1` — local verification (and emergency fallback)
+
+`scripts/release.ps1` (exposed as `npm run release`) is now a **local
+verification tool**. By default it builds the installer — handling the
+winCodeSign symlink workaround and the `better-sqlite3` ABI rebuild — and then
+**stops without modifying `package.json`, committing, tagging, pushing, or
+publishing anything**. Use it to confirm a build packages cleanly before you
+push a tag.
+
+```powershell
+npm run release                              # verification build only (default, safe)
+npm run release -- -Bump minor               # verify what a 0.2.0 build would look like
+npm run release -- -Publish -Bump patch      # EMERGENCY local publish (only if CI is down)
 ```
 
 | Parameter | Meaning |
 | --- | --- |
 | `-Version X.Y.Z` | Set an explicit version (must be valid semver). |
 | `-Bump patch\|minor\|major` | Auto-increment from the current `package.json` version. |
-| `-Notes "..."` | Markdown release notes (default: an auto-generated note). |
-| `-Branch <name>` | Branch to release from (default `main`). |
-| `-SkipPush` | Build and tag locally but do **not** push the tag or create the GitHub Release — use this to verify a build first. |
+| `-Notes "..."` | Markdown release notes (publish only; default: auto-generated). |
+| `-Branch <name>` | Branch to build/release from (default `main`). |
+| `-Publish` | **Opt in** to an emergency local publish: bump + commit + tag + push + GitHub Release. Without it, the script only verifies the build. |
+| `-SkipPush` | Deprecated no-op (the script is already verify-only by default); kept for backward compatibility. |
 
-Prerequisites: `git` and the GitHub CLI (`gh`) on `PATH`, `gh auth login` already done, a clean working tree on the target branch. The script aborts if the tag already exists or the build fails (publishing is irreversible).
+Prefer the CI path for every normal release. Only reach for `-Publish` when CI
+is unavailable; it requires the GitHub CLI (`gh`) on `PATH`, `gh auth login`
+done, and a clean working tree on the target branch, and the script aborts if
+the tag already exists or the build fails (publishing is irreversible).
 
-**Release Manager agent** — instead of running the script manually, open the **Release Manager** custom agent in VS Code (Copilot Chat agent picker) and say e.g. *"ship a 0.2.0 release"*. It confirms the version, runs the pre-flight git checks, suggests a dry build (`-SkipPush`) first, asks for confirmation before publishing, then reports the release URL. It draws release notes from `git log <prevTag>..HEAD --oneline` and never force-pushes or bypasses a failed build. The agent definition lives in `.github/agents/release-manager.agent.md`.
+**Release Manager agent** — the **Release Manager** custom agent in VS Code
+(Copilot Chat agent picker) drives this flow: it confirms the version, runs the
+pre-flight git checks, suggests a local `npm run release` verification build
+first, and prefers the CI tag-push path — only falling back to `-Publish` with
+your explicit confirmation. The agent definition lives in
+`.github/agents/release-manager.agent.md`.
 
 ### Launch and auto-open repros (-L / -R)
 

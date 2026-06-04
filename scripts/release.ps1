@@ -6,49 +6,65 @@
 # LICENSE file in the root directory of this source tree.
 <#
 .SYNOPSIS
-    One-command release automation for M2_GIT_DIFF.
+    Local verification build for M2_GIT_DIFF (with an opt-in emergency publish).
 
 .DESCRIPTION
-    Builds the Windows NSIS installer and publishes a GitHub Release with the
-    artifact attached. Handles the known electron-builder winCodeSign symlink
-    extraction failure on Windows automatically.
+    The CANONICAL release path is CI: push a vX.Y.Z tag and
+    .github/workflows/release.yml builds the installer and publishes the
+    GitHub Release. That keeps releases reproducible and independent of any
+    one machine.
 
-    Steps:
+    By DEFAULT this script only does a LOCAL VERIFICATION BUILD: it builds the
+    Windows NSIS installer so you can confirm it packages and installs, but it
+    NEVER modifies package.json, commits, tags, pushes, or publishes. It also
+    handles the known electron-builder winCodeSign symlink extraction failure.
+
+    Pass -Publish to opt in to an EMERGENCY LOCAL PUBLISH (bump + commit + tag +
+    push + gh release). Use this only when CI is unavailable.
+
+    Verify steps (default):
       1. Verify clean working tree on the target branch (default: main)
-      2. (Optional) bump the version in package.json
-      3. Pre-extract the winCodeSign cache (skips the darwin symlinks that fail)
-      4. npm install + npm run rebuild (native better-sqlite3) + npm run dist
-      5. git tag vX.Y.Z and push
-      6. gh release create + upload the installer
+      2. Pre-extract the winCodeSign cache (skips the darwin symlinks that fail)
+      3. npm install + npm run rebuild (native better-sqlite3) + npm run dist
+      4. Confirm the installer exists, then stop (nothing pushed/published)
+
+    Publish adds (only with -Publish): bump package.json + commit, tag vX.Y.Z,
+    push, and gh release create + upload the installer.
 
 .PARAMETER Version
-    Explicit version to release, e.g. "0.2.0". If omitted, uses the current
+    Explicit version, e.g. "0.2.0". If omitted, uses the current
     version in package.json.
 
 .PARAMETER Bump
     Auto-bump the package.json version: patch | minor | major.
-    Ignored if -Version is supplied.
+    Ignored if -Version is supplied. Only applied with -Publish.
 
 .PARAMETER Notes
     Release notes (markdown). If omitted, a default note is generated.
+    Only used with -Publish.
 
 .PARAMETER Branch
-    Branch the release is cut from. Default: main.
+    Branch the build/release is cut from. Default: main.
+
+.PARAMETER Publish
+    Opt in to an emergency LOCAL publish: bump + commit + tag + push + create
+    the GitHub Release. Without this, the script only verifies the build.
 
 .PARAMETER SkipPush
-    Build and tag locally but do NOT push the tag or create the GitHub release.
-    Useful for a dry build to verify the installer first.
+    Deprecated / no-op: the script is already verify-only by default. Kept for
+    backward compatibility; forces verify-only even if -Publish is given.
 
 .EXAMPLE
     npm run release
-    # Re-releases the current package.json version.
+    # Local verification build only. Nothing is pushed or published.
 
 .EXAMPLE
-    powershell -File scripts/release.ps1 -Bump minor
-    # Bumps 0.1.0 -> 0.2.0, builds, tags, and publishes.
+    git tag v0.2.0; git push origin v0.2.0
+    # Canonical release: CI builds and publishes from the tag.
 
 .EXAMPLE
-    powershell -File scripts/release.ps1 -Version 1.0.0 -Notes "First stable."
+    powershell -File scripts/release.ps1 -Bump minor -Publish
+    # Emergency local publish: bumps 0.1.0 -> 0.2.0, builds, tags, publishes.
 #>
 [CmdletBinding()]
 param(
@@ -57,8 +73,14 @@ param(
     [string]$Bump,
     [string]$Notes,
     [string]$Branch = 'main',
+    [switch]$Publish,
     [switch]$SkipPush
 )
+
+# Canonical release = CI (push a vX.Y.Z tag -> .github/workflows/release.yml).
+# This script is verify-only by default; -Publish opts in to a local publish.
+# -SkipPush is a deprecated no-op that forces verify-only for back-compat.
+$doPublish = $Publish.IsPresent -and -not $SkipPush.IsPresent
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
@@ -69,8 +91,8 @@ function Fail($msg) { Write-Host "ERROR: $msg" -ForegroundColor Red; exit 1 }
 
 # --- 0. Tool checks -------------------------------------------------------
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) { Fail 'git not found in PATH.' }
-if (-not $SkipPush -and -not (Get-Command gh -ErrorAction SilentlyContinue)) {
-    Fail 'gh (GitHub CLI) not found. Install it or run with -SkipPush.'
+if ($doPublish -and -not (Get-Command gh -ErrorAction SilentlyContinue)) {
+    Fail 'gh (GitHub CLI) not found. Install it, or omit -Publish to run a local verification build.'
 }
 
 # --- 1. Branch + clean tree ----------------------------------------------
@@ -108,8 +130,9 @@ if ($Version -notmatch '^\d+\.\d+\.\d+$') { Fail "Version '$Version' is not semv
 $tag = "v$Version"
 Write-Host "Releasing $tag (was $currentVersion)" -ForegroundColor Green
 
-# Write version back if it changed
-if ($Version -ne $currentVersion) {
+# Write version back if it changed (publish only — a verification build must
+# never mutate package.json or create commits).
+if ($doPublish -and $Version -ne $currentVersion) {
     Write-Step "Updating package.json version -> $Version"
     # Preserve formatting: targeted replace of the version line
     $raw = Get-Content $pkgPath -Raw
@@ -122,10 +145,15 @@ if ($Version -ne $currentVersion) {
     git add package.json package-lock.json
     git commit -m "chore(release): $tag"
 }
+elseif (-not $doPublish -and $Version -ne $currentVersion) {
+    Write-Host "Verify mode: leaving package.json untouched (would set version -> $Version on publish)." -ForegroundColor Yellow
+}
 
-# Guard: tag must not already exist
-$existing = git tag --list $tag
-if ($existing) { Fail "Tag $tag already exists. Pick a new version." }
+# Guard: tag must not already exist (publish only)
+if ($doPublish) {
+    $existing = git tag --list $tag
+    if ($existing) { Fail "Tag $tag already exists. Pick a new version." }
+}
 
 # --- 3. Pre-extract winCodeSign cache (Windows symlink workaround) --------
 Write-Step 'Preparing winCodeSign cache'
@@ -164,9 +192,13 @@ if (-not (Test-Path $installer)) { Fail "Installer not found at: $installer" }
 $sizeMB = [math]::Round((Get-Item $installer).Length / 1MB, 1)
 Write-Host "Built: $installer ($sizeMB MB)" -ForegroundColor Green
 
-if ($SkipPush) {
-    Write-Step 'SkipPush set - stopping before tag/publish'
+if (-not $doPublish) {
+    Write-Step 'Verification build complete - not publishing'
     Write-Host "Local build ready. Installer: $installer" -ForegroundColor Green
+    Write-Host 'This was a LOCAL VERIFICATION BUILD. Nothing was pushed or published.' -ForegroundColor Cyan
+    Write-Host 'To publish the canonical release, push a tag and let CI build it:' -ForegroundColor Cyan
+    Write-Host "    git tag $tag; git push origin $tag" -ForegroundColor Cyan
+    Write-Host 'Or, for an emergency LOCAL publish, re-run with -Publish.' -ForegroundColor Cyan
     exit 0
 }
 

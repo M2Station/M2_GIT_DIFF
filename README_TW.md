@@ -255,34 +255,64 @@ npm run build        # 建置 renderer 到 dist/
 npm run dist         # electron-builder 打包（Windows NSIS）
 npm run rebuild      # 為當前 Electron ABI 重編 better-sqlite3
 npm run demo:gif     # 重新產生操作預覽動畫 public/demo.gif
-npm run release      # 自動發佈：bump + 建置安裝檔 + 打 tag + 建立 GitHub Release（見下方）
+npm run release      # 本機驗證建置（不發佈）；正式發佈由 CI 在 push tag 時處理（見下方）
 ```
 
 > 產生應用程式圖示：`node scripts/make-icon.mjs` 會把 `public/icon.svg` 轉成多尺寸（16~256px、透明背景）的 `public/icon.ico`，供右鍵選單與打包圖示使用；改了 `icon.svg` 後重跑即可。
 
-### 發佈版本（`npm run release` / Release Manager agent）
+### 發佈版本（CI 於 push tag 時建置）
 
-版本發佈已由 `scripts/release.ps1`（綁定為 `npm run release`）完全自動化。一條指令即可：bump 版號 → 建置 Windows NSIS 安裝檔（內含 winCodeSign 符號連結繞過與 `better-sqlite3` ABI 重編）→ 打 `vX.Y.Z` git tag → 建立 GitHub Release 並附上安裝檔。
+**正式發佈路徑是 CI**：推上 `vX.Y.Z` tag，
+[`.github/workflows/release.yml`](.github/workflows/release.yml) 就會建置
+Windows NSIS 安裝檔並建立 GitHub Release（附上安裝檔）。如此每個發佈版本都可
+重現、且不綁定任何單一開發者的機器（Electron 建置在不同機器上永遠不會位元級
+相同，因此「單一真實來源」很重要）。
 
 ```powershell
-npm run release                              # 重新發佈 package.json 目前的版本
-npm run release -- -Bump patch               # 0.1.0 → 0.1.1
-npm run release -- -Bump minor               # 0.1.0 → 0.2.0
-npm run release -- -Bump major               # 0.1.0 → 1.0.0
-npm run release -- -Version 1.0.0 -Notes "First stable release."
-npm run release -- -SkipPush -Bump patch     # 試跑：只在本機 build + tag，不發佈
-npm run release -- -Bump minor -Branch main  # 從指定分支發佈（預設 main）
+# 1.（選用）先在本機驗證能否成功打包 —— 只建置安裝檔，不發佈任何東西
+npm run release
+
+# 2. bump 版號、commit 並 push tag —— 之後交給 CI
+npm version patch                 # 0.1.0 -> 0.1.1（也可：minor | major | 1.2.3）
+git push --follow-tags            # 同時推送 commit 與 vX.Y.Z tag
+```
+
+推上 `vX.Y.Z` tag 會觸發 workflow，它會執行 `npm ci`、建置、重編
+`better-sqlite3`、以 `electron-builder --publish never` 打包，再透過
+`softprops/action-gh-release` 用內建的 `GITHUB_TOKEN` 發佈（不需要 PAT）。
+也可從 **Actions → Release → Run workflow** 手動觸發。
+
+#### `scripts/release.ps1` —— 本機驗證（兼緊急備援）
+
+`scripts/release.ps1`（綁定為 `npm run release`）現在是**本機驗證工具**。
+預設只建置安裝檔（內含 winCodeSign 符號連結繞過與 `better-sqlite3` ABI 重編），
+建好後就**停止，不會修改 `package.json`、不 commit、不打 tag、不 push、也不發佈
+任何東西**。用它在推 tag 前確認能否乾淨打包。
+
+```powershell
+npm run release                              # 僅驗證建置（預設，安全）
+npm run release -- -Bump minor               # 驗證 0.2.0 建置會長怎樣
+npm run release -- -Publish -Bump patch      # 緊急本機發佈（僅在 CI 故障時使用）
 ```
 
 | 參數 | 意義 |
 | --- | --- |
 | `-Version X.Y.Z` | 指定明確版號（須為合法 semver）。 |
 | `-Bump patch\|minor\|major` | 從 `package.json` 目前版號自動遞增。 |
-| `-Notes "..."` | Markdown release notes（預設為自動產生的說明）。 |
-| `-Branch <name>` | 要發佈的分支（預設 `main`）。 |
-| `-SkipPush` | 只在本機 build 並打 tag，**不**推 tag、**不**建立 GitHub Release——用來先驗證能否成功打包。 |
+| `-Notes "..."` | Markdown release notes（僅發佈時使用，預設自動產生）。 |
+| `-Branch <name>` | 要建置/發佈的分支（預設 `main`）。 |
+| `-Publish` | **明確選擇**緊急本機發佈：bump + commit + tag + push + GitHub Release。不帶此參數時只驗證建置。 |
+| `-SkipPush` | 已棄用的 no-op（腳本預設已是驗證模式）；保留以維持向後相容。 |
 
-前置條件：`git` 與 GitHub CLI（`gh`）在 `PATH` 中、已完成 `gh auth login`、目標分支工作區乾淨。若 tag 已存在或 build 失敗，腳本會中止（發佈不可逆）。
+一般發佈一律走 CI 路徑。只有在 CI 不可用時才動用 `-Publish`；它需要 `gh`
+（GitHub CLI）在 `PATH`、已完成 `gh auth login`、目標分支工作區乾淨，且若 tag
+已存在或 build 失敗腳本會中止（發佈不可逆）。
+
+**Release Manager agent** —— VS Code 的 **Release Manager** 自訂 agent
+（Copilot Chat agent 選單）會驅動此流程：確認版號、跑 git 前置檢查、建議先用
+`npm run release` 在本機驗證，並優先採用 CI 的 push-tag 路徑 —— 只有在你明確
+確認下才退而使用 `-Publish`。agent 定義在
+`.github/agents/release-manager.agent.md`。
 
 **Release Manager agent** — 除了手動跑腳本，也可在 VS Code 的 Copilot Chat agent 選單選 **Release Manager** 自訂 agent，直接說例如「幫我發 0.2.0」。它會先確認版號、跑 git 前置檢查、建議先用 `-SkipPush` 試跑、發佈前向你確認，最後回報 release 連結。release notes 取自 `git log <prevTag>..HEAD --oneline`，且不會 force-push 或略過失敗的 build。agent 定義在 `.github/agents/release-manager.agent.md`。
 
