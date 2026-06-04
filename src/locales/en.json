@@ -56,7 +56,9 @@
   "settings": {
     "title": "⚙ Settings",
     "language": "Language",
-    "languageHint": "Choose the interface language. Your choice is saved automatically."
+    "languageHint": "Choose the interface language. Your choice is saved automatically.",
+    "theme": "Theme",
+    "themeHint": "Choose the colour theme. Your choice is saved automatically."
   },
   "search": {
     "title": "🔍 Search",

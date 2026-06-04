@@ -1,12 +1,14 @@
 import React, { useEffect } from 'react';
 import { useI18n } from '../lib/i18n.js';
+import { useTheme } from '../lib/theme.js';
 
-// Centered modal opened from the toolbar ⚙ Settings button. Currently hosts the
-// language picker; the available languages are discovered automatically from
-// the JSON files in src/locales. Closes on the ✕ button, a backdrop click, or
-// Escape.
+// Centered modal opened from the toolbar ⚙ Settings button. Hosts the language
+// and theme pickers; both lists are discovered automatically from the JSON
+// files in src/locales and src/themes. Closes on the ✕ button, a backdrop
+// click, or Escape.
 export default function SettingsPopup({ onClose }) {
   const { t, lang, setLang, locales } = useI18n();
+  const { theme, setTheme, themes } = useTheme();
 
   useEffect(() => {
     const onKey = (e) => {
@@ -49,6 +51,25 @@ export default function SettingsPopup({ onClose }) {
               ))}
             </select>
             <p className="settings-hint">{t('settings.languageHint')}</p>
+          </div>
+
+          <div className="settings-field">
+            <label className="settings-label" htmlFor="settings-theme">
+              {t('settings.theme')}
+            </label>
+            <select
+              id="settings-theme"
+              className="settings-select"
+              value={theme}
+              onChange={(e) => setTheme(e.target.value)}
+            >
+              {themes.map((th) => (
+                <option key={th.id} value={th.id}>
+                  {th.name}
+                </option>
+              ))}
+            </select>
+            <p className="settings-hint">{t('settings.themeHint')}</p>
           </div>
         </div>
 
