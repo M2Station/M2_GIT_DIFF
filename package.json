@@ -54,8 +54,7 @@
     },
     "win": {
       "target": "nsis",
-      "icon": "public/icon.ico",
-      "signAndEditExecutable": false
+      "icon": "public/icon.ico"
     },
     "nsis": {
       "include": "installer/installer.nsh",
