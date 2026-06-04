@@ -25,7 +25,8 @@ const LOG_FORMAT = [
   '%ad', // author date (iso)
   '%cd', // commit date (iso)
   '%s', // subject / title
-  '%b' // body
+  '%b', // body
+  '%D' // ref names (branches, tags, HEAD) — used to surface tags
 ].join(FIELD) + RECORD;
 
 function run(args, cwd) {
@@ -91,6 +92,24 @@ async function getRemoteUrl(cwd) {
 }
 
 /**
+ * Extract tag names from a `%D` ref-decoration string. Git renders tags as
+ * `tag: <name>` entries in a comma-separated list that also holds branch and
+ * HEAD pointers (e.g. `HEAD -> main, tag: v0.1.3, origin/main`). Only the
+ * `tag:` entries are returned, with the prefix stripped.
+ * @param {string} refs the `%D` field for a commit
+ * @returns {string[]} tag names (empty when the commit has no tags)
+ */
+function parseTags(refs) {
+  if (!refs) return [];
+  return refs
+    .split(',')
+    .map((r) => r.trim())
+    .filter((r) => r.startsWith('tag: '))
+    .map((r) => r.slice(5).trim())
+    .filter(Boolean);
+}
+
+/**
  * Parse `git log` output into structured commits.
  * @param {string} cwd repo path
  * @param {object} opts { limit, branch }
@@ -123,7 +142,8 @@ async function getCommits(cwd, opts = {}) {
       authorDate: f[5],
       commitDate: f[6],
       subject: f[7],
-      body: f[8] ? f[8].trim() : ''
+      body: f[8] ? f[8].trim() : '',
+      tags: parseTags(f[9])
     });
   }
   return commits;

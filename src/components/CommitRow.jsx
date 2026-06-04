@@ -126,7 +126,15 @@ function CommitRow({ commit, side, query, dimmed, isHit, selected, height, top, 
     >
       <span className="sha">{highlight(commit.short, query)}</span>
       <span className="date">{shortDate(commit.authorDate)}</span>
-      <span className="subject">{highlight(commit.subject, query)}</span>
+      <span className="subject">
+        {Array.isArray(commit.tags) &&
+          commit.tags.map((tag) => (
+            <span key={tag} className="commit-tag" title={`tag: ${tag}`}>
+              {tag}
+            </span>
+          ))}
+        {highlight(commit.subject, query)}
+      </span>
       <span className="author">{commit.author}</span>
       {hasNote && (
         <button

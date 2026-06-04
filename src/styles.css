@@ -1630,6 +1630,22 @@ mark.cd-hl {
   order: 4;
 }
 
+/* ---- tag badge (git tags shown inline at the start of the subject) ---- */
+.commit-tag {
+  display: inline-block;
+  vertical-align: baseline;
+  margin-right: 6px;
+  padding: 0 6px;
+  border-radius: 9px;
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--bg, #12151c);
+  background: var(--accent, #e0a44a);
+  border: 1px solid rgba(0, 0, 0, 0.25);
+  white-space: nowrap;
+}
+
 .commit-row.common {
   background: var(--common-bg);
   border-left-color: var(--common-bd);
