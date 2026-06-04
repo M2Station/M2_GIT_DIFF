@@ -238,6 +238,9 @@
     "filterHint": "Type to filter…",
     "loading": "Loading…",
     "noFolders": "No folders here",
+    "frequent": "Frequent",
+    "frequentTitle": "Folders where you open repos most often — click to jump",
+    "recent": "recent",
     "open": "Open",
     "hint": "↑↓ move · Enter open repo · → into folder · ←/Backspace up · type to filter"
   }

@@ -238,6 +238,9 @@
     "filterHint": "輸入文字以篩選…",
     "loading": "載入中…",
     "noFolders": "此處沒有目錄",
+    "frequent": "常用",
+    "frequentTitle": "你最常開啟儲存庫的目錄 — 點一下即可跳轉",
+    "recent": "最近",
     "open": "開啟",
     "hint": "↑↓ 移動 · Enter 開啟儲存庫 · → 進入目錄 · ←/Backspace 上一層 · 輸入文字篩選"
   }

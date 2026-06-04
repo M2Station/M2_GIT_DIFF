@@ -1,1 +1,0 @@
-.\start.cmd -L "D:\CODE\UEFI\WID\Devices_TOT" -R "D:\CODE\UEFI\WID\Devices_BAA_PREEV"

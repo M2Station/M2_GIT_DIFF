@@ -16,6 +16,7 @@
 // submodule repos are detected just like top-level ones.
 
 const fs = require('node:fs');
+const fsp = require('node:fs/promises');
 const path = require('node:path');
 
 // Sentinel path that represents the Windows "This PC" level (the list of
@@ -25,6 +26,18 @@ const DRIVES = ':drives:';
 function isRepo(dir) {
   try {
     return fs.existsSync(path.join(dir, '.git'));
+  } catch {
+    return false;
+  }
+}
+
+// Async git-repo probe. Used by the async listDir path so the directory scan
+// never blocks the Electron main process. `.git` is a folder for a normal repo
+// and a file for a submodule/worktree, so an existence check covers both.
+async function isRepoAsync(dir) {
+  try {
+    await fsp.access(path.join(dir, '.git'));
+    return true;
   } catch {
     return false;
   }
@@ -51,7 +64,10 @@ function listDrives() {
 // renderer can render and navigate:
 //   { path, parent, canGoUp, isRepo, isDriveList, entries[] }
 // where each entry is { name, path, isRepo, isDrive? }.
-function listDir(dirPath) {
+//
+// Fully async (fs/promises) so scanning a large directory never blocks the
+// Electron main process — the window stays responsive and Esc still works.
+async function listDir(dirPath) {
   if (dirPath === DRIVES && process.platform === 'win32') {
     return {
       path: DRIVES,
@@ -64,24 +80,34 @@ function listDir(dirPath) {
   }
 
   const abs = path.resolve(dirPath);
-  const dirents = fs.readdirSync(abs, { withFileTypes: true });
+  const dirents = await fsp.readdir(abs, { withFileTypes: true });
 
-  const entries = [];
+  // First pass: keep only directories (following junctions/symlinks).
+  const dirs = [];
   for (const de of dirents) {
     if (de.name === '.git') continue; // never list the repo's own .git
     let isDir = de.isDirectory();
     if (de.isSymbolicLink()) {
       // Follow links so junctions/symlinks to folders still show up.
       try {
-        isDir = fs.statSync(path.join(abs, de.name)).isDirectory();
+        const st = await fsp.stat(path.join(abs, de.name));
+        isDir = st.isDirectory();
       } catch {
         isDir = false;
       }
     }
     if (!isDir) continue;
-    const full = path.join(abs, de.name);
-    entries.push({ name: de.name, path: full, isRepo: isRepo(full) });
+    dirs.push({ name: de.name, path: path.join(abs, de.name) });
   }
+
+  // Second pass: probe each directory for a git repo in parallel.
+  const entries = await Promise.all(
+    dirs.map(async (d) => ({
+      name: d.name,
+      path: d.path,
+      isRepo: await isRepoAsync(d.path)
+    }))
+  );
 
   entries.sort((a, b) =>
     a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
@@ -95,7 +121,7 @@ function listDir(dirPath) {
     // POSIX the filesystem root has no parent.
     parent: atRoot ? (process.platform === 'win32' ? DRIVES : null) : parent,
     canGoUp: process.platform === 'win32' ? true : !atRoot,
-    isRepo: isRepo(abs),
+    isRepo: await isRepoAsync(abs),
     isDriveList: false,
     entries
   };

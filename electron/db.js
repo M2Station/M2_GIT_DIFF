@@ -102,4 +102,86 @@ function setSetting(key, value) {
   memSettings.set(key, String(value));
 }
 
-module.exports = { init, get, set, cacheKey, getSetting, setSetting, isSqlite: () => usingSqlite };
+// ---- Repo open-history learning (frequency + recents) ----
+//
+// The folder picker learns where the user keeps their repos so it can offer
+// one-click shortcuts and a smart default start location. Two small JSON blobs
+// are stored in the generic `settings` table (so they ride the sqlite/in-memory
+// fallback for free):
+//   repoParentFreq : { [parentDir]: { count, last } }   — how often repos under
+//                    each parent folder were opened (for "frequent folders").
+//   recentRepos    : [ { path, last } ]  newest-first    — the last repos opened.
+
+const REPO_FREQ_KEY = 'repoParentFreq';
+const RECENT_REPOS_KEY = 'recentRepos';
+const MAX_RECENT = 12;
+const DAY_MS = 86400000;
+
+function readJsonSetting(key, fallback) {
+  const raw = getSetting(key, null);
+  if (!raw) return fallback;
+  try {
+    const v = JSON.parse(raw);
+    return v == null ? fallback : v;
+  } catch {
+    return fallback;
+  }
+}
+
+// Record that a repo was opened: bump its parent-folder frequency and push it
+// to the front of the recent list (deduped, capped).
+function recordRepoOpen(repoPath, parentDir) {
+  if (!repoPath) return;
+  const now = Date.now();
+
+  if (parentDir) {
+    const freq = readJsonSetting(REPO_FREQ_KEY, {});
+    const e = freq[parentDir] || { count: 0, last: 0 };
+    e.count = (e.count || 0) + 1;
+    e.last = now;
+    freq[parentDir] = e;
+    setSetting(REPO_FREQ_KEY, JSON.stringify(freq));
+  }
+
+  let recents = readJsonSetting(RECENT_REPOS_KEY, []);
+  if (!Array.isArray(recents)) recents = [];
+  recents = recents.filter((r) => r && r.path && r.path !== repoPath);
+  recents.unshift({ path: repoPath, last: now });
+  if (recents.length > MAX_RECENT) recents = recents.slice(0, MAX_RECENT);
+  setSetting(RECENT_REPOS_KEY, JSON.stringify(recents));
+}
+
+// Top parent folders ranked by a time-decayed frequency score, so folders you
+// use often *and recently* float up. Returns [{ path, count, last, score }].
+function getTopRepoParents(n = 5) {
+  const freq = readJsonSetting(REPO_FREQ_KEY, {});
+  const now = Date.now();
+  const scored = Object.entries(freq).map(([dir, e]) => {
+    const count = (e && e.count) || 0;
+    const last = (e && e.last) || 0;
+    const days = Math.max(0, (now - last) / DAY_MS);
+    return { path: dir, count, last, score: count * Math.pow(0.97, days) };
+  });
+  scored.sort((a, b) => b.score - a.score || b.last - a.last);
+  return scored.slice(0, Math.max(0, n));
+}
+
+// The most recently opened repos, newest first.
+function getRecentRepos(n = 5) {
+  const recents = readJsonSetting(RECENT_REPOS_KEY, []);
+  if (!Array.isArray(recents)) return [];
+  return recents.slice(0, Math.max(0, n));
+}
+
+module.exports = {
+  init,
+  get,
+  set,
+  cacheKey,
+  getSetting,
+  setSetting,
+  recordRepoOpen,
+  getTopRepoParents,
+  getRecentRepos,
+  isSqlite: () => usingSqlite
+};
