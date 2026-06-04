@@ -64,12 +64,79 @@ body {
 /* ---------------- Toolbar ---------------- */
 .toolbar {
   display: flex;
-  align-items: center;
-  gap: 16px;
+  flex-direction: column;
+  gap: 8px;
   padding: 8px 14px;
   background: linear-gradient(180deg, var(--bg-soft), var(--bg));
   border-bottom: 1px solid var(--line);
+}
+
+/* Each toolbar row is its own wrapping flex line, so groups never collide with
+   an unrelated group when the window narrows. */
+.toolbar-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
   flex-wrap: wrap;
+}
+/* The action row pins its trailing groups (search + export) to the right on
+   wide screens; once it wraps the auto margin simply collapses. */
+.actions-row .search-block {
+  margin-left: auto;
+}
+
+/* --- Responsive toolbar --- */
+/* Below full-desktop width the logo takes its own row, leaving
+   LEFT | FUZZY | RIGHT together on the row beneath it. */
+@media (max-width: 1280px) {
+  .toolbar {
+    padding: 8px 10px;
+  }
+  .toolbar-row {
+    gap: 10px;
+  }
+  .title-block {
+    width: 100%;
+  }
+  .actions-row .search-block {
+    margin-left: 0;
+  }
+}
+
+/* Narrow widths: let repo metadata shrink/wrap and drop the segmented-control
+   divider so nothing overflows or collides. */
+@media (max-width: 860px) {
+  .toolbar-row {
+    gap: 8px;
+  }
+  .repo-slot {
+    flex-wrap: wrap;
+  }
+  .repo-meta {
+    min-width: 0;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+  }
+  .mode-block {
+    padding-left: 0;
+    border-left: none;
+  }
+}
+
+/* Very narrow: stack each control group full-width so the toolbar reads top to
+   bottom instead of breaking mid-group. */
+@media (max-width: 560px) {
+  .toolbar-row {
+    align-items: stretch;
+  }
+  /* Keep repo selectors (LEFT | FUZZY | RIGHT) on a single shared row; only the
+     action groups stack full-width per the current toolbar design. */
+  .mode-block,
+  .search-block,
+  .export-block {
+    width: 100%;
+    justify-content: flex-start;
+  }
 }
 
 .title-block {
@@ -108,14 +175,37 @@ body {
 
 .repo-meta {
   display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 160px;
+  max-width: 320px;
+}
+
+.repo-path {
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.2px;
+  line-height: 1.35;
+  word-break: break-all;
+  max-width: 100%;
+  opacity: 0.85;
+}
+
+.repo-branch {
+  display: flex;
+}
+
+.repo-stats {
+  display: flex;
   align-items: center;
-  gap: 10px;
-  min-width: 180px;
+  gap: 8px;
 }
 
 .repo-name {
   color: var(--text);
   font-weight: 600;
+  word-break: break-all;
 }
 .repo-name.muted,
 .muted {
@@ -128,25 +218,29 @@ body {
   background: rgba(54, 214, 255, 0.08);
   border: 1px solid var(--accent-dim);
   border-radius: 10px;
-  padding: 1px 8px;
+  padding: 1px 9px;
   font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  word-break: break-all;
 }
 
 .count {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 10px;
+  letter-spacing: 0.2px;
 }
 
 .stat-badges {
   display: inline-flex;
-  gap: 4px;
+  gap: 3px;
 }
 .stat-badges .b {
-  min-width: 22px;
+  min-width: 20px;
   text-align: center;
   padding: 0 5px;
   border-radius: 4px;
-  font-size: 11px;
+  font-size: 10px;
   border: 1px solid transparent;
 }
 .stat-badges .b.common {
@@ -317,7 +411,6 @@ body {
 }
 
 .search-block {
-  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 8px;

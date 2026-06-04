@@ -36,10 +36,14 @@ function RepoSlot({ side, repo, loading, onPick, onReload, stats, t }) {
       <div className="repo-meta">
         {repo.path ? (
           <>
-            <span className="repo-name" title={repo.path}>{repo.name}</span>
-            <span className="branch" title={t('common.currentBranch')}>⎇ {repo.branch}</span>
-            <span className="count">{t('toolbar.commits', { count: repo.commits.length })}</span>
-            <StatBadge stats={stats} t={t} />
+            <div className="repo-path" title={repo.path}>{repo.path}</div>
+            <div className="repo-branch" title={t('common.currentBranch')}>
+              <span className="branch">⎇ {repo.branch}</span>
+            </div>
+            <div className="repo-stats">
+              <span className="count">{t('toolbar.commits', { count: repo.commits.length })}</span>
+              <StatBadge stats={stats} t={t} />
+            </div>
           </>
         ) : (
           <span className="repo-name muted">{t('toolbar.noRepoSelected')}</span>
@@ -79,132 +83,136 @@ export default function Toolbar({
   const t = useT();
   return (
     <div className="toolbar">
-      <div className="title-block">
-        <img className="app-logo" src={logoUrl} alt="M2_GIT_DIFF logo" />
-        <span className="app-title">M2_GIT_DIFF</span>
+      <div className="toolbar-row repos-row">
+        <div className="title-block">
+          <img className="app-logo" src={logoUrl} alt="M2_GIT_DIFF logo" />
+          <span className="app-title">M2_GIT_DIFF</span>
+        </div>
+
+        <RepoSlot side="L" repo={left} loading={loading.L} onPick={onPick} onReload={onReload} stats={leftStats} t={t} />
+        <div className="fuzzy-block" role="group" aria-label="Fuzzy match">
+          <button
+            className={'btn fuzzy-toggle' + (fuzzyEnabled ? ' on' : '')}
+            onClick={onToggleFuzzy}
+            title={t('toolbar.fuzzyTitle')}
+            aria-pressed={fuzzyEnabled}
+          >
+            {t('toolbar.fuzzyMatch')}
+          </button>
+          <span className="fuzzy-pct" title={t('toolbar.fuzzyThresholdTitle')}>
+            <input
+              className="fuzzy-input"
+              type="number"
+              min={0}
+              max={100}
+              step={5}
+              value={fuzzyThreshold}
+              disabled={!fuzzyEnabled}
+              onChange={(e) => {
+                const n = Math.max(0, Math.min(100, Number(e.target.value) || 0));
+                onSetFuzzyThreshold(n);
+              }}
+              aria-label={t('toolbar.fuzzyThresholdAria')}
+            />
+            <span className="fuzzy-unit">%</span>
+          </span>
+        </div>
+        <button
+          className="btn swap-sides"
+          onClick={onSwapSides}
+          disabled={!left.path && !right.path}
+          title={t('toolbar.swapTitle')}
+          aria-label={t('toolbar.swapAria')}
+        >
+          {t('toolbar.swap')}
+        </button>
+        <RepoSlot side="R" repo={right} loading={loading.R} onPick={onPick} onReload={onReload} stats={rightStats} t={t} />
       </div>
 
-      <RepoSlot side="L" repo={left} loading={loading.L} onPick={onPick} onReload={onReload} stats={leftStats} t={t} />
-      <div className="fuzzy-block" role="group" aria-label="Fuzzy match">
-        <button
-          className={'btn fuzzy-toggle' + (fuzzyEnabled ? ' on' : '')}
-          onClick={onToggleFuzzy}
-          title={t('toolbar.fuzzyTitle')}
-          aria-pressed={fuzzyEnabled}
-        >
-          {t('toolbar.fuzzyMatch')}
-        </button>
-        <span className="fuzzy-pct" title={t('toolbar.fuzzyThresholdTitle')}>
-          <input
-            className="fuzzy-input"
-            type="number"
-            min={0}
-            max={100}
-            step={5}
-            value={fuzzyThreshold}
-            disabled={!fuzzyEnabled}
-            onChange={(e) => {
-              const n = Math.max(0, Math.min(100, Number(e.target.value) || 0));
-              onSetFuzzyThreshold(n);
-            }}
-            aria-label={t('toolbar.fuzzyThresholdAria')}
-          />
-          <span className="fuzzy-unit">%</span>
-        </span>
-      </div>
-      <button
-        className="btn swap-sides"
-        onClick={onSwapSides}
-        disabled={!left.path && !right.path}
-        title={t('toolbar.swapTitle')}
-        aria-label={t('toolbar.swapAria')}
-      >
-        {t('toolbar.swap')}
-      </button>
-      <RepoSlot side="R" repo={right} loading={loading.R} onPick={onPick} onReload={onReload} stats={rightStats} t={t} />
+      <div className="toolbar-row actions-row">
+        <div className="mode-block" role="group" aria-label="View mode">
+          <span className="mode-label">{t('toolbar.view')}</span>
+          <button
+            className={'btn mode' + (single === null ? ' on' : '')}
+            onClick={() => onSetSingle(null)}
+            title={t('toolbar.compareTitle')}
+          >
+            {t('toolbar.compare')}
+          </button>
+          <button
+            className={'btn mode' + (single === 'L' ? ' on' : '')}
+            onClick={() => onSetSingle('L')}
+            disabled={!left.path}
+            title={t('toolbar.leftOnlyTitle')}
+          >
+            {t('toolbar.leftOnly')}
+          </button>
+          <button
+            className={'btn mode' + (single === 'R' ? ' on' : '')}
+            onClick={() => onSetSingle('R')}
+            disabled={!right.path}
+            title={t('toolbar.rightOnlyTitle')}
+          >
+            {t('toolbar.rightOnly')}
+          </button>
+        </div>
 
-      <div className="mode-block" role="group" aria-label="View mode">
-        <span className="mode-label">{t('toolbar.view')}</span>
-        <button
-          className={'btn mode' + (single === null ? ' on' : '')}
-          onClick={() => onSetSingle(null)}
-          title={t('toolbar.compareTitle')}
-        >
-          {t('toolbar.compare')}
-        </button>
-        <button
-          className={'btn mode' + (single === 'L' ? ' on' : '')}
-          onClick={() => onSetSingle('L')}
-          disabled={!left.path}
-          title={t('toolbar.leftOnlyTitle')}
-        >
-          {t('toolbar.leftOnly')}
-        </button>
-        <button
-          className={'btn mode' + (single === 'R' ? ' on' : '')}
-          onClick={() => onSetSingle('R')}
-          disabled={!right.path}
-          title={t('toolbar.rightOnlyTitle')}
-        >
-          {t('toolbar.rightOnly')}
-        </button>
-      </div>
+        <div className="search-block">
+          <button className="btn" onClick={onOpenSearch} title={t('toolbar.searchTitle')}>
+            {t('toolbar.search')}
+          </button>
+          <button
+            className="btn clear-manual"
+            onClick={onClearManualLinks}
+            disabled={!manualCount}
+            title={t('toolbar.clearManualTitle')}
+          >
+            {t('toolbar.clearManual')}{manualCount ? ` (${manualCount})` : ''}
+          </button>
+          <button
+            className="btn clear-notes"
+            onClick={onClearNotes}
+            disabled={!noteCount}
+            title={t('toolbar.clearNotesTitle')}
+          >
+            {t('toolbar.clearNotes')}{noteCount ? ` (${noteCount})` : ''}
+          </button>
+          <button
+            className="btn clear-colors"
+            onClick={onClearColors}
+            disabled={!colorCount}
+            title={t('toolbar.clearColorsTitle')}
+          >
+            {t('toolbar.clearColors')}{colorCount ? ` (${colorCount})` : ''}
+          </button>
+        </div>
 
-      <div className="search-block">
-        <button className="btn" onClick={onOpenSearch} title={t('toolbar.searchTitle')}>
-          {t('toolbar.search')}
-        </button>
-        <button
-          className="btn clear-manual"
-          onClick={onClearManualLinks}
-          disabled={!manualCount}
-          title={t('toolbar.clearManualTitle')}
-        >
-          {t('toolbar.clearManual')}{manualCount ? ` (${manualCount})` : ''}
-        </button>
-        <button
-          className="btn clear-notes"
-          onClick={onClearNotes}
-          disabled={!noteCount}
-          title={t('toolbar.clearNotesTitle')}
-        >
-          {t('toolbar.clearNotes')}{noteCount ? ` (${noteCount})` : ''}
-        </button>
-        <button
-          className="btn clear-colors"
-          onClick={onClearColors}
-          disabled={!colorCount}
-          title={t('toolbar.clearColorsTitle')}
-        >
-          {t('toolbar.clearColors')}{colorCount ? ` (${colorCount})` : ''}
-        </button>
-      </div>
-
-      <div className="export-block">
-        <button
-          className="btn export-xlsx"
-          onClick={onExport}
-          disabled={!canExport}
-          title={t('toolbar.exportExcelTitle')}
-        >
-          {t('toolbar.exportExcel')}
-        </button>
-        <button
-          className="btn help-btn"
-          onClick={onOpenHelp}
-          title={t('toolbar.helpTitle')}
-          aria-label={t('toolbar.help')}
-        >
-          {t('toolbar.help')}
-        </button>
-        <button
-          className="btn settings-btn"
-          onClick={onOpenSettings}
-          title={t('toolbar.settingsTitle')}
-          aria-label={t('toolbar.settingsTitle')}
-        >
-          {t('toolbar.settings')}
-        </button>
+        <div className="export-block">
+          <button
+            className="btn export-xlsx"
+            onClick={onExport}
+            disabled={!canExport}
+            title={t('toolbar.exportExcelTitle')}
+          >
+            {t('toolbar.exportExcel')}
+          </button>
+          <button
+            className="btn help-btn"
+            onClick={onOpenHelp}
+            title={t('toolbar.helpTitle')}
+            aria-label={t('toolbar.help')}
+          >
+            {t('toolbar.help')}
+          </button>
+          <button
+            className="btn settings-btn"
+            onClick={onOpenSettings}
+            title={t('toolbar.settingsTitle')}
+            aria-label={t('toolbar.settingsTitle')}
+          >
+            {t('toolbar.settings')}
+          </button>
+        </div>
       </div>
     </div>
   );
