@@ -31,6 +31,7 @@
 | 搜尋 | 可搜尋 標題 / 內文 / SHA / 作者 / 日期，命中高亮、其餘變暗，顯示命中數量 | — |
 | Filter 模式 | 開啟後只保留命中的 commit（壓縮排列），關閉則只是變暗 | — |
 | **命令列自動開啟** | 啟動時帶 `-L <path> -R <path>` 可自動載入左右兩側 repro | — |
+| **內建 Repo 選擇器** | 「Open repo…」/ `Alt`+`F` 會開啟內建、以鍵盤操作的資料夾瀏覽器（取代 OS 對話框），逐層掃描 git 倉庫（含巢狀 submodule）並標示，附即時名稱過濾與 **僅顯示 repo** 切換（`Ctrl`+`G`），並記住每側上次造訪的資料夾。按鍵：`↑`/`↓` 移動、`Enter` 開啟 repo 或進入資料夾、`→` 進入（即使是 repo，以便看 submodule）、`←`/`Backspace` 返回上層、`Ctrl`+`Enter` 選取非 repo 資料夾、`Esc` 取消 | — |
 | **手動連結** | 在未配對（紅）的 commit 上點節點 ◗，左右各點一個即可手動配對；顏色為**紫色**以區別 cherry 黃色；可斷開並自動暫存，重開相同 repro 會自動還原 | 紫色背景＋紫色實線 |
 | **單一 Repo 模式** | 工具列 **View** 切換 `⇄ Compare` / `◧ Left only` / `◨ Right only`；只看單邊時該欄放大佔滿整個視窗，隱藏 gutter 與連線；單欄模式下 commit 背景改為**正常（透明）**，強制顏色仍保留 | — |
 | **每列註記（Note）** | 右鍵任一 commit → 新增/編輯註記（浮動可拖曳編輯框，`Ctrl+Enter` 儲存）；有註記者顯示 📝 圖示，點圖示可檢視/編輯/刪除 | — |
@@ -41,7 +42,7 @@
 | **匯出 Excel（.xlsx）** | 工具列右上 **⬇ Export Excel**：把左右對齊後的 commit、強制顏色、註記與手動連結一併輸出成 styled `.xlsx`（ExcelJS）。儲存格底色對應強制顏色、註記以 cell 註解（像 tip）呈現、配對 commit 以空白 cell 對齊；另含一張 **Manual Links** 工作表列出所有手動連結 | 與畫面同色 |
 | **匯出筆數確認** | 按下匯出前先跳出對話框詢問要輸出多少筆（預設 **全部 ALL**，或指定前 N 筆），資料量大時提醒，避免一次輸出過多造成卡頓 | — |
 | **Commit 詳情浮窗** | `Ctrl`+左鍵點 commit → 浮動視窗顯示 SHA / 作者 / 日期（清楚標示）＋ Markdown 渲染的 commit 內文（**Merged PR** 的識別編號與 **Related work items** 下的每個 id 會以強調色加底線以利快速辨識）；配對的 **Related item** 特別凸顯；右上 **HL** 輸入格可即時高亮符合文字（開啟時自動帶入目前搜尋字）；可**移動、拖拉縮放**、依內容自動調整寬度；可**同時開多個**（重複點同一個不重開） | — |
-| **可點擊的 commit 連結** | Commit 詳情浮窗在 SHA 旁顯示 **🌐 Web** 連結，以系統預設瀏覽器開啟該 commit 的遠端頁面（自動辨識 GitHub / GitLab / Gitea / ADO / Bitbucket）；Excel 匯出時 SHA 儲存格也會超連結到同一遠端 URL | — |
+| **可點擊的 commit 連結** | Commit 詳情浮窗在 SHA 旁顯示多個連結：**🔗 Web** 以系統預設瀏覽器開啟該 commit 的遠端頁面（自動辨識 GitHub / GitLab / Gitea / ADO / Bitbucket）；**🔀 PR {n}** 開啟每個 Merged PR 的頁面；**🔍 #{n}** 對每個關聯的 work-item id 開啟該 host 的程式碼搜尋。Excel 匯出時 SHA 儲存格也會超連結到同一遠端 URL | — |
 | **VS Code Chat 整合** | Commit 詳情浮窗的 **💬 Chat** 按鈕，呼叫本機安裝的 VS Code（`code chat`）並以該 repo 為工作區開啟 Copilot Chat（agent 模式），自動帶入該 commit 的英文說明 prompt（可在 chat 內執行 `git show <sha>` 看完整 diff）；未安裝 VS Code 時於浮窗顯示提示 | — |
 | 虛擬化 | 只渲染視窗內的列，支援大型倉庫（數千 commit）順暢捲動 | — |
 | **快捷鍵說明（Help）** | 工具列右上 **❓ Help** 開啟置中彈窗，列出全部快捷鍵（鍵帽樣式）；底部含可點擊的 `Powered by OA Hsiao` 徽章連到作者 GitHub。背景點擊 / ✕ / `Esc` 皆可關閉 | — |
@@ -83,6 +84,7 @@ Electron (主行程)
 ├─ electron/preload.js   contextBridge 安全橋接，暴露 window.api（含 exportExcel）
 ├─ electron/git.js       呼叫系統 git，解析 git log → 結構化 commit；getPatchIds / getDiffTexts（Fuzzy 變更行）；gitOp 回傳完整 stdout/stderr 與 exit code
 ├─ electron/excel.js     ExcelJS 產生 styled .xlsx（顏色填滿、註記 cell 註解、SHA 超連結到遠端 commit URL、Manual Links 工作表）
+├─ electron/fsdialog.js  內建 FolderPicker 的目錄列舉（dialog:listDir / dialog:rememberDir）
 └─ electron/db.js        better-sqlite3 快取層（缺少時自動退回記憶體快取）
 
 Renderer (React + Vite)
@@ -102,10 +104,12 @@ Renderer (React + Vite)
    ├─ RowMenu.jsx          右鍵情境選單（註記 + 強制背景顏色 + 自訂取色第五色）
    ├─ RepoGitBar.jsx       每側 Git 操作列（pull / fetch…）
    ├─ GitTerminalPopup.jsx Git 操作結果浮窗（可拖曳，顯示指令/輸出/exit code，成功綠框失敗紅框）
+   ├─ BranchSwitchPopup.jsx 分支選擇器（可拖曳/縮放，本地＋各 remote 的可收摺樹、搜尋框、完整鍵盤導覽，透過 IPC 執行 git switch）
+   ├─ FolderPicker.jsx     內建、以鍵盤操作的 repo/資料夾選擇器（取代 OS 對話框；掃描 git 倉庫含 submodule、僅顯示 repo 過濾、記住上次造訪資料夾）
    ├─ ExportPrompt.jsx     匯出前的筆數確認對話框（預設 ALL，或前 N 筆）
    ├─ HelpPopup.jsx       快捷鍵說明彈窗（置中 Modal、鍵帽列表、OA Hsiao 徽章，`Esc`/背景關閉）
    ├─ SettingsPopup.jsx   設定彈窗（語言選擇器 + 主題選擇器；語系由 `src/locales`、主題由 `src/themes` 自動掃描）
-   └─ CommitDetail.jsx     Commit 詳情浮窗（Markdown 渲染、Related item、SHA 旁 🌐 Web 連結開遠端頁面、可移動縮放、可多開、💬 Chat 開 VS Code）
+   └─ CommitDetail.jsx     Commit 詳情浮窗（Markdown 渲染、Related item、SHA 旁 🔗 Web / 🔀 PR / 🔍 程式碼搜尋連結、可移動縮放、可多開、💬 Chat 開 VS Code）
 ```
 
 **多主題配色（Theme）**：主題定義存於 `src/themes/*.json`（每個檔案一個主題，檔名去掉 `.json` 即主題 id，檔內 `_meta.name` 為顯示名稱，`vars` 為 CSS 自訂屬性對應表）。`src/lib/theme.js` 以 Vite `import.meta.glob('../themes/*.json', { eager: true })` 在建置時**自動掃描**該目錄，掃到幾個檔就提供幾種主題——新增 `xx.json` 即自動出現於設定清單，無需改程式。`ThemeProvider` 包住 `App`（`src/main.jsx`）；切換時 `applyTheme()` 把該主題的 `vars` 逐一寫到 `document.documentElement` 的 inline style 並設 `data-theme` 屬性，`src/styles.css` 內所有顏色皆以 `var(--…)` 引用，因此即時換膚。選擇存於 `localStorage` 的 `appTheme`（預設：已存值 → `low_key` → 掃描到的第一個），且模組載入時即先套用一次以避免畫面閃爍（FOUC）。內建 **Low Key**（原生深色）、**Daylight**（淺色）、**Solarized**、**Matrix**、**Army**（軍綠／沙漠棕／水泥灰）五種。
@@ -122,7 +126,7 @@ Renderer (React + Vite)
 
 ## 3. 資料流程
 
-1. 使用者按「Open repo…」→ `main.js` 的 `dialog:pickFolder` 開啟資料夾選擇。
+1. 使用者按「Open repo…」（或 `Alt`+`F`）→ 開啟內建的 `FolderPicker`，透過 `dialog:listDir` IPC（`electron/fsdialog.js`）列出目錄，並以 `dialog:rememberDir` 記住所選資料夾。
 2. `repo:load` IPC：
    - 檢查是否為 git 倉庫（`.git` 是否存在）。
    - 以 `repoPath::branch::limit` 為 key、HEAD SHA 為版本，查快取（`db.js`）。
