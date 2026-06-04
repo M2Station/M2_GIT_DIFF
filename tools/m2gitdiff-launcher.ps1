@@ -158,9 +158,16 @@ finally {
     $mutex.Dispose()
 }
 
-if ($paths.Count -lt 2) {
+if ($paths.Count -eq 0) {
     Show-Info "請一次選取兩個資料夾再選擇『Compare in M2 GIT DIFF』；`n或先在來源資料夾按右鍵選擇『Select Folder for M2 GIT DIFF』，再到目標資料夾選擇『Compare in M2 GIT DIFF』。"
     exit 1
+}
+
+# Single folder selected: load the same directory into both the left and right
+# sides so the user can immediately compare branches/commits within one repo.
+if ($paths.Count -eq 1) {
+    Start-Compare $paths[0] $paths[0]
+    exit 0
 }
 
 Start-Compare $paths[0] $paths[1]
