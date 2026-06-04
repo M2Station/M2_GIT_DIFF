@@ -10,8 +10,10 @@
 
 const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('node:path');
+const os = require('node:os');
 const git = require('./git');
 const db = require('./db');
+const fsdialog = require('./fsdialog');
 
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -108,6 +110,43 @@ ipcMain.handle('dialog:pickFolder', async () => {
   });
   if (result.canceled || result.filePaths.length === 0) return null;
   return result.filePaths[0];
+});
+
+// ---- In-app keyboard folder picker ----
+
+const LAST_DIR_KEY = 'lastPickerDir';
+
+// List the directories under `dirPath`, flagging git repos. When no path is
+// given (first open) it starts at the last-used location, falling back to the
+// user's home directory.
+ipcMain.handle('dialog:listDir', async (_evt, payload) => {
+  const requested = payload && payload.path;
+  let target = requested;
+  if (!target) {
+    target = db.getSetting(LAST_DIR_KEY) || os.homedir();
+  }
+  try {
+    return { ok: true, ...fsdialog.listDir(target) };
+  } catch (err) {
+    // Fall back to home if the remembered/target path is gone or unreadable.
+    if (!requested) {
+      try {
+        return { ok: true, ...fsdialog.listDir(os.homedir()) };
+      } catch {
+        /* ignore — report the original error below */
+      }
+    }
+    return { ok: false, error: String(err && err.message ? err.message : err) };
+  }
+});
+
+// Remember the directory the user last browsed to so the picker reopens there.
+ipcMain.handle('dialog:rememberDir', async (_evt, payload) => {
+  const dir = payload && payload.path;
+  if (typeof dir === 'string' && dir && dir !== fsdialog.DRIVES) {
+    db.setSetting(LAST_DIR_KEY, dir);
+  }
+  return { ok: true };
 });
 
 ipcMain.handle('repo:load', async (_evt, payload) => {

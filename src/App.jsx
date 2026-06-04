@@ -20,6 +20,7 @@ import BranchSwitchPopup from './components/BranchSwitchPopup.jsx';
 import ExportPrompt from './components/ExportPrompt.jsx';
 import HelpPopup from './components/HelpPopup.jsx';
 import SettingsPopup from './components/SettingsPopup.jsx';
+import FolderPicker from './components/FolderPicker.jsx';
 import logoUrl from './assets/logo.svg';
 import { computeDiff, applyFuzzy, matchesQuery, alignLayout } from './lib/diff.js';
 import { ROW_HEIGHT, GUTTER_WIDTH, DEFAULT_LIMIT } from './lib/constants.js';
@@ -41,6 +42,9 @@ export default function App() {
   const [loading, setLoading] = useState({ L: false, R: false });
   const [error, setError] = useState('');
   const [selectedMatch, setSelectedMatch] = useState(null);
+
+  // Side ('L'/'R') whose repo is being chosen in the in-app FolderPicker, or null.
+  const [pickerSide, setPickerSide] = useState(null);
 
   // Floating window showing the git terminal transcript after a Fetch/Pull.
   // { side, op, repoName, ok, command, output, exitCode } | null
@@ -186,21 +190,30 @@ export default function App() {
     return () => clearTimeout(id);
   }, [rawQuery, query]);
 
-  const pick = useCallback(async (side) => {
+  const pick = useCallback((side) => {
     setError('');
-    const folder = await window.api.pickFolder();
-    if (!folder) return;
-    setLoading((s) => ({ ...s, [side]: true }));
-    try {
-      const repo = await window.api.loadRepo({ repoPath: folder, limit: DEFAULT_LIMIT });
-      if (side === 'L') setLeft(repo);
-      else setRight(repo);
-    } catch (e) {
-      setError(String(e?.message || e));
-    } finally {
-      setLoading((s) => ({ ...s, [side]: false }));
-    }
+    setPickerSide(side);
   }, []);
+
+  // Confirm handler from the in-app FolderPicker modal.
+  const onPickFolder = useCallback(
+    async (folder) => {
+      const side = pickerSide;
+      setPickerSide(null);
+      if (!folder || !side) return;
+      setLoading((s) => ({ ...s, [side]: true }));
+      try {
+        const repo = await window.api.loadRepo({ repoPath: folder, limit: DEFAULT_LIMIT });
+        if (side === 'L') setLeft(repo);
+        else setRight(repo);
+      } catch (e) {
+        setError(String(e?.message || e));
+      } finally {
+        setLoading((s) => ({ ...s, [side]: false }));
+      }
+    },
+    [pickerSide]
+  );
 
   // Load a repo straight from a known path (used by CLI auto-open).
   const loadPath = useCallback(async (side, repoPath) => {
@@ -1282,6 +1295,10 @@ export default function App() {
   // selected manual link. Ctrl+F opens search, Alt+F opens a repo, F3 cycles.
   useEffect(() => {
     const onKey = (e) => {
+      // While the folder picker modal is open it owns all keyboard input
+      // (arrows, Enter, typing-to-filter, Esc) — don't let the global handler
+      // also move the commit cursor or reopen search underneath it.
+      if (pickerSide) return;
       // Don't hijack typing in the search box (or any input / editable field).
       const tag = e.target?.tagName;
       const typing =
@@ -1378,7 +1395,8 @@ export default function App() {
     moveCursor,
     moveCursorSide,
     openCursorDetail,
-    activeHit
+    activeHit,
+    pickerSide
   ]);
 
   // Esc inside the search box closes the panel, clearing the query and its
@@ -1541,6 +1559,10 @@ export default function App() {
       {helpOpen && <HelpPopup onClose={() => setHelpOpen(false)} />}
 
       {settingsOpen && <SettingsPopup onClose={() => setSettingsOpen(false)} />}
+
+      {pickerSide && (
+        <FolderPicker onPick={onPickFolder} onClose={() => setPickerSide(null)} />
+      )}
 
       <div className="git-bars">
         {single !== 'R' && (

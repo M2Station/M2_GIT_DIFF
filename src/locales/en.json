@@ -222,5 +222,17 @@
     "legendFuzzy": "■ Fuzzy match (similar content)",
     "hintLinking": "Pick a node on the other side to link · Esc to cancel",
     "hintDefault": "Click a row node ◗ to link two commits · Del removes a selected manual link"
+  },
+  "picker": {
+    "title": "Open repository",
+    "thisPc": "This PC",
+    "upTitle": "Up one level (← / Backspace)",
+    "reposOnly": "Repos only",
+    "reposOnlyTitle": "Hide folders that are not git repositories (Ctrl+G)",
+    "filterHint": "Type to filter…",
+    "loading": "Loading…",
+    "noFolders": "No folders here",
+    "open": "Open",
+    "hint": "↑↓ move · Enter open repo · → into folder · ←/Backspace up · type to filter"
   }
 }
