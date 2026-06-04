@@ -1,9 +1,11 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useT } from '../lib/i18n.js';
 
 // Floating note editor/viewer for a single commit. Opened by right-clicking a
 // commit row (to add) or clicking its note icon (to view/edit). Draggable by
 // its header; Save / Delete / Close actions in the footer.
 export default function NotePopup({ side, sha, short, subject, x, y, value, onSave, onDelete, onClose }) {
+  const t = useT();
   const [text, setText] = useState(value || '');
   const [pos, setPos] = useState(() => ({
     x: Math.min(x, window.innerWidth - 320),
@@ -71,12 +73,12 @@ export default function NotePopup({ side, sha, short, subject, x, y, value, onSa
       onClick={(e) => e.stopPropagation()}
     >
       <div className="np-header" onPointerDown={onDragStart}>
-        <span className="np-title">📝 Note</span>
+        <span className="np-title">{t('note.title')}</span>
         <span className="np-ref" title={subject}>
           {short}
         </span>
         <span className="np-spacer" />
-        <button className="np-close" onClick={onClose} title="Close (Esc)" aria-label="Close">
+        <button className="np-close" onClick={onClose} title={t('common.closeEsc')} aria-label={t('common.close')}>
           ✕
         </button>
       </div>
@@ -85,7 +87,7 @@ export default function NotePopup({ side, sha, short, subject, x, y, value, onSa
         <textarea
           ref={areaRef}
           className="np-area"
-          placeholder="輸入註記…  (Ctrl+Enter 儲存)"
+          placeholder={t('note.placeholder')}
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKeyDown}
@@ -97,16 +99,16 @@ export default function NotePopup({ side, sha, short, subject, x, y, value, onSa
           className="btn danger"
           onClick={() => onDelete(side, sha)}
           disabled={!value}
-          title="刪除此註記"
+          title={t('note.deleteTitle')}
         >
-          🗑 Delete
+          {t('note.delete')}
         </button>
         <span className="np-spacer" />
         <button className="btn ghost" onClick={onClose}>
-          Cancel
+          {t('common.cancel')}
         </button>
         <button className="btn primary" onClick={save}>
-          Save
+          {t('common.save')}
         </button>
       </div>
     </div>

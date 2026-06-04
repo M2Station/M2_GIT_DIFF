@@ -10,13 +10,16 @@ import CommitDetail from './components/CommitDetail.jsx';
 import GitTerminalPopup from './components/GitTerminalPopup.jsx';
 import ExportPrompt from './components/ExportPrompt.jsx';
 import HelpPopup from './components/HelpPopup.jsx';
+import SettingsPopup from './components/SettingsPopup.jsx';
 import logoUrl from './assets/logo.svg';
 import { computeDiff, applyFuzzy, matchesQuery, alignLayout } from './lib/diff.js';
 import { ROW_HEIGHT, GUTTER_WIDTH, DEFAULT_LIMIT } from './lib/constants.js';
+import { useT } from './lib/i18n.js';
 
 const emptyRepo = { path: '', name: '', branch: '', head: '', commits: [] };
 
 export default function App() {
+  const t = useT();
   const [left, setLeft] = useState(emptyRepo);
   const [right, setRight] = useState(emptyRepo);
   const [query, setQuery] = useState('');
@@ -105,6 +108,8 @@ export default function App() {
   const [searchOpen, setSearchOpen] = useState(false);
   // Help / keyboard-shortcuts modal.
   const [helpOpen, setHelpOpen] = useState(false);
+  // Settings modal (language picker, etc.).
+  const [settingsOpen, setSettingsOpen] = useState(false);
   // Single-repo mode: null = dual compare; 'L' or 'R' = show only that repo,
   // full width. Toggled from the toolbar.
   const [single, setSingle] = useState(null);
@@ -267,11 +272,11 @@ export default function App() {
         output: msg,
         exitCode: 1
       });
-      setError(`git ${op} 失敗：${msg}`);
+      setError(t('app.gitOpFail', { op, msg }));
     } finally {
       setLoading((s) => ({ ...s, [side]: false }));
     }
-  }, [left, right]);
+  }, [left, right, t]);
 
   // Exact-match pass (common / cherry / patch-id / manual). Memoized on its own
   // so it is NOT recomputed every time a single fuzzy diff-text arrives.
@@ -1346,6 +1351,7 @@ export default function App() {
         onExport={openExportPrompt}
         canExport={canExport}
         onOpenHelp={() => setHelpOpen(true)}
+        onOpenSettings={() => setSettingsOpen(true)}
       />
 
       {searchOpen && (
@@ -1450,6 +1456,8 @@ export default function App() {
 
       {helpOpen && <HelpPopup onClose={() => setHelpOpen(false)} />}
 
+      {settingsOpen && <SettingsPopup onClose={() => setSettingsOpen(false)} />}
+
       <div className="git-bars">
         {single !== 'R' && (
           <RepoGitBar side="L" repo={left} loading={loading.L} onGitOp={runGitOp} onReload={reload} />
@@ -1470,7 +1478,7 @@ export default function App() {
         {fuzzyPending && !loadingEmpty && !noRepos && (
           <div className="fuzzy-pending" role="status" aria-live="polite">
             <span className="fuzzy-pending-dot" />
-            模糊比對中…
+            {t('app.fuzzyPending')}
           </div>
         )}
         {(noRepos || loadingEmpty || stageEmpty) && (
@@ -1478,23 +1486,26 @@ export default function App() {
             {loadingEmpty ? (
               <>
                 <div className="stage-spinner" />
-                <div className="stage-empty-title" role="status" aria-live="polite">讀取 commit 中…</div>
+                <div className="stage-empty-title" role="status" aria-live="polite">{t('app.loadingTitle')}</div>
                 <div className="stage-empty-sub">
-                  正在載入 {loading.L && loading.R ? '左右兩個' : loading.L ? '左側' : '右側'} repository 歷史（最多 {DEFAULT_LIMIT.toLocaleString()} 筆）
+                  {t('app.loadingSub', {
+                    sides: loading.L && loading.R ? t('app.loadingSubBoth') : loading.L ? t('app.loadingSubLeft') : t('app.loadingSubRight'),
+                    limit: DEFAULT_LIMIT.toLocaleString()
+                  })}
                 </div>
               </>
             ) : noRepos ? (
               <>
                 <img className="stage-empty-logo" src={logoUrl} alt="M2_GIT_DIFF" draggable="false" />
-                <div className="stage-empty-title">尚未選擇 repository</div>
+                <div className="stage-empty-title">{t('app.noRepoTitle')}</div>
                 <div className="stage-empty-sub">
-                  從上方工具列選擇左右兩個 Git 資料夾，開始比對 commit 歷史
+                  {t('app.noRepoSub')}
                 </div>
                 <a
                   className="stage-empty-badge"
                   href="https://github.com/oahsiao"
                   onClick={(e) => { e.preventDefault(); window.api?.openExternal?.('https://github.com/oahsiao'); }}
-                  title="開啟作者 GitHub · github.com/oahsiao"
+                  title={t('app.githubTitle')}
                 >
                   <span className="seb-spark">✦</span>
                   <span className="seb-text">Powered by <b>OA Hsiao</b></span>
@@ -1505,12 +1516,12 @@ export default function App() {
               <>
                 <div className="stage-empty-icon">∅</div>
                 <div className="stage-empty-title">
-                  {filterActive ? '沒有符合搜尋的 commit' : '沒有 commit 可顯示'}
+                  {filterActive ? t('app.noMatchTitle') : t('app.noCommitTitle')}
                 </div>
                 <div className="stage-empty-sub">
                   {filterActive
-                    ? '調整關鍵字，或關閉「只看符合」改顯示全部'
-                    : '這個 repository 沒有可顯示的歷史紀錄'}
+                    ? t('app.noMatchSub')
+                    : t('app.noCommitSub')}
                 </div>
               </>
             )}
@@ -1582,22 +1593,22 @@ export default function App() {
       </div>
 
       <div className="legend">
-        <span className="chip common">■ Common (same SHA)</span>
-        <span className="chip cherry">■ Cherry-pick (same title)</span>
-        <span className="chip unique">■ Unique (one side only)</span>
-        <span className="chip manual">■ Manual link</span>
-        <span className="chip fuzzy">■ Fuzzy match (similar content)</span>
+        <span className="chip common">{t('app.legendCommon')}</span>
+        <span className="chip cherry">{t('app.legendCherry')}</span>
+        <span className="chip unique">{t('app.legendUnique')}</span>
+        <span className="chip manual">{t('app.legendManual')}</span>
+        <span className="chip fuzzy">{t('app.legendFuzzy')}</span>
         <span className="spacer" />
         <span className="hint">
           {pendingNode
-            ? 'Pick a node on the other side to link · Esc to cancel'
-            : 'Click a row node ◗ to link two commits · Del removes a selected manual link'}
+            ? t('app.hintLinking')
+            : t('app.hintDefault')}
         </span>
         <a
           className="legend-credit"
           href="https://github.com/oahsiao"
           onClick={(e) => { e.preventDefault(); window.api?.openExternal?.('https://github.com/oahsiao'); }}
-          title="開啟作者 GitHub · github.com/oahsiao"
+          title={t('app.githubTitle')}
         >
           Powered by <b>OA Hsiao</b>
           <span className="lc-gh">↗</span>

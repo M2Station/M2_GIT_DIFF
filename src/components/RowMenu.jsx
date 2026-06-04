@@ -1,17 +1,20 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useT } from '../lib/i18n.js';
 
 // Color swatches offered by the context menu. Keys match the CSS classes
-// `.commit-row.force-<key>` that paint the forced background.
+// `.commit-row.force-<key>` that paint the forced background. Labels are
+// translated via `rowMenu.colors.<key>`.
 const COLORS = [
-  { key: 'green', label: '綠色', dot: '#2ea043' },
-  { key: 'red', label: '亮紅色', dot: '#ff2d3c' },
-  { key: 'blue', label: '藍色', dot: '#3b82f6' },
-  { key: 'yellow', label: '黃色', dot: '#e0a44a' }
+  { key: 'green', dot: '#2ea043' },
+  { key: 'red', dot: '#ff2d3c' },
+  { key: 'blue', dot: '#3b82f6' },
+  { key: 'yellow', dot: '#e0a44a' }
 ];
 
 // Right-click context menu for a commit row: add/edit a note or force-override
 // the row background color. Closes on outside click, Escape, or after a choice.
 export default function RowMenu({ side, sha, short, x, y, hasNote, color, customColor, onAddNote, onSetColor, onPickCustom, onClearColor, onClose }) {
+  const t = useT();
   const ref = useRef(null);
   const [pos, setPos] = useState(() => ({
     x: Math.min(x, window.innerWidth - 190),
@@ -54,34 +57,37 @@ export default function RowMenu({ side, sha, short, x, y, hasNote, color, custom
           onClose();
         }}
       >
-        📝 {hasNote ? '編輯註記' : '新增註記'}
+        📝 {hasNote ? t('rowMenu.editNote') : t('rowMenu.addNote')}
       </button>
 
       <div className="rm-sep" />
-      <div className="rm-label">強制背景顏色</div>
+      <div className="rm-label">{t('rowMenu.forceColor')}</div>
       <div className="rm-swatches">
-        {COLORS.map((c) => (
-          <button
-            key={c.key}
-            type="button"
-            className={'rm-swatch' + (color === c.key ? ' on' : '')}
-            style={{ background: c.dot }}
-            title={c.label}
-            aria-label={c.label}
-            onClick={() => {
-              onSetColor(side, sha, c.key);
-              onClose();
-            }}
-          />
-        ))}
+        {COLORS.map((c) => {
+          const label = t('rowMenu.colors.' + c.key);
+          return (
+            <button
+              key={c.key}
+              type="button"
+              className={'rm-swatch' + (color === c.key ? ' on' : '')}
+              style={{ background: c.dot }}
+              title={label}
+              aria-label={label}
+              onClick={() => {
+                onSetColor(side, sha, c.key);
+                onClose();
+              }}
+            />
+          );
+        })}
         {customColor && (
           <button
             key="custom"
             type="button"
             className={'rm-swatch' + (color === customColor ? ' on' : '')}
             style={{ background: customColor }}
-            title={'自訂顏色 ' + customColor}
-            aria-label={'自訂顏色 ' + customColor}
+            title={t('rowMenu.customColor', { color: customColor })}
+            aria-label={t('rowMenu.customColor', { color: customColor })}
             onClick={() => {
               onSetColor(side, sha, customColor);
               onClose();
@@ -90,8 +96,8 @@ export default function RowMenu({ side, sha, short, x, y, hasNote, color, custom
         )}
         <label
           className="rm-swatch rm-swatch-pick"
-          title="自訂顏色…"
-          aria-label="自訂顏色"
+          title={t('rowMenu.customColorPick')}
+          aria-label={t('rowMenu.customColorAria')}
         >
           ＋
           <input
@@ -114,7 +120,7 @@ export default function RowMenu({ side, sha, short, x, y, hasNote, color, custom
           onClose();
         }}
       >
-        ✕ 清除顏色
+        {t('rowMenu.clearColor')}
       </button>
     </div>
   );

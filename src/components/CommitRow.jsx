@@ -1,4 +1,5 @@
 import React from 'react';
+import { useT } from '../lib/i18n.js';
 
 function highlight(text, query) {
   if (!query || !text) return text;
@@ -28,6 +29,7 @@ function hexToTint(hex, alpha) {
 }
 
 function CommitRow({ commit, side, query, dimmed, isHit, selected, height, top, onSelect, manualLinked, pending, onNode, activeHit, hasNote, onNoteOpen, color, onRowMenu, onDetail }) {
+  const t = useT();
   // A `#rrggbb` color is a user-defined custom swatch: paint it inline since it
   // has no `.force-*` CSS class. Named keys still use the class.
   const isHex = typeof color === 'string' && color.charAt(0) === '#';
@@ -98,10 +100,10 @@ function CommitRow({ commit, side, query, dimmed, isHit, selected, height, top, 
     .filter(Boolean)
     .join(' ');
   const nodeTitle = manualLinked
-    ? 'Click to disconnect this manual link'
+    ? t('row.nodeDisconnect')
     : pending
-    ? 'Pick a node on the other side to link · Esc to cancel'
-    : 'Click to start a manual link';
+    ? t('row.nodePick')
+    : t('row.nodeStart');
 
   const title = `${commit.short}  ${commit.subject}\n${commit.author} · ${commit.authorDate}\n${commit.body || ''}`;
 
@@ -123,8 +125,8 @@ function CommitRow({ commit, side, query, dimmed, isHit, selected, height, top, 
           type="button"
           className="note-icon"
           onClick={handleNoteIcon}
-          title="檢視 / 編輯註記"
-          aria-label="View note"
+          title={t('row.viewEditNote')}
+          aria-label={t('row.viewNote')}
         >
           📝
         </button>
