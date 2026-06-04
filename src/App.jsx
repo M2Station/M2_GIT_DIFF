@@ -20,6 +20,11 @@ export default function App() {
   const [left, setLeft] = useState(emptyRepo);
   const [right, setRight] = useState(emptyRepo);
   const [query, setQuery] = useState('');
+  // `rawQuery` mirrors the search box character-by-character so typing stays
+  // responsive, while `query` (which drives the heavy match/highlight/align
+  // memos over thousands of rows) is updated on a short debounce so each
+  // keystroke doesn't rescan every commit.
+  const [rawQuery, setRawQuery] = useState('');
   const [filterOnly, setFilterOnly] = useState(false);
   const [loading, setLoading] = useState({ L: false, R: false });
   const [error, setError] = useState('');
@@ -148,6 +153,19 @@ export default function App() {
     window.addEventListener('resize', measure);
     return () => window.removeEventListener('resize', measure);
   }, []);
+
+  // Debounce the typed query into the value the heavy memos depend on. Clearing
+  // (empty string) is applied immediately so closing search / deleting the last
+  // character feels instant.
+  useEffect(() => {
+    if (rawQuery === query) return undefined;
+    if (rawQuery === '') {
+      setQuery('');
+      return undefined;
+    }
+    const id = setTimeout(() => setQuery(rawQuery), 120);
+    return () => clearTimeout(id);
+  }, [rawQuery, query]);
 
   const pick = useCallback(async (side) => {
     setError('');
@@ -1177,6 +1195,7 @@ export default function App() {
   // Close the floating search panel (clears query + highlights).
   const closeSearch = useCallback(() => {
     setSearchOpen(false);
+    setRawQuery('');
     setQuery('');
     scrollRef.current?.focus();
   }, []);
@@ -1331,8 +1350,8 @@ export default function App() {
 
       {searchOpen && (
         <SearchPanel
-          query={query}
-          onQuery={setQuery}
+          query={rawQuery}
+          onQuery={setRawQuery}
           scopes={scopes}
           onToggleScope={toggleScope}
           matchCount={matchCount}

@@ -2,6 +2,21 @@ import React, { useMemo } from 'react';
 import CommitRow from './CommitRow.jsx';
 import { ROW_HEIGHT, OVERSCAN } from '../lib/constants.js';
 
+// First index in `rows` whose `displayIndex` is >= target. `rows` is always
+// ordered by a strictly increasing `displayIndex` (the alignment layout assigns
+// them top-to-bottom), so a binary search finds the visible slice boundaries in
+// O(log n) instead of scanning every row on each scroll frame.
+function lowerBound(rows, target) {
+  let lo = 0;
+  let hi = rows.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (rows[mid].displayIndex < target) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
 // Virtualized column: only renders the rows currently inside the viewport
 // (plus an overscan margin). Each visible row carries its `displayIndex`, so
 // it is absolutely positioned at displayIndex * ROW_HEIGHT — keeping the two
@@ -36,7 +51,7 @@ export default function RepoColumn({
   );
 
   const visible = useMemo(
-    () => rows.filter((r) => r.displayIndex >= start && r.displayIndex < end),
+    () => rows.slice(lowerBound(rows, start), lowerBound(rows, end)),
     [rows, start, end]
   );
 
