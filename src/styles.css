@@ -1050,6 +1050,8 @@ mark.cd-hl {
   font-size: 12.5px;
   line-height: 1.6;
   color: var(--text);
+  overflow-wrap: anywhere;
+  word-break: normal;
 }
 
 /* markdown elements */
@@ -1064,6 +1066,14 @@ mark.cd-hl {
 .md h4.md-h, .md h5.md-h, .md h6.md-h { font-size: 13px; }
 .md .md-p {
   margin: 6px 0;
+}
+.md .md-num {
+  text-decoration: underline;
+  text-decoration-color: var(--accent, currentColor);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 .md .md-list {
   margin: 6px 0;
@@ -1101,6 +1111,11 @@ mark.cd-hl {
   border: 1px solid var(--line);
   border-radius: 4px;
   padding: 1px 4px;
+  /* short identifiers fit on a line and stay whole; only very long paths
+     break, and only when they can't fit — never mid short token */
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
 }
 .md .md-hr {
   border: none;
@@ -1112,6 +1127,15 @@ mark.cd-hl {
   text-decoration: underline;
   text-decoration-style: dotted;
   cursor: help;
+}
+.cd-pr-link {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.cd-search-link {
+  color: var(--text-dim, var(--text));
+  border-color: var(--text-dim, var(--text));
+  opacity: 0.85;
 }
 
 /* resize handles around the commit-detail popup */
