@@ -1,9 +1,11 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useT } from '../lib/i18n.js';
 
 // Pre-export dialog: asks how many rows to write to the Excel file so a very
 // large diff doesn't produce an unwieldy / failing workbook. Defaults to ALL.
 // Closes on Cancel, the backdrop, or Escape; confirms on Export / Enter.
 export default function ExportPrompt({ total, onExport, onCancel }) {
+  const t = useT();
   // mode: 'all' = export everything; 'limit' = export the first N rows.
   const [mode, setMode] = useState('all');
   const [count, setCount] = useState(String(Math.min(total, 1000)));
@@ -40,11 +42,11 @@ export default function ExportPrompt({ total, onExport, onCancel }) {
   return (
     <div className="export-prompt-backdrop" onMouseDown={onCancel}>
       <div className="export-prompt" onMouseDown={(e) => e.stopPropagation()}>
-        <div className="export-prompt-head">⬇ 匯出 Excel</div>
+        <div className="export-prompt-head">{t('export.head')}</div>
 
         <div className="export-prompt-body">
           <p className="export-prompt-q">
-            目前可匯出 <b>{total.toLocaleString()}</b> 筆資料，要輸出多少筆？
+            {t('export.question', { total: total.toLocaleString() })}
           </p>
 
           <label className="export-prompt-opt">
@@ -55,7 +57,7 @@ export default function ExportPrompt({ total, onExport, onCancel }) {
               onChange={() => setMode('all')}
             />
             <span>
-              全部 (ALL) <span className="muted">— {total.toLocaleString()} 筆</span>
+              {t('export.all')} <span className="muted">{t('export.allSuffix', { total: total.toLocaleString() })}</span>
             </span>
           </label>
 
@@ -66,7 +68,7 @@ export default function ExportPrompt({ total, onExport, onCancel }) {
               checked={mode === 'limit'}
               onChange={() => setMode('limit')}
             />
-            <span>只輸出前</span>
+            <span>{t('export.limitPrefix')}</span>
             <input
               ref={inputRef}
               type="number"
@@ -79,22 +81,22 @@ export default function ExportPrompt({ total, onExport, onCancel }) {
               onChange={(e) => setCount(e.target.value)}
               onKeyDown={onKeyDown}
             />
-            <span>筆</span>
+            <span>{t('export.limitSuffix')}</span>
           </label>
 
           {big && mode === 'all' && (
             <p className="export-prompt-warn">
-              ⚠ 資料量較大，匯出可能需要一些時間或產生較大的檔案。
+              {t('export.warn')}
             </p>
           )}
         </div>
 
         <div className="export-prompt-foot">
           <button type="button" className="btn" onClick={onCancel}>
-            取消
+            {t('common.cancel')}
           </button>
           <button type="button" className="btn export-xlsx" onClick={confirm}>
-            匯出 {limited ? `${parsed.toLocaleString()} 筆` : '全部'}
+            {limited ? t('export.exportN', { count: parsed.toLocaleString() }) : t('export.exportAll')}
           </button>
         </div>
       </div>

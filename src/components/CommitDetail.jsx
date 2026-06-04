@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { renderMarkdown } from '../lib/markdown.js';
+import { useT } from '../lib/i18n.js';
 
 // Floating commit detail viewer (Ctrl+Click a row). Header surfaces the key
 // metadata (SHA / date / author) prominently; the message body is rendered as
@@ -53,6 +54,7 @@ function commitWebUrl(remoteUrl, sha) {
 }
 
 export default function CommitDetail({ side, commit, related, repoPath, remoteUrl, x, y, searchTerm, onClose, onOpenRelated }) {
+  const t = useT();
   const [size, setSize] = useState(() => {
     const w = initialWidth(commit);
     const h = Math.min(560, Math.round(window.innerHeight * 0.7));
@@ -223,11 +225,11 @@ export default function CommitDetail({ side, commit, related, repoPath, remoteUr
 
   if (!commit) return null;
 
-  const sideName = side === 'L' ? 'LEFT' : 'RIGHT';
+  const sideName = side === 'L' ? t('common.left') : t('common.right');
   const statusLabel = {
-    common: 'Common · 相同 SHA',
-    cherry: 'Cherry-pick · 相同內容',
-    unique: 'Unique · 單側獨有'
+    common: t('detail.statusCommon'),
+    cherry: t('detail.statusCherry'),
+    unique: t('detail.statusUnique')
   }[commit.status] || commit.status;
 
   // Hand the commit off to the locally installed VS Code chat. The prompt is
@@ -236,7 +238,7 @@ export default function CommitDetail({ side, commit, related, repoPath, remoteUr
   // The prompt is kept in English so it survives any stdin encoding quirks.
   const openInChat = async () => {
     if (!window.api?.openInVSCodeChat) {
-      setToast('VS Code 整合僅在桌面版 (Electron) 可用。');
+      setToast(t('detail.toastVSCodeOnly'));
       return;
     }
     const prompt = [
@@ -258,9 +260,9 @@ export default function CommitDetail({ side, commit, related, repoPath, remoteUr
       await window.api.openInVSCodeChat({ repoPath, prompt, mode: 'agent' });
     } catch (e) {
       if (e && (e.code === 'VSCODE_NOT_FOUND' || /VSCODE_NOT_FOUND/.test(e.message || ''))) {
-        setToast('找不到 VS Code，請先安裝並確認 `code` 指令已加入 PATH。');
+        setToast(t('detail.toastVSCodeNotFound'));
       } else {
-        setToast('開啟 VS Code Chat 失敗：' + (e?.message || e));
+        setToast(t('detail.toastVSCodeFail', { msg: e?.message || e }));
       }
     }
   };
@@ -284,7 +286,7 @@ export default function CommitDetail({ side, commit, related, repoPath, remoteUr
         await window.api.openExternal(webUrl);
         return;
       } catch (e) {
-        setToast('開啟網頁失敗：' + (e?.message || e));
+        setToast(t('detail.toastWebFail', { msg: e?.message || e }));
         return;
       }
     }
@@ -306,8 +308,8 @@ export default function CommitDetail({ side, commit, related, repoPath, remoteUr
           className="cd-hl-input"
           type="text"
           value={hl}
-          placeholder="HL…"
-          title="高亮符合的字"
+          placeholder={t('detail.hlPlaceholder')}
+          title={t('detail.hlTitle')}
           onChange={(e) => setHl(e.target.value)}
           onPointerDown={(e) => e.stopPropagation()}
           onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setHl(''); } }}
@@ -316,12 +318,12 @@ export default function CommitDetail({ side, commit, related, repoPath, remoteUr
           className="cd-chat"
           onClick={openInChat}
           onPointerDown={(e) => e.stopPropagation()}
-          title="用 VS Code Copilot Chat 解說此 Commit"
-          aria-label="Open in VS Code Chat"
+          title={t('detail.chatTitle')}
+          aria-label={t('detail.chatAria')}
         >
-          💬 Chat
+          {t('detail.chat')}
         </button>
-        <button className="cd-close" onClick={onClose} title="Close (Esc)" aria-label="Close">
+        <button className="cd-close" onClick={onClose} title={t('common.closeEsc')} aria-label={t('common.close')}>
           ✕
         </button>
       </div>
@@ -329,7 +331,7 @@ export default function CommitDetail({ side, commit, related, repoPath, remoteUr
       {toast && (
         <div className="cd-toast" role="alert" onPointerDown={(e) => e.stopPropagation()}>
           <span>{toast}</span>
-          <button className="cd-toast-x" onClick={() => setToast(null)} aria-label="Dismiss">✕</button>
+          <button className="cd-toast-x" onClick={() => setToast(null)} aria-label={t('detail.dismiss')}>✕</button>
         </div>
       )}
 
@@ -346,20 +348,20 @@ export default function CommitDetail({ side, commit, related, repoPath, remoteUr
               className="cd-sha-link"
               onClick={openCommitOnWeb}
               onPointerDown={(e) => e.stopPropagation()}
-              title={'在瀏覽器開啟此 Commit 網頁\n' + webUrl}
-              aria-label="Open commit on web"
+              title={t('detail.webTitle', { url: webUrl })}
+              aria-label={t('detail.webAria')}
             >
-              🔗 Web
+              {t('detail.web')}
             </button>
           )}
         </div>
         <div className="cd-meta-row">
-          <span className="cd-key">作者</span>
+          <span className="cd-key">{t('detail.author')}</span>
           <span className="cd-author">{commit.author}</span>
           {commit.authorEmail && <span className="cd-email">&lt;{commit.authorEmail}&gt;</span>}
         </div>
         <div className="cd-meta-row">
-          <span className="cd-key">日期</span>
+          <span className="cd-key">{t('detail.date')}</span>
           <span className="cd-date">{commit.authorDate}</span>
         </div>
       </div>
@@ -370,14 +372,14 @@ export default function CommitDetail({ side, commit, related, repoPath, remoteUr
       {related ? (
         <div className={'cd-related ' + (related.commit.status || '')}>
           <div className="cd-related-head">
-            🔗 Related item · {related.side === 'L' ? 'LEFT' : 'RIGHT'}
+            {t('detail.relatedItem', { side: related.side === 'L' ? t('common.left') : t('common.right') })}
             <span className={'cd-related-type ' + related.type}>{related.type}</span>
           </div>
           <button
             type="button"
             className="cd-related-body"
             onClick={() => onOpenRelated(related.side, related.commit.sha)}
-            title="點選查看對應 Commit 詳情"
+            title={t('detail.relatedBodyTitle')}
           >
             <span className="cd-related-sha">{related.commit.short}</span>
             <span className="cd-related-subject">{related.commit.subject}</span>
@@ -387,13 +389,13 @@ export default function CommitDetail({ side, commit, related, repoPath, remoteUr
           </button>
         </div>
       ) : (
-        <div className="cd-related none">無對應項目（此 Commit 僅存在於 {sideName}）</div>
+        <div className="cd-related none">{t('detail.noRelated', { side: sideName })}</div>
       )}
 
-      <div className="cd-body-label">Commit message</div>
+      <div className="cd-body-label">{t('detail.commitMessage')}</div>
       <div
         className="cd-body md"
-        dangerouslySetInnerHTML={{ __html: renderMarkdown(commit.body || '_（無內文）_') }}
+        dangerouslySetInnerHTML={{ __html: renderMarkdown(commit.body || t('detail.emptyBody')) }}
       />
       </div>
 

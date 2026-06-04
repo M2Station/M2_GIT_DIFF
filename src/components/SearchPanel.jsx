@@ -1,14 +1,9 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
+import { useT } from '../lib/i18n.js';
 
 // Scope checkboxes shown inside the panel. `key` matches the fields tested in
-// matchesQuery(); `label` is what the user sees.
-const SCOPES = [
-  { key: 'subject', label: 'Title' },
-  { key: 'body', label: 'Body' },
-  { key: 'sha', label: 'SHA' },
-  { key: 'author', label: 'Author' },
-  { key: 'date', label: 'Date' }
-];
+// matchesQuery(); the label is translated via `search.scope.<key>`.
+const SCOPES = ['subject', 'body', 'sha', 'author', 'date'];
 
 // A floating, draggable search window. Opened with Ctrl+F. Lets the user pick
 // which fields to search (multi-select) and cycle matches with the arrows / F3.
@@ -29,6 +24,7 @@ export default function SearchPanel({
   onPrevNote,
   onNextNote
 }) {
+  const t = useT();
   // Position is local so dragging never re-renders the rest of the app.
   const [pos, setPos] = useState({ x: window.innerWidth - 380, y: 70 });
   const dragRef = useRef(null);
@@ -81,9 +77,9 @@ export default function SearchPanel({
       onClick={(e) => e.stopPropagation()}
     >
       <div className="sp-header" onPointerDown={onDragStart}>
-        <span className="sp-title">🔍 Search</span>
+        <span className="sp-title">{t('search.title')}</span>
         <span className="sp-spacer" />
-        <button className="sp-close" onClick={onClose} title="Close (Esc)" aria-label="Close">
+        <button className="sp-close" onClick={onClose} title={t('common.closeEsc')} aria-label={t('common.close')}>
           ✕
         </button>
       </div>
@@ -94,8 +90,8 @@ export default function SearchPanel({
             ref={inputRef}
             className="search"
             type="text"
-            placeholder="Search…"
-            aria-label="搜尋 commit（Ctrl+F）"
+            placeholder={t('search.placeholder')}
+            aria-label={t('search.inputAria')}
             value={query}
             onChange={(e) => onQuery(e.target.value)}
             onKeyDown={onInputKeyDown}
@@ -103,48 +99,51 @@ export default function SearchPanel({
         </div>
 
         <div className="sp-scopes">
-          {SCOPES.map((s) => (
-            <label key={s.key} className="sp-scope" title={`Search in ${s.label}`}>
-              <input
-                type="checkbox"
-                checked={!!scopes[s.key]}
-                onChange={() => onToggleScope(s.key)}
-              />
-              <span>{s.label}</span>
-            </label>
-          ))}
+          {SCOPES.map((key) => {
+            const label = t('search.scope.' + key);
+            return (
+              <label key={key} className="sp-scope" title={t('search.searchIn', { label })}>
+                <input
+                  type="checkbox"
+                  checked={!!scopes[key]}
+                  onChange={() => onToggleScope(key)}
+                />
+                <span>{label}</span>
+              </label>
+            );
+          })}
         </div>
 
         <div className="sp-row sp-actions">
-          <span className="match-count">{query ? `${matchCount} hits` : '\u00a0'}</span>
+          <span className="match-count">{query ? t('search.hits', { count: matchCount }) : '\u00a0'}</span>
           <span className="sp-spacer" />
-          <button className="btn ghost" onClick={onPrev} disabled={!query} title="Previous (Shift+F3)">
+          <button className="btn ghost" onClick={onPrev} disabled={!query} title={t('search.previous')}>
             ↑
           </button>
-          <button className="btn ghost" onClick={onNext} disabled={!query} title="Next (F3)">
+          <button className="btn ghost" onClick={onNext} disabled={!query} title={t('search.next')}>
             ↓
           </button>
           <button
             className={'btn toggle' + (filterOnly ? ' on' : '')}
             onClick={onToggleFilter}
             disabled={!query}
-            title="Show only matching commits"
+            title={t('search.filterOnly')}
           >
-            {filterOnly ? '☑' : '☐'} Filter
+            {filterOnly ? '☑' : '☐'} {t('search.filter')}
           </button>
         </div>
 
         <div className="sp-sep" />
 
         <div className="sp-row sp-notes">
-          <span className="sp-notes-label">📝 Notes</span>
-          <span className="match-count">{noteCount ? `${noteCount} notes` : '無註記'}</span>
+          <span className="sp-notes-label">{t('search.notes')}</span>
+          <span className="match-count">{noteCount ? t('search.noteCount', { count: noteCount }) : t('search.noNotes')}</span>
           <span className="sp-spacer" />
           <button
             className="btn ghost"
             onClick={onPrevNote}
             disabled={!noteCount}
-            title="Previous note"
+            title={t('search.prevNote')}
           >
             ↑
           </button>
@@ -152,7 +151,7 @@ export default function SearchPanel({
             className="btn ghost"
             onClick={onNextNote}
             disabled={!noteCount}
-            title="Next note"
+            title={t('search.nextNote')}
           >
             ↓
           </button>

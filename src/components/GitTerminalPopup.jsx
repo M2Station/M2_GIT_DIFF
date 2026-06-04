@@ -1,9 +1,11 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { useT } from '../lib/i18n.js';
 
 // Floating window that shows the git terminal transcript after a Fetch / Pull,
 // for both success and failure. Draggable by its header; closes on the ✕
 // button, the OK button, the backdrop, or Escape.
 export default function GitTerminalPopup({ info, onClose }) {
+  const t = useT();
   const { side, op, repoName, ok, command, output, exitCode } = info || {};
   const W = 560;
   const [pos, setPos] = useState(() => ({
@@ -51,7 +53,7 @@ export default function GitTerminalPopup({ info, onClose }) {
     [pos.x, pos.y]
   );
 
-  const sideLabel = side === 'L' ? 'LEFT' : side === 'R' ? 'RIGHT' : '';
+  const sideLabel = side === 'L' ? t('common.left') : side === 'R' ? t('common.right') : '';
 
   return (
     <div className="git-term-backdrop" onMouseDown={onClose}>
@@ -63,8 +65,8 @@ export default function GitTerminalPopup({ info, onClose }) {
         <div className="git-term-head" onPointerDown={onDragStart}>
           <span className="git-term-status">{ok ? '✔' : '✕'}</span>
           <span className="git-term-title">
-            git {op} {ok ? '成功' : '失敗'}
-            {!ok && typeof exitCode === 'number' ? ` (exit ${exitCode})` : ''}
+            git {op} {ok ? t('gitTerm.success') : t('gitTerm.fail')}
+            {!ok && typeof exitCode === 'number' ? ` ${t('gitTerm.exit', { code: exitCode })}` : ''}
           </span>
           <span className="git-term-meta">
             {sideLabel}
@@ -74,8 +76,8 @@ export default function GitTerminalPopup({ info, onClose }) {
             type="button"
             className="git-term-x"
             onClick={onClose}
-            title="關閉 (Esc)"
-            aria-label="Close"
+            title={t('common.closeEsc')}
+            aria-label={t('common.close')}
           >
             ✕
           </button>
@@ -83,12 +85,12 @@ export default function GitTerminalPopup({ info, onClose }) {
 
         <div className="git-term-body">
           <div className="git-term-cmd">$ {command}</div>
-          <pre className="git-term-output">{output || '(無輸出)'}</pre>
+          <pre className="git-term-output">{output || t('common.noOutput')}</pre>
         </div>
 
         <div className="git-term-foot">
           <button type="button" className="btn" onClick={onClose}>
-            OK
+            {t('common.ok')}
           </button>
         </div>
       </div>

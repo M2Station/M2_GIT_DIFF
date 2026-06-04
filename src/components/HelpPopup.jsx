@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { useT } from '../lib/i18n.js';
 
 // Centered modal that lists every keyboard shortcut / hotkey in the app.
 // Closes on the ✕ button, the OK button, a backdrop click, or Escape.
@@ -6,20 +7,22 @@ import React, { useEffect } from 'react';
 // home (empty-state) screen, linking out to the author's GitHub.
 const GH_URL = 'https://github.com/oahsiao';
 
-const SHORTCUTS = [
-  { keys: ['Ctrl', 'F'], desc: '開啟搜尋面板' },
-  { keys: ['Alt', 'F'], desc: '開啟資料夾選擇器（依序填入左 / 右 repo）' },
-  { keys: ['F3'], desc: '跳到下一個搜尋結果' },
-  { keys: ['Shift', 'F3'], desc: '跳到上一個搜尋結果' },
-  { keys: ['↑'], desc: '同欄移到上一個 commit' },
-  { keys: ['↓'], desc: '同欄移到下一個 commit' },
-  { keys: ['←'], desc: '焦點跳到左欄最接近的 commit' },
-  { keys: ['→'], desc: '焦點跳到右欄最接近的 commit' },
-  { keys: ['Enter'], desc: '開啟目前 commit 的詳細視窗' },
-  { keys: ['Ctrl', 'Click'], desc: '開啟該 commit 的詳細視窗（可同時開多個）' },
-  { keys: ['Esc'], desc: '關閉所有彈窗 / 取消選取 / 取消連結中' },
-  { keys: ['Del'], desc: '刪除目前選取的手動連結' },
-  { keys: ['Ctrl', 'Enter'], desc: '在註記視窗中：儲存並關閉' },
+// Keyboard keys are language-neutral; only the descriptions are translated
+// (via the `help.shortcuts` array, matched by index).
+const SHORTCUT_KEYS = [
+  ['Ctrl', 'F'],
+  ['Alt', 'F'],
+  ['F3'],
+  ['Shift', 'F3'],
+  ['↑'],
+  ['↓'],
+  ['←'],
+  ['→'],
+  ['Enter'],
+  ['Ctrl', 'Click'],
+  ['Esc'],
+  ['Del'],
+  ['Ctrl', 'Enter']
 ];
 
 function openGitHub(e) {
@@ -28,6 +31,12 @@ function openGitHub(e) {
 }
 
 export default function HelpPopup({ onClose }) {
+  const t = useT();
+  const descs = t('help.shortcuts');
+  const SHORTCUTS = SHORTCUT_KEYS.map((keys, i) => ({
+    keys,
+    desc: Array.isArray(descs) ? descs[i] : ''
+  }));
   // Close on Escape (capture so it wins over global handlers).
   useEffect(() => {
     const onKey = (e) => {
@@ -45,9 +54,9 @@ export default function HelpPopup({ onClose }) {
     <div className="help-backdrop" onMouseDown={onClose}>
       <div className="help-popup" onMouseDown={(e) => e.stopPropagation()}>
         <div className="help-head">
-          <span className="help-title">⌨ 快捷鍵 / Keyboard Shortcuts</span>
+          <span className="help-title">{t('help.title')}</span>
           <span className="help-spacer" />
-          <button className="help-x" onClick={onClose} title="關閉 (Esc)">✕</button>
+          <button className="help-x" onClick={onClose} title={t('common.closeEsc')}>✕</button>
         </div>
 
         <div className="help-body">
@@ -75,7 +84,7 @@ export default function HelpPopup({ onClose }) {
             className="stage-empty-badge help-credit"
             href={GH_URL}
             onClick={openGitHub}
-            title="開啟作者 GitHub · github.com/oahsiao"
+            title={t('help.githubTitle')}
           >
             <span className="seb-spark">✦</span>
             <span className="seb-text">Powered by <b>OA Hsiao</b></span>
