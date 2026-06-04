@@ -42,6 +42,10 @@ function remoteWebBase(remoteUrl) {
   } else if (url.startsWith('ssh://')) {
     url = 'https://' + url.slice('ssh://'.length).replace(/^[^@]+@/, '');
   }
+  // Strip any embedded credential (e.g. ADO's "https://<org>@dev.azure.com/...").
+  // Otherwise host detection that anchors on the scheme (codeSearchUrl) breaks
+  // while the looser PR/commit matchers still work — causing inconsistent links.
+  url = url.replace(/^(https?:\/\/)[^/@]+@/, '$1');
   url = url.replace(/\.git$/, '').replace(/\/$/, '');
   return url;
 }
@@ -59,6 +63,98 @@ function commitWebUrl(remoteUrl, sha) {
   }
   // GitHub, GitLab, Gitea and most others use /commit/<sha>.
   return `${base}/commit/${sha}`;
+}
+
+// Build the web URL for a pull/merge request number on the detected host.
+// Returns '' when the remote can't be mapped to a web URL.
+function pullRequestUrl(remoteUrl, number) {
+  const base = remoteWebBase(remoteUrl);
+  if (!base || !number) return '';
+  // Azure DevOps / VSTS pull requests live under the repo's /pullrequest/<id>.
+  if (/dev\.azure\.com|visualstudio\.com/.test(base)) {
+    return `${base}/pullrequest/${number}`;
+  }
+  // GitLab uses merge requests.
+  if (/gitlab\./.test(base)) {
+    return `${base}/-/merge_requests/${number}`;
+  }
+  // Bitbucket.
+  if (/bitbucket\.org/.test(base)) {
+    return `${base}/pull-requests/${number}`;
+  }
+  // GitHub, Gitea and most others use /pull/<id>.
+  return `${base}/pull/${number}`;
+}
+
+// Build a host-aware code-search URL for a reference number (e.g. a bug id like
+// "#5555768"). Each host has its own search surface, so the host is detected
+// automatically. Returns '' when the remote can't be mapped to a search URL.
+function codeSearchUrl(remoteUrl, term) {
+  const base = remoteWebBase(remoteUrl);
+  if (!base || !term) return '';
+  const q = encodeURIComponent(term);
+  // Azure DevOps: organisation-level code search.
+  let m = base.match(/^(https:\/\/dev\.azure\.com\/[^/]+)/);
+  if (m) {
+    return `${m[1]}/_search?text=${q}&type=code&lp=custom-Collection&filters=&pageSize=25`;
+  }
+  // VSTS: https://<org>.visualstudio.com
+  m = base.match(/^(https:\/\/[^/]+\.visualstudio\.com)/);
+  if (m) {
+    return `${m[1]}/_search?text=${q}&type=code&lp=custom-Collection&filters=&pageSize=25`;
+  }
+  // GitHub: repo-scoped code search.
+  m = base.match(/^https:\/\/github\.com\/([^/]+\/[^/]+)/);
+  if (m) {
+    return `https://github.com/search?q=${encodeURIComponent(`repo:${m[1]} ${term}`)}&type=code`;
+  }
+  // GitLab: repo-scoped blob search.
+  if (/gitlab\./.test(base)) {
+    return `${base}/-/search?search=${q}&scope=blobs`;
+  }
+  // Bitbucket.
+  if (/bitbucket\.org/.test(base)) {
+    return `${base}/search?q=${q}`;
+  }
+  return '';
+}
+
+// Find every PR reference in a piece of text. Only the ADO merge-commit form
+// "Merged PR <number>" is treated as a PR reference (e.g. the merge title
+// "Merged PR 390271: ..."). Returns numeric ids as strings, de-duplicated, in
+// order.
+function findPRNumbers(text) {
+  if (!text) return [];
+  const out = [];
+  const seen = new Set();
+  let m;
+  const re = /\bMerged\s+PR\s*#?\s*(\d+)\b/gi;
+  while ((m = re.exec(text))) {
+    if (!seen.has(m[1])) {
+      seen.add(m[1]);
+      out.push(m[1]);
+    }
+  }
+  return out;
+}
+
+// Find every "#<number>" reference in a piece of text (e.g. a bug id like
+// "#5555768"), including the Azure Boards mention form "AB#5579125". These map
+// to a code search rather than a PR. Avoids HTML entities such as "&#123;".
+// Returns numeric ids as strings, de-duplicated.
+function findSearchRefs(text) {
+  if (!text) return [];
+  const out = [];
+  const seen = new Set();
+  let m;
+  const re = /(?:^|[^&\w/])(?:AB)?#(\d+)\b/gi;
+  while ((m = re.exec(text))) {
+    if (!seen.has(m[1])) {
+      seen.add(m[1]);
+      out.push(m[1]);
+    }
+  }
+  return out;
 }
 
 export default function CommitDetail({ side, commit, related, repoPath, remoteUrl, x, y, searchTerm, onClose, onOpenRelated }) {
@@ -301,6 +397,34 @@ export default function CommitDetail({ side, commit, related, repoPath, remoteUr
     window.open(webUrl, '_blank', 'noopener');
   };
 
+  // Collect PR references for this commit. The merge title (subject) is the
+  // strongest reference point (e.g. "Merged PR 390569: ..."), so scan it first,
+  // then the body. Only keep numbers that map to a web URL on this remote.
+  const refText = `${commit.subject || ''}\n${commit.body || ''}`;
+  const prLinks = findPRNumbers(refText)
+    .map((n) => ({ n, url: pullRequestUrl(remoteUrl, n) }))
+    .filter((p) => p.url);
+
+  // Bare "#<n>" references (e.g. bug ids) become host-aware code searches.
+  const searchLinks = findSearchRefs(refText)
+    .map((n) => ({ n, url: codeSearchUrl(remoteUrl, n) }))
+    .filter((p) => p.url);
+
+  // Open any page in the default browser via the main process.
+  const openUrlOnWeb = async (url) => {
+    if (!url) return;
+    if (window.api?.openExternal) {
+      try {
+        await window.api.openExternal(url);
+        return;
+      } catch (e) {
+        setToast(t('detail.toastWebFail', { msg: e?.message || e }));
+        return;
+      }
+    }
+    window.open(url, '_blank', 'noopener');
+  };
+
   return (
     <div
       ref={rootRef}
@@ -362,6 +486,32 @@ export default function CommitDetail({ side, commit, related, repoPath, remoteUr
               {t('detail.web')}
             </button>
           )}
+          {prLinks.map((p) => (
+            <button
+              key={p.n}
+              type="button"
+              className="cd-sha-link cd-pr-link"
+              onClick={() => openUrlOnWeb(p.url)}
+              onPointerDown={(e) => e.stopPropagation()}
+              title={t('detail.prTitle', { n: p.n, url: p.url })}
+              aria-label={t('detail.prAria', { n: p.n })}
+            >
+              {t('detail.pr', { n: p.n })}
+            </button>
+          ))}
+          {searchLinks.map((p) => (
+            <button
+              key={`s-${p.n}`}
+              type="button"
+              className="cd-sha-link cd-search-link"
+              onClick={() => openUrlOnWeb(p.url)}
+              onPointerDown={(e) => e.stopPropagation()}
+              title={t('detail.searchTitle', { n: p.n, url: p.url })}
+              aria-label={t('detail.searchAria', { n: p.n })}
+            >
+              {t('detail.search', { n: p.n })}
+            </button>
+          ))}
         </div>
         <div className="cd-meta-row">
           <span className="cd-key">{t('detail.author')}</span>
