@@ -43,7 +43,11 @@ jobs:
         run: npm run rebuild
 
       - name: Build installer (electron-builder)
-        run: npm run dist
+        # --publish never: only package the artifacts here. Publishing is
+        # handled by the dedicated "Publish GitHub Release" step below.
+        # Without this, electron-builder auto-publishes on a tag and fails
+        # with "GitHub Personal Access Token is not set".
+        run: npm run dist -- --publish never
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
