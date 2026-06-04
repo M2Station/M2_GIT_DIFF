@@ -1,3 +1,9 @@
+# M2_GIT_DIFF
+# Copyright (c) 2026 OA Hsiao
+# SPDX-License-Identifier: MIT
+#
+# This source code is licensed under the MIT License found in the
+# LICENSE file in the root directory of this source tree.
 # 判斷 dist/ 是否為最新。
 # exit 0 = dist 已是最新（可略過建置）；exit 1 = 需要重建。
 $ErrorActionPreference = 'SilentlyContinue'

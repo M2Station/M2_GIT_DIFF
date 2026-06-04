@@ -3,7 +3,7 @@
   "version": "0.1.2",
   "description": "Side-by-side git history comparison for two local repros (GenLen-style HUD)",
   "main": "electron/main.js",
-  "author": "",
+  "author": "OA Hsiao",
   "license": "MIT",
   "scripts": {
     "dev": "concurrently -k -n VITE,ELECTRON -c cyan,magenta \"npm:dev:vite\" \"npm:dev:electron\"",
@@ -15,7 +15,8 @@
     "rebuild": "electron-rebuild -f -w better-sqlite3",
     "dist": "vite build && electron-builder",
     "release": "powershell -ExecutionPolicy Bypass -File scripts/release.ps1",
-    "demo:gif": "node scripts/make-demo-gif.mjs"
+    "demo:gif": "node scripts/make-demo-gif.mjs",
+    "check:license": "node scripts/check-license-headers.mjs"
   },
   "optionalDependencies": {
     "better-sqlite3": "^11.8.1"

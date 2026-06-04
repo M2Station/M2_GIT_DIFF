@@ -1,4 +1,10 @@
-﻿# Installs the M2 GIT DIFF Explorer right-click menu (per-user, no admin needed).
+# M2_GIT_DIFF
+# Copyright (c) 2026 OA Hsiao
+# SPDX-License-Identifier: MIT
+#
+# This source code is licensed under the MIT License found in the
+# LICENSE file in the root directory of this source tree.
+# Installs the M2 GIT DIFF Explorer right-click menu (per-user, no admin needed).
 #
 # Adds two verbs to the folder context menu, mirroring Beyond Compare:
 #   • "Select Folder for M2 GIT DIFF"  — remembers the folder as the left side

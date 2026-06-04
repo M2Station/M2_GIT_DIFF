@@ -1,3 +1,9 @@
+# M2_GIT_DIFF
+# Copyright (c) 2026 OA Hsiao
+# SPDX-License-Identifier: MIT
+#
+# This source code is licensed under the MIT License found in the
+# LICENSE file in the root directory of this source tree.
 # 檢查 better-sqlite3 原生模組是否需要對目前 Electron 版本重新編譯。
 #   無參數      : 檢查模式。exit 1 = 需要 rebuild；exit 0 = 不需要 (或無此選用模組)。
 #   -Mark       : 標記模式。將目前 Electron 版本寫入標記檔 (rebuild 成功後呼叫)。
