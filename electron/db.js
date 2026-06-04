@@ -32,6 +32,10 @@ function init(userDataDir) {
         payload TEXT NOT NULL,
         updated_at INTEGER NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
     `);
     usingSqlite = true;
   } catch (err) {
@@ -74,4 +78,28 @@ function set(key, head, payload) {
   memCache.set(key, { head, payload });
 }
 
-module.exports = { init, get, set, cacheKey, isSqlite: () => usingSqlite };
+// ---- Generic key/value settings (e.g. last-opened folder) ----
+
+const memSettings = new Map();
+
+function getSetting(key, fallback = null) {
+  if (usingSqlite && db) {
+    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
+    return row ? row.value : fallback;
+  }
+  return memSettings.has(key) ? memSettings.get(key) : fallback;
+}
+
+function setSetting(key, value) {
+  if (value == null) return;
+  if (usingSqlite && db) {
+    db.prepare(
+      `INSERT INTO settings (key, value) VALUES (?, ?)
+       ON CONFLICT(key) DO UPDATE SET value=excluded.value`
+    ).run(key, String(value));
+    return;
+  }
+  memSettings.set(key, String(value));
+}
+
+module.exports = { init, get, set, cacheKey, getSetting, setSetting, isSqlite: () => usingSqlite };

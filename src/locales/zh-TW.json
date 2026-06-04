@@ -222,5 +222,17 @@
     "legendFuzzy": "■ Fuzzy match (similar content)",
     "hintLinking": "Pick a node on the other side to link · Esc to cancel",
     "hintDefault": "Click a row node ◗ to link two commits · Del removes a selected manual link"
+  },
+  "picker": {
+    "title": "開啟儲存庫",
+    "thisPc": "本機",
+    "upTitle": "上一層（← / Backspace）",
+    "reposOnly": "只顯示儲存庫",
+    "reposOnlyTitle": "隱藏非 git 儲存庫的目錄（Ctrl+G）",
+    "filterHint": "輸入文字以篩選…",
+    "loading": "載入中…",
+    "noFolders": "此處沒有目錄",
+    "open": "開啟",
+    "hint": "↑↓ 移動 · Enter 開啟儲存庫 · → 進入目錄 · ←/Backspace 上一層 · 輸入文字篩選"
   }
 }

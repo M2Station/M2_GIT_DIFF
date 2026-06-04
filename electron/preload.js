@@ -12,6 +12,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
   pickFolder: () => ipcRenderer.invoke('dialog:pickFolder'),
+  listDir: (path) => ipcRenderer.invoke('dialog:listDir', { path }),
+  rememberDir: (path) => ipcRenderer.invoke('dialog:rememberDir', { path }),
   loadRepo: (opts) => ipcRenderer.invoke('repo:load', opts),
   getPatchIds: (opts) => ipcRenderer.invoke('repo:patchIds', opts),
   getDiffTexts: (opts) => ipcRenderer.invoke('repo:diffTexts', opts),
