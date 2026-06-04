@@ -37,6 +37,19 @@ function run(args, cwd) {
   });
 }
 
+// Upper bound on how many commit shas are fed to a single `git show`. Large
+// repos can have thousands of unique commits; piping them all through one
+// invocation risks brushing against the maxBuffer ceiling and spikes memory.
+// Chunking keeps each invocation's output bounded and lets partial results
+// survive even if one batch fails.
+const SHOW_BATCH = 200;
+
+function chunk(arr, size) {
+  const out = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
 function isGitRepo(dir) {
   try {
     return fs.existsSync(path.join(dir, '.git'));
@@ -129,27 +142,29 @@ async function getCommits(cwd, opts = {}) {
 async function getPatchIds(cwd, shas) {
   const map = new Map();
   if (!shas || shas.length === 0) return map;
-  try {
-    // Pipe the diffs of every requested commit through a single
-    // `git patch-id --stable`. Each output line is "<patchId> <commitSha>",
-    // so the mapping stays correct regardless of order. This keeps the whole
-    // request to two git invocations instead of two per commit.
-    const patch = await run(['show', '--no-color', ...shas], cwd);
-    const idOut = await new Promise((resolve) => {
-      const cp = execFile(
-        'git',
-        ['patch-id', '--stable'],
-        { cwd, maxBuffer: 1024 * 1024 * 256, windowsHide: true },
-        (e, stdout) => resolve(e ? '' : stdout.toString())
-      );
-      cp.stdin.end(patch);
-    });
-    for (const line of idOut.split('\n')) {
-      const [patchId, sha] = line.trim().split(/\s+/);
-      if (patchId && sha) map.set(sha, patchId);
+  // Process the shas in bounded batches. Each batch pipes its diffs through a
+  // single `git patch-id --stable`; output lines are "<patchId> <commitSha>",
+  // so the mapping stays correct regardless of order. Batching caps the buffer
+  // a single `git show` must hold and keeps partial results when a batch fails.
+  for (const batch of chunk(shas, SHOW_BATCH)) {
+    try {
+      const patch = await run(['show', '--no-color', ...batch], cwd);
+      const idOut = await new Promise((resolve) => {
+        const cp = execFile(
+          'git',
+          ['patch-id', '--stable'],
+          { cwd, maxBuffer: 1024 * 1024 * 256, windowsHide: true },
+          (e, stdout) => resolve(e ? '' : stdout.toString())
+        );
+        cp.stdin.end(patch);
+      });
+      for (const line of idOut.split('\n')) {
+        const [patchId, sha] = line.trim().split(/\s+/);
+        if (patchId && sha) map.set(sha, patchId);
+      }
+    } catch {
+      // Skip this batch but keep results gathered from other batches.
     }
-  } catch {
-    return new Map();
   }
   return map;
 }
@@ -160,45 +175,48 @@ async function getPatchIds(cwd, shas) {
  * array holds the deduped, normalized added/removed lines (the actual edits,
  * not diff metadata). Best-effort: returns an empty map on failure.
  *
- * Implementation: a single `git show` over all requested shas, using a NUL
- * separator format so each commit's diff block is delimited unambiguously,
- * keeping the whole request to one git invocation.
+ * Implementation: batched `git show` invocations over the requested shas,
+ * using a NUL separator format so each commit's diff block is delimited
+ * unambiguously. Batching bounds each invocation's output (memory) and lets
+ * results from successful batches survive even if one batch fails.
  */
 async function getDiffTexts(cwd, shas) {
   const map = new Map();
   if (!shas || shas.length === 0) return map;
-  try {
-    // tformat:%x00%H%x00 prints  NUL <sha> NUL  before each commit's diff.
-    const out = await run(
-      ['show', '--no-color', '--format=tformat:%x00%H%x00', ...shas],
-      cwd
-    );
-    // Split on NUL -> ['', sha1, diff1, sha2, diff2, ...].
-    const parts = out.split('\0');
-    for (let i = 1; i + 1 < parts.length; i += 2) {
-      const sha = parts[i].trim();
-      const body = parts[i + 1] || '';
-      if (!sha) continue;
-      const seen = new Set();
-      const lines = [];
-      for (const raw of body.split('\n')) {
-        // Keep only added/removed content lines; skip the +++/--- file headers.
-        if (raw.length < 2) continue;
-        const c = raw[0];
-        if (c !== '+' && c !== '-') continue;
-        if (raw.startsWith('+++') || raw.startsWith('---')) continue;
-        const text = raw.slice(1).trim();
-        if (text.length < 2) continue; // ignore lone braces / trivial lines
-        const key = c + text; // keep +/- sign so an add vs delete differ
-        if (seen.has(key)) continue;
-        seen.add(key);
-        lines.push(key);
-        if (lines.length >= 4000) break; // cap payload for huge commits
+  for (const batch of chunk(shas, SHOW_BATCH)) {
+    try {
+      // tformat:%x00%H%x00 prints  NUL <sha> NUL  before each commit's diff.
+      const out = await run(
+        ['show', '--no-color', '--format=tformat:%x00%H%x00', ...batch],
+        cwd
+      );
+      // Split on NUL -> ['', sha1, diff1, sha2, diff2, ...].
+      const parts = out.split('\0');
+      for (let i = 1; i + 1 < parts.length; i += 2) {
+        const sha = parts[i].trim();
+        const body = parts[i + 1] || '';
+        if (!sha) continue;
+        const seen = new Set();
+        const lines = [];
+        for (const raw of body.split('\n')) {
+          // Keep only added/removed content lines; skip the +++/--- file headers.
+          if (raw.length < 2) continue;
+          const c = raw[0];
+          if (c !== '+' && c !== '-') continue;
+          if (raw.startsWith('+++') || raw.startsWith('---')) continue;
+          const text = raw.slice(1).trim();
+          if (text.length < 2) continue; // ignore lone braces / trivial lines
+          const key = c + text; // keep +/- sign so an add vs delete differ
+          if (seen.has(key)) continue;
+          seen.add(key);
+          lines.push(key);
+          if (lines.length >= 4000) break; // cap payload for huge commits
+        }
+        if (lines.length) map.set(sha, lines);
       }
-      if (lines.length) map.set(sha, lines);
+    } catch {
+      // Skip this batch but keep results gathered from other batches.
     }
-  } catch {
-    return new Map();
   }
   return map;
 }
