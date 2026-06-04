@@ -43,6 +43,7 @@
 | 虛擬化 | 只渲染視窗內的列，支援大型倉庫（數千 commit）順暢捲動 | — |
 | **快捷鍵說明（Help）** | 工具列右上 **❓ Help** 開啟置中彈窗，列出全部快捷鍵（鍵帽樣式）；底部含可點擊的 `Powered by OA Hsiao` 徽章連到作者 GitHub。背景點擊 / ✕ / `Esc` 皆可關閉 | — |
 | **多國語言（i18n）** | 工具列右上 **⚙ Settings** 開啟設定彈窗，可切換介面語言（目前內建 **English** 與 **中文（繁體）**）。語系字串放在 `src/locales/*.json`，程式以 Vite `import.meta.glob` **自動掃描該目錄**決定支援哪些語言——新增一個 `xx.json` 即自動出現在語言清單，無需改程式。選擇存於 `localStorage` 的 `appLang`，重開仍記住 | — |
+| **多主題配色（Theme）** | 同一個 **⚙ Settings** 彈窗可切換配色主題（內建 **Low Key**（預設深色）、**Daylight**（淺色）、**Solarized**、**Matrix**、**Army**（軍綠／沙漠棕／水泥灰））。主題定義放在 `src/themes/*.json`，每個檔以 `vars` 物件對應 CSS 自訂屬性（如 `--accent`、`--bg`）；程式以 Vite `import.meta.glob` **自動掃描該目錄**——丟一個 `xx.json` 進去即自動出現在主題清單，無需改程式。切換時把 `vars` 寫到 `<html>` 並設 `data-theme` 屬性。選擇存於 `localStorage` 的 `appTheme`，且在 React 渲染前即套用以避免閃爍（FOUC） | — |
 | 快取 | 解析結果以 HEAD SHA 為版本快取，重開同 repo 免重新解析 | — |
 | LOGO / 品牌 | 工具列左上角 LOGO ＋ `M2_GIT_DIFF` 名稱；視窗標題與 favicon 同步 | — |
 
@@ -100,9 +101,11 @@ Renderer (React + Vite)
    ├─ GitTerminalPopup.jsx Git 操作結果浮窗（可拖曳，顯示指令/輸出/exit code，成功綠框失敗紅框）
    ├─ ExportPrompt.jsx     匯出前的筆數確認對話框（預設 ALL，或前 N 筆）
    ├─ HelpPopup.jsx       快捷鍵說明彈窗（置中 Modal、鍵帽列表、OA Hsiao 徽章，`Esc`/背景關閉）
-   ├─ SettingsPopup.jsx   設定彈窗（語言選擇器；語系由 `src/locales` 自動掃描）
+   ├─ SettingsPopup.jsx   設定彈窗（語言選擇器 + 主題選擇器；語系由 `src/locales`、主題由 `src/themes` 自動掃描）
    └─ CommitDetail.jsx     Commit 詳情浮窗（Markdown 渲染、Related item、SHA 旁 🌐 Web 連結開遠端頁面、可移動縮放、可多開、💬 Chat 開 VS Code）
 ```
+
+**多主題配色（Theme）**：主題定義存於 `src/themes/*.json`（每個檔案一個主題，檔名去掉 `.json` 即主題 id，檔內 `_meta.name` 為顯示名稱，`vars` 為 CSS 自訂屬性對應表）。`src/lib/theme.js` 以 Vite `import.meta.glob('../themes/*.json', { eager: true })` 在建置時**自動掃描**該目錄，掃到幾個檔就提供幾種主題——新增 `xx.json` 即自動出現於設定清單，無需改程式。`ThemeProvider` 包住 `App`（`src/main.jsx`）；切換時 `applyTheme()` 把該主題的 `vars` 逐一寫到 `document.documentElement` 的 inline style 並設 `data-theme` 屬性，`src/styles.css` 內所有顏色皆以 `var(--…)` 引用，因此即時換膚。選擇存於 `localStorage` 的 `appTheme`（預設：已存值 → `low_key` → 掃描到的第一個），且模組載入時即先套用一次以避免畫面閃爍（FOUC）。內建 **Low Key**（原生深色）、**Daylight**（淺色）、**Solarized**、**Matrix**、**Army**（軍綠／沙漠棕／水泥灰）五種。
 
 **多國語言（i18n）**：語系字串存於 `src/locales/*.json`（每個檔案一個語言，檔名去掉 `.json` 即 locale 代碼，檔內 `_meta.name` 為顯示名稱）。`src/lib/i18n.js` 以 Vite `import.meta.glob('../locales/*.json', { eager: true })` 在建置時**自動掃描**該目錄，掃到幾個檔就提供幾種語言——新增 `ja.json` 日文即自動出現於設定清單，無需改程式。`I18nProvider` 包住 `App`（`src/main.jsx`），各元件以 `useT()` 取得翻譯函式 `t(key, vars)`（點路徑查表、找不到退回 `en` 再退回 key本身、以 `{var}` 內插）。選擇存於 `localStorage` 的 `appLang`（預設：已存值 → `zh-TW` → `en` → 掃描到的第一個）。
 

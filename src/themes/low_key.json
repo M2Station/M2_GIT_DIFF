@@ -1,0 +1,28 @@
+{
+  "_meta": {
+    "name": "Low Key"
+  },
+  "vars": {
+    "--bg": "#0a0e14",
+    "--bg-soft": "#0f1622",
+    "--panel": "#121a28",
+    "--line": "#1e2a3a",
+    "--text": "#cfe3f2",
+    "--muted": "#6b8199",
+    "--accent": "#36d6ff",
+    "--accent-dim": "#1c6e85",
+
+    "--common-bg": "rgba(120, 134, 150, 0.16)",
+    "--common-bd": "#5b6b7d",
+    "--cherry-bg": "rgba(240, 200, 60, 0.16)",
+    "--cherry-bd": "#f0c83c",
+    "--unique-bg": "rgba(235, 70, 80, 0.16)",
+    "--unique-bd": "#eb4650",
+
+    "--manual-bg": "rgba(163, 113, 255, 0.16)",
+    "--manual-bd": "#a371ff",
+
+    "--fuzzy-bg": "rgba(255, 93, 177, 0.16)",
+    "--fuzzy-bd": "#ff5db1"
+  }
+}
