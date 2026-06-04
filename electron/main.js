@@ -53,7 +53,7 @@ function createWindow() {
     minHeight: 600,
     backgroundColor: '#0a0e14',
     title: APP_NAME,
-    icon: path.join(__dirname, '..', 'public', 'icon.svg'),
+    icon: path.join(__dirname, '..', 'public', 'icon.ico'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

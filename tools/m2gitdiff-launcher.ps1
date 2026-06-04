@@ -19,7 +19,13 @@ param(
     [string]$Action,
 
     [Parameter(Mandatory = $true)]
-    [string]$Path
+    [string]$Path,
+
+    # Path to the installed M2_GIT_DIFF.exe. Supplied by the NSIS installer's
+    # registry entries so packaged installs launch the built app directly. When
+    # empty (dev/source mode) we fall back to start.cmd + `npm run dev`.
+    [Parameter(Mandatory = $false)]
+    [string]$Exe
 )
 
 $ErrorActionPreference = 'Stop'
@@ -38,12 +44,17 @@ function Show-Info($text, $title = 'M2 GIT DIFF') {
 }
 
 function Start-Compare($left, $right) {
+    # Installed mode: launch the packaged exe directly with -L/-R.
+    if ($Exe -and (Test-Path -LiteralPath $Exe)) {
+        Start-Process -FilePath $Exe -ArgumentList @('-L', $left, '-R', $right)
+        return
+    }
+    # Dev/source mode: start.cmd opens its own console and runs `npm run dev`.
     if (-not (Test-Path -LiteralPath $startCmd)) {
         Show-Info "找不到 start.cmd：`n$startCmd`n`n請確認 tools 資料夾仍在專案內。"
         exit 1
     }
-    # Launch the app in dev mode with both repos pre-loaded. start.cmd opens its
-    # own console window and runs `npm run dev`.
+    # Launch the app in dev mode with both repos pre-loaded.
     Start-Process -FilePath $startCmd -ArgumentList @('-L', $left, '-R', $right) -WorkingDirectory $repoRoot
 }
 
