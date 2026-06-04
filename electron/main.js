@@ -11,6 +11,7 @@
 const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('node:path');
 const os = require('node:os');
+const fs = require('node:fs');
 const git = require('./git');
 const db = require('./db');
 const fsdialog = require('./fsdialog');
@@ -116,22 +117,43 @@ ipcMain.handle('dialog:pickFolder', async () => {
 
 const LAST_DIR_KEY = 'lastPickerDir';
 
+// Pick a smart default start folder for the picker's first open: the folder
+// where the user opens repos most (and most recently), then one level up from
+// the last-used location, finally the home directory.
+function smartStartDir() {
+  const tops = db.getTopRepoParents(5);
+  const best = tops.find((t) => t.path && existsSafe(t.path));
+  if (best) return best.path;
+  const last = db.getSetting(LAST_DIR_KEY);
+  if (last && last !== fsdialog.DRIVES && existsSafe(last)) {
+    const up = path.dirname(last);
+    return up && up !== last ? up : last;
+  }
+  return os.homedir();
+}
+
+function existsSafe(p) {
+  try {
+    return !!p && fs.existsSync(p);
+  } catch {
+    return false;
+  }
+}
+
 // List the directories under `dirPath`, flagging git repos. When no path is
-// given (first open) it starts at the last-used location, falling back to the
-// user's home directory.
+// given (first open) it starts at the smartest learned location (see
+// smartStartDir), so the user lands ready to pick a repo.
 ipcMain.handle('dialog:listDir', async (_evt, payload) => {
   const requested = payload && payload.path;
   let target = requested;
-  if (!target) {
-    target = db.getSetting(LAST_DIR_KEY) || os.homedir();
-  }
+  if (!target) target = smartStartDir();
   try {
-    return { ok: true, ...fsdialog.listDir(target) };
+    return { ok: true, ...(await fsdialog.listDir(target)) };
   } catch (err) {
     // Fall back to home if the remembered/target path is gone or unreadable.
     if (!requested) {
       try {
-        return { ok: true, ...fsdialog.listDir(os.homedir()) };
+        return { ok: true, ...(await fsdialog.listDir(os.homedir())) };
       } catch {
         /* ignore — report the original error below */
       }
@@ -169,6 +191,42 @@ ipcMain.handle('repo:load', async (_evt, payload) => {
   const repo = await git.loadRepo(repoPath, { branch, limit: lim });
   db.set(key, repo.head, repo);
   return { ...repo, cached: false };
+});
+
+// Record an opened repo so the picker can learn frequent folders and recents.
+// Called explicitly by the renderer when the user picks a repo, so automatic
+// reloads/branch-switches don't inflate the counts.
+ipcMain.handle('picker:recordOpen', async (_evt, payload) => {
+  const repoPath = payload && payload.repoPath;
+  if (typeof repoPath === 'string' && repoPath) {
+    db.recordRepoOpen(repoPath, path.dirname(repoPath));
+  }
+  return { ok: true };
+});
+
+// Top "frequent folders" shortcuts: existing parent dirs ranked by learned use.
+ipcMain.handle('picker:topParents', async (_evt, payload) => {
+  const n = (payload && Number(payload.n)) || 5;
+  return db
+    .getTopRepoParents(n * 2)
+    .filter((t) => existsSafe(t.path))
+    .slice(0, n)
+    .map((t) => ({ path: t.path, name: path.basename(t.path) || t.path, count: t.count }));
+});
+
+// Recently opened repos that still exist on disk, newest first.
+ipcMain.handle('picker:recentRepos', async (_evt, payload) => {
+  const n = (payload && Number(payload.n)) || 5;
+  return db
+    .getRecentRepos(n * 2)
+    .filter((r) => r && existsSafe(r.path) && git.isGitRepo(r.path))
+    .slice(0, n)
+    .map((r) => ({
+      path: r.path,
+      name: path.basename(r.path) || r.path,
+      parent: path.dirname(r.path),
+      last: r.last
+    }));
 });
 
 ipcMain.handle('repo:patchIds', async (_evt, payload) => {

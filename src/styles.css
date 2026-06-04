@@ -2692,6 +2692,40 @@ mark {
   font-size: 11px;
 }
 .fp-filter-clear:hover { color: var(--accent); }
+.fp-shortcuts {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-soft);
+}
+.fp-shortcuts-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-right: 2px;
+}
+.fp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 200px;
+  background: var(--panel);
+  border: 1px solid var(--accent-dim);
+  border-radius: 12px;
+  padding: 2px 10px;
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fp-chip:hover { border-color: var(--accent); color: var(--accent); }
 .fp-list {
   flex: 1;
   overflow: auto;
@@ -2715,6 +2749,7 @@ mark {
 }
 .fp-row.repo .fp-name { color: var(--accent); font-weight: 600; }
 .fp-row.drive .fp-name { font-weight: 600; }
+.fp-row.recent .fp-name { color: var(--accent); font-weight: 600; }
 .fp-icon { flex: none; width: 18px; text-align: center; }
 .fp-name {
   flex: 1;
@@ -2722,6 +2757,18 @@ mark {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.fp-sub {
+  flex: none;
+  max-width: 46%;
+  font-size: 11px;
+  color: var(--muted);
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  direction: rtl;
+  text-align: left;
 }
 .fp-tag {
   flex: none;
@@ -2734,6 +2781,7 @@ mark {
   border-radius: 4px;
   padding: 0 5px;
 }
+.fp-tag.recent { color: var(--muted); border-color: var(--line); }
 .fp-empty {
   padding: 24px 12px;
   text-align: center;

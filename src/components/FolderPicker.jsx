@@ -26,6 +26,13 @@ import { useT } from '../lib/i18n.js';
 
 const DRIVES = ':drives:';
 
+// Derive a folder's display name from its full path (handles win32 + posix).
+function baseName(p) {
+  if (!p) return p;
+  const parts = String(p).split(/[\\/]/).filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : p;
+}
+
 export default function FolderPicker({ onPick, onClose }) {
   const t = useT();
   const [view, setView] = useState(null); // { path, parent, canGoUp, isRepo, isDriveList, entries }
@@ -34,12 +41,16 @@ export default function FolderPicker({ onPick, onClose }) {
   const [index, setIndex] = useState(0);
   const [filter, setFilter] = useState('');
   const [reposOnly, setReposOnly] = useState(false);
+  const [isInitial, setIsInitial] = useState(true);
+  const [topParents, setTopParents] = useState([]);
+  const [recents, setRecents] = useState([]);
   const listRef = useRef(null);
   const rowRefs = useRef([]);
 
   const load = useCallback(async (path) => {
     setLoading(true);
     setError('');
+    setIsInitial(path === undefined); // only the first (pathless) open is "home"
     try {
       const res = await window.api.listDir(path);
       if (!res || res.ok === false) {
@@ -59,21 +70,58 @@ export default function FolderPicker({ onPick, onClose }) {
     }
   }, []);
 
-  // Initial load: backend starts at the remembered location (or home).
+  // Initial load: backend starts at the smartest learned location (or home).
   useEffect(() => {
     load(undefined);
   }, [load]);
 
-  // Entries after applying the name filter and the repos-only toggle.
+  // Fetch the learned shortcuts (frequent folders + recent repos) once.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const [tops, recent] = await Promise.all([
+          window.api.pickerTopParents?.(5),
+          window.api.pickerRecentRepos?.(5)
+        ]);
+        if (!alive) return;
+        setTopParents(Array.isArray(tops) ? tops : []);
+        setRecents(Array.isArray(recent) ? recent : []);
+      } catch {
+        /* shortcuts are best-effort; ignore failures */
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // Recent-repo rows are pinned to the top of the list, but only on the very
+  // first view and while no filter is active (so browsing/searching is clean).
+  const showShortcuts = isInitial && !filter.trim();
+  const recentRows = useMemo(() => {
+    if (!showShortcuts) return [];
+    return recents.map((r) => ({
+      name: r.name || baseName(r.path),
+      path: r.path,
+      isRepo: true,
+      isRecent: true,
+      sub: r.parent
+    }));
+  }, [recents, showShortcuts]);
+
+  // Entries after applying the name filter and the repos-only toggle, with the
+  // recent repos pinned in front on the home view.
   const entries = useMemo(() => {
     const all = view?.entries || [];
     const q = filter.trim().toLowerCase();
-    return all.filter((e) => {
+    const folders = all.filter((e) => {
       if (reposOnly && !e.isRepo && !e.isDrive) return false;
       if (q && !e.name.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [view, filter, reposOnly]);
+    return [...recentRows, ...folders];
+  }, [view, filter, reposOnly, recentRows]);
 
   // Keep the highlight in range when the filtered list shrinks.
   useEffect(() => {
@@ -102,6 +150,7 @@ export default function FolderPicker({ onPick, onClose }) {
     (p) => {
       if (!p || p === DRIVES) return;
       window.api.rememberDir(p);
+      window.api.recordRepoOpen?.(p);
       onPick(p);
     },
     [onPick]
@@ -223,6 +272,23 @@ export default function FolderPicker({ onPick, onClose }) {
           )}
         </div>
 
+        {showShortcuts && topParents.length > 0 && (
+          <div className="fp-shortcuts" title={t('picker.frequentTitle')}>
+            <span className="fp-shortcuts-label">{t('picker.frequent')}</span>
+            {topParents.map((p) => (
+              <button
+                key={p.path}
+                className="fp-chip"
+                title={p.path}
+                onClick={() => load(p.path)}
+                tabIndex={-1}
+              >
+                📂 {p.name}
+              </button>
+            ))}
+          </div>
+        )}
+
         <div className="fp-list" ref={listRef}>
           {loading ? (
             <div className="fp-empty">{t('picker.loading')}</div>
@@ -233,20 +299,28 @@ export default function FolderPicker({ onPick, onClose }) {
           ) : (
             entries.map((entry, i) => (
               <div
-                key={entry.path}
+                key={(entry.isRecent ? 'recent:' : '') + entry.path}
                 ref={(el) => (rowRefs.current[i] = el)}
                 className={
                   'fp-row' +
                   (i === index ? ' active' : '') +
                   (entry.isRepo ? ' repo' : '') +
-                  (entry.isDrive ? ' drive' : '')
+                  (entry.isDrive ? ' drive' : '') +
+                  (entry.isRecent ? ' recent' : '')
                 }
                 onMouseDown={() => setIndex(i)}
                 onDoubleClick={() => activate(entry)}
               >
-                <span className="fp-icon">{entry.isDrive ? '💽' : entry.isRepo ? '⎇' : '📁'}</span>
+                <span className="fp-icon">
+                  {entry.isRecent ? '🕘' : entry.isDrive ? '💽' : entry.isRepo ? '⎇' : '📁'}
+                </span>
                 <span className="fp-name">{entry.name}</span>
-                {entry.isRepo && <span className="fp-tag">git</span>}
+                {entry.isRecent && entry.sub && <span className="fp-sub">{entry.sub}</span>}
+                {entry.isRecent ? (
+                  <span className="fp-tag recent">{t('picker.recent')}</span>
+                ) : (
+                  entry.isRepo && <span className="fp-tag">git</span>
+                )}
               </div>
             ))
           )}
