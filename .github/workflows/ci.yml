@@ -1,0 +1,58 @@
+name: CI
+
+# Verifies the same build steps that `npm run release` depends on
+# (install -> rebuild native modules -> electron-builder dist) succeed
+# in a clean environment. Does NOT tag or publish a release.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build installer (windows)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build renderer (vite)
+        run: npm run build
+
+      - name: Rebuild native modules (better-sqlite3)
+        run: npm run rebuild
+
+      - name: Build installer (electron-builder)
+        run: npm run dist
+        env:
+          # GitHub-hosted Windows runners have symlink privilege, so the
+          # winCodeSign darwin-symlink extraction issue handled in
+          # scripts/release.ps1 does not occur here. Skipping publish.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: M2_GIT_DIFF-installer
+          path: |
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+          if-no-files-found: error
+          retention-days: 14
