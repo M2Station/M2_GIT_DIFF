@@ -1,4 +1,10 @@
-﻿# repair-electron.ps1
+# M2_GIT_DIFF
+# Copyright (c) 2026 OA Hsiao
+# SPDX-License-Identifier: MIT
+#
+# This source code is licensed under the MIT License found in the
+# LICENSE file in the root directory of this source tree.
+# repair-electron.ps1
 # 修復 Electron 二進位檔在網路磁碟 (例如 Z:) 上 npm 解壓會掉檔的問題。
 # 作法：把 @electron/get 快取的 zip 先解壓到本機 TEMP，再用 robocopy 複製進 node_modules\electron\dist。
 $ErrorActionPreference = 'Stop'

@@ -1,4 +1,10 @@
-﻿# Removes the M2 GIT DIFF Explorer right-click menu installed by
+# M2_GIT_DIFF
+# Copyright (c) 2026 OA Hsiao
+# SPDX-License-Identifier: MIT
+#
+# This source code is licensed under the MIT License found in the
+# LICENSE file in the root directory of this source tree.
+# Removes the M2 GIT DIFF Explorer right-click menu installed by
 # install-context-menu.ps1. Per-user (HKCU), no admin needed.
 #
 # Run: powershell -NoProfile -ExecutionPolicy Bypass -File tools\uninstall-context-menu.ps1

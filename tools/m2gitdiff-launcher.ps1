@@ -1,4 +1,10 @@
-﻿# M2 GIT DIFF — Explorer context-menu launcher
+# M2_GIT_DIFF
+# Copyright (c) 2026 OA Hsiao
+# SPDX-License-Identifier: MIT
+#
+# This source code is licensed under the MIT License found in the
+# LICENSE file in the root directory of this source tree.
+# M2 GIT DIFF — Explorer context-menu launcher
 #
 # Implements the Beyond Compare style two-step folder compare:
 #   1) "Select Folder for M2 GIT DIFF"  -> remembers the folder (left side)

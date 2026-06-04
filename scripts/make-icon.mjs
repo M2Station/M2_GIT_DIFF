@@ -1,3 +1,11 @@
+/*
+ * M2_GIT_DIFF
+ * Copyright (c) 2026 OA Hsiao
+ * SPDX-License-Identifier: MIT
+ *
+ * This source code is licensed under the MIT License found in the
+ * LICENSE file in the root directory of this source tree.
+ */
 // Converts public/icon.svg into a multi-size public/icon.ico for the Windows
 // Explorer context-menu icon. Uses @napi-rs/canvas to rasterize the SVG and
 // packs PNG-compressed frames into the ICO container (supported on Windows 7+).
