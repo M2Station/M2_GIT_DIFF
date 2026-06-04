@@ -109,7 +109,11 @@ if ($Version -ne $currentVersion) {
     $raw = Get-Content $pkgPath -Raw
     $raw = $raw -replace '("version"\s*:\s*")[^"]+(")', "`${1}$Version`${2}"
     Set-Content -Path $pkgPath -Value $raw -NoNewline
-    git add package.json
+    # Sync package-lock.json to the new version so it doesn't show up as a
+    # stray change on the next install. --package-lock-only avoids touching
+    # node_modules.
+    npm install --package-lock-only --no-audit --no-fund | Out-Null
+    git add package.json package-lock.json
     git commit -m "chore(release): $tag"
 }
 
