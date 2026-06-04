@@ -16,6 +16,7 @@ import NotePopup from './components/NotePopup.jsx';
 import RowMenu from './components/RowMenu.jsx';
 import CommitDetail from './components/CommitDetail.jsx';
 import GitTerminalPopup from './components/GitTerminalPopup.jsx';
+import BranchSwitchPopup from './components/BranchSwitchPopup.jsx';
 import ExportPrompt from './components/ExportPrompt.jsx';
 import HelpPopup from './components/HelpPopup.jsx';
 import SettingsPopup from './components/SettingsPopup.jsx';
@@ -44,6 +45,11 @@ export default function App() {
   // Floating window showing the git terminal transcript after a Fetch/Pull.
   // { side, op, repoName, ok, command, output, exitCode } | null
   const [gitTerminal, setGitTerminal] = useState(null);
+
+  // Switch-branch modal: { side, repoName, data:{current,local,remote} } | null.
+  // `branchBusy` guards the popup while a checkout is in flight.
+  const [branchPopup, setBranchPopup] = useState(null);
+  const [branchBusy, setBranchBusy] = useState(false);
 
   // Content-based cherry-pick matching: sha -> git patch-id. Filled lazily for
   // commits that stay `unique` after SHA + title matching.
@@ -285,6 +291,65 @@ export default function App() {
       setLoading((s) => ({ ...s, [side]: false }));
     }
   }, [left, right, t]);
+
+  // Open the switch-branch modal for one side: load the branch list first so
+  // the popup renders the tree immediately.
+  const openSwitchBranch = useCallback(async (side) => {
+    const repo = side === 'L' ? left : right;
+    if (!repo.path) return;
+    setError('');
+    try {
+      const data = await window.api.listBranches({ repoPath: repo.path });
+      setBranchPopup({ side, repoName: repo.name || repo.path, data });
+    } catch (e) {
+      setError(t('app.branchListFail', { msg: String(e?.message || e) }));
+    }
+  }, [left, right, t]);
+
+  // Perform the checkout chosen in the modal, then surface the git transcript
+  // and reload that side's repo so the graph reflects the new branch.
+  const doSwitchBranch = useCallback(async (selected) => {
+    if (!branchPopup || !selected) return;
+    const { side, repoName } = branchPopup;
+    const repo = side === 'L' ? left : right;
+    if (!repo.path) return;
+    setBranchBusy(true);
+    try {
+      const res = await window.api.switchBranch({
+        repoPath: repo.path,
+        branch: selected.ref,
+        isRemote: !!selected.isRemote
+      });
+      setBranchPopup(null);
+      setGitTerminal({
+        side,
+        op: t('branchSwitch.opLabel'),
+        repoName,
+        ok: res?.ok !== false,
+        command: res?.command || `git switch ${selected.ref}`,
+        output: res?.output || '',
+        exitCode: typeof res?.exitCode === 'number' ? res.exitCode : res?.ok === false ? 1 : 0
+      });
+      if (res?.ok !== false) {
+        const fresh = await window.api.loadRepo({ repoPath: repo.path, limit: DEFAULT_LIMIT });
+        if (side === 'L') setLeft(fresh);
+        else setRight(fresh);
+      }
+    } catch (e) {
+      setBranchPopup(null);
+      setGitTerminal({
+        side,
+        op: t('branchSwitch.opLabel'),
+        repoName,
+        ok: false,
+        command: `git switch ${selected.ref}`,
+        output: String(e?.message || e),
+        exitCode: 1
+      });
+    } finally {
+      setBranchBusy(false);
+    }
+  }, [branchPopup, left, right, t]);
 
   // Exact-match pass (common / cherry / patch-id / manual). Memoized on its own
   // so it is NOT recomputed every time a single fuzzy diff-text arrives.
@@ -1454,6 +1519,17 @@ export default function App() {
         />
       )}
 
+      {branchPopup && (
+        <BranchSwitchPopup
+          side={branchPopup.side}
+          repoName={branchPopup.repoName}
+          data={branchPopup.data}
+          busy={branchBusy}
+          onSwitch={doSwitchBranch}
+          onClose={() => !branchBusy && setBranchPopup(null)}
+        />
+      )}
+
       {exportPrompt && (
         <ExportPrompt
           total={exportPrompt.total}
@@ -1468,11 +1544,11 @@ export default function App() {
 
       <div className="git-bars">
         {single !== 'R' && (
-          <RepoGitBar side="L" repo={left} loading={loading.L} onGitOp={runGitOp} onReload={reload} />
+          <RepoGitBar side="L" repo={left} loading={loading.L} onGitOp={runGitOp} onReload={reload} onSwitchBranch={openSwitchBranch} />
         )}
         {!single && <div className="git-bars-gutter" style={{ width: GUTTER_WIDTH }} />}
         {single !== 'L' && (
-          <RepoGitBar side="R" repo={right} loading={loading.R} onGitOp={runGitOp} onReload={reload} />
+          <RepoGitBar side="R" repo={right} loading={loading.R} onGitOp={runGitOp} onReload={reload} onSwitchBranch={openSwitchBranch} />
         )}
       </div>
 
@@ -1508,6 +1584,12 @@ export default function App() {
                 <div className="stage-empty-title">{t('app.noRepoTitle')}</div>
                 <div className="stage-empty-sub">
                   {t('app.noRepoSub')}
+                </div>
+                <div className="stage-empty-shortcut">
+                  <kbd>Alt</kbd>
+                  <span className="sek-plus">+</span>
+                  <kbd>F</kbd>
+                  <span className="sek-label">{t('app.openRepoHint')}</span>
                 </div>
                 <a
                   className="stage-empty-badge"

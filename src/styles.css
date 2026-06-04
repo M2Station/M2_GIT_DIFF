@@ -1189,6 +1189,38 @@ mark.cd-hl {
   color: var(--muted);
   max-width: 360px;
 }
+/* VS Code–style keyboard shortcut hint on the empty homepage. */
+.stage-empty-shortcut {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 16px;
+  font-size: 13px;
+  color: var(--muted);
+  animation: stage-badge-in 0.5s ease 0.15s both;
+}
+.stage-empty-shortcut kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  padding: 2px 7px;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text, #c9d4e0);
+  background: color-mix(in srgb, var(--text, #c9d4e0) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--text, #c9d4e0) 22%, transparent);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+}
+.stage-empty-shortcut .sek-plus {
+  opacity: 0.55;
+  font-size: 12px;
+}
+.stage-empty-shortcut .sek-label {
+  margin-left: 6px;
+}
 /* Homepage author credit — styled as a label / sticker pill. */
 .stage-empty-badge {
   position: absolute;
@@ -1864,6 +1896,256 @@ mark {
   padding: 8px 12px;
   border-top: 1px solid var(--line);
   background: var(--bg-soft);
+}
+
+/* ---------------- Switch-branch tree modal ---------------- */
+.bsp-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 125;
+  background: rgba(4, 8, 14, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.bsp {
+  position: fixed;
+  width: 480px;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100vh - 24px);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--accent);
+  border-radius: 10px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.bsp-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--bg-soft);
+  border-bottom: 1px solid var(--line);
+  user-select: none;
+  cursor: move;
+}
+.bsp-title {
+  font-weight: 600;
+  color: var(--text);
+}
+.bsp-meta {
+  color: var(--muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bsp-x {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.bsp-x:hover:not(:disabled) {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+}
+.bsp-x:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.bsp-subhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line);
+  font-size: 11px;
+  color: var(--muted);
+}
+.bsp-current {
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  color: var(--accent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bsp-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.bsp-search-icon {
+  font-size: 12px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.bsp-search-input {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 5px 9px;
+  outline: none;
+}
+.bsp-search-input:focus {
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--line));
+}
+.bsp-search-input::placeholder {
+  color: var(--muted);
+}
+.bsp-search-clear {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 3px 6px;
+  border-radius: 4px;
+}
+.bsp-search-clear:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+}
+.bsp-tree {
+  flex: 1;
+  min-height: 80px;
+  overflow: auto;
+  padding: 6px 4px;
+}
+.bsp-empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--muted);
+}
+.bsp-node {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
+}
+.bsp-node:hover {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.bsp-node.selected {
+  background: color-mix(in srgb, var(--accent) 26%, transparent);
+  outline: 1px solid color-mix(in srgb, var(--accent) 60%, transparent);
+}
+.bsp-node.active {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  outline: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  outline-offset: -1px;
+}
+.bsp-node.selected.active {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.bsp-node.group {
+  color: var(--muted);
+  font-weight: 600;
+}
+.bsp-node.root {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.bsp-caret {
+  width: 12px;
+  height: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.bsp-caret.closed::before,
+.bsp-caret.open::before {
+  content: '';
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 4px 0 4px 6px;
+  border-color: transparent transparent transparent var(--muted);
+  transition: transform 0.12s ease;
+}
+.bsp-caret.open::before {
+  transform: rotate(90deg);
+}
+.bsp-icon {
+  width: 16px;
+  display: inline-flex;
+  justify-content: center;
+  font-size: 12px;
+}
+.bsp-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bsp-current-badge {
+  margin-left: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 999px;
+  color: #3fcf63;
+  background: color-mix(in srgb, #2ea043 22%, transparent);
+}
+.bsp-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--line);
+  background: var(--bg-soft);
+}
+.bsp-selected {
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 11px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bsp-foot-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.bsp-resize {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+  border-radius: 0 0 8px 0;
+  background: linear-gradient(
+    135deg,
+    transparent 0 50%,
+    color-mix(in srgb, var(--accent) 55%, transparent) 50% 60%,
+    transparent 60% 72%,
+    color-mix(in srgb, var(--accent) 55%, transparent) 72% 82%,
+    transparent 82%
+  );
 }
 
 /* ---------------- Export-to-Excel row-count prompt ---------------- */

@@ -11,7 +11,7 @@ import { useT } from '../lib/i18n.js';
 
 // Per-repo Git toolbar shown above each commit column. Exposes the common
 // remote operations (Fetch / Pull / Push) plus a reload, scoped to one side.
-export default function RepoGitBar({ side, repo, loading, onGitOp, onReload }) {
+export default function RepoGitBar({ side, repo, loading, onGitOp, onReload, onSwitchBranch }) {
   const t = useT();
   const disabled = !repo.path || loading;
   return (
@@ -29,6 +29,9 @@ export default function RepoGitBar({ side, repo, loading, onGitOp, onReload }) {
       </span>
 
       <span className="git-bar-actions">
+        <button className="btn git-op" onClick={() => onSwitchBranch(side)} disabled={disabled} title={t('gitBar.switchBranchTitle')}>
+          {t('gitBar.switchBranch')}
+        </button>
         <button className="btn git-op" onClick={() => onGitOp(side, 'fetch')} disabled={disabled} title={t('gitBar.fetchTitle')}>
           {t('gitBar.fetch')}
         </button>

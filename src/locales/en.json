@@ -104,6 +104,8 @@
   },
   "gitBar": {
     "noRepository": "No repository",
+    "switchBranch": "⎇ Switch",
+    "switchBranchTitle": "Switch branch\nLists every branch as a tree; pick one to switch.",
     "fetch": "⭳ Fetch",
     "fetchTitle": "git fetch --all --prune\nUpdates only the remote-tracking refs (origin/*); it does not change your local commits.\nThe view usually stays the same — use Pull to apply updates.",
     "pull": "⬇ Pull",
@@ -114,6 +116,22 @@
     "success": "succeeded",
     "fail": "failed",
     "exit": "(exit {code})"
+  },
+  "branchSwitch": {
+    "title": "Switch branch",
+    "opLabel": "switch",
+    "current": "Current branch: {branch}",
+    "count": "{count} branches",
+    "countFiltered": "{shown} / {count} branches match",
+    "searchPlaceholder": "Search / filter branches…",
+    "clearFilter": "Clear filter",
+    "noMatch": "No branches match",
+    "localGroup": "Local branches",
+    "switchTo": "Switch to branch",
+    "switching": "Switching…",
+    "noSelection": "No branch selected",
+    "empty": "No branches to show",
+    "resize": "Drag to resize"
   },
   "export": {
     "head": "⬇ Export Excel",
@@ -182,6 +200,7 @@
   },
   "app": {
     "gitOpFail": "git {op} failed: {msg}",
+    "branchListFail": "Failed to list branches: {msg}",
     "fuzzyPending": "Fuzzy matching…",
     "loadingTitle": "Reading commits…",
     "loadingSubBoth": "both",
@@ -190,6 +209,7 @@
     "loadingSub": "Loading {sides} repository history (up to {limit} commits)",
     "noRepoTitle": "No repository selected",
     "noRepoSub": "Pick the left and right Git folders from the toolbar above to start comparing commit history",
+    "openRepoHint": "Open Repo",
     "noMatchTitle": "No commit matches the search",
     "noCommitTitle": "No commits to display",
     "noMatchSub": "Adjust your keywords, or turn off \"matches only\" to show everything",

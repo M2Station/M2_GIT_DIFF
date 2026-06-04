@@ -104,6 +104,8 @@
   },
   "gitBar": {
     "noRepository": "No repository",
+    "switchBranch": "⎇ Switch",
+    "switchBranchTitle": "切換分支\n以樹狀圖列出全部分支，選擇後切換。",
     "fetch": "⭳ Fetch",
     "fetchTitle": "git fetch --all --prune\n只更新遠端追蹤 (origin/*)，不會改變本地 commit。\n畫面通常不會變動；要套用更新請用 Pull。",
     "pull": "⬇ Pull",
@@ -114,6 +116,22 @@
     "success": "成功",
     "fail": "失敗",
     "exit": "(exit {code})"
+  },
+  "branchSwitch": {
+    "title": "切換分支",
+    "opLabel": "switch",
+    "current": "目前分支：{branch}",
+    "count": "共 {count} 個分支",
+    "countFiltered": "符合 {shown} / {count} 個分支",
+    "searchPlaceholder": "搜尋 / 過濾分支…",
+    "clearFilter": "清除過濾",
+    "noMatch": "沒有符合的分支",
+    "localGroup": "本地分支",
+    "switchTo": "切換至此分支",
+    "switching": "切換中…",
+    "noSelection": "尚未選擇分支",
+    "empty": "沒有可顯示的分支",
+    "resize": "拖曳以調整大小"
   },
   "export": {
     "head": "⬇ 匯出 Excel",
@@ -182,6 +200,7 @@
   },
   "app": {
     "gitOpFail": "git {op} 失敗：{msg}",
+    "branchListFail": "讀取分支清單失敗：{msg}",
     "fuzzyPending": "模糊比對中…",
     "loadingTitle": "讀取 commit 中…",
     "loadingSubBoth": "左右兩個",
@@ -190,6 +209,7 @@
     "loadingSub": "正在載入 {sides} repository 歷史（最多 {limit} 筆）",
     "noRepoTitle": "尚未選擇 repository",
     "noRepoSub": "從上方工具列選擇左右兩個 Git 資料夾，開始比對 commit 歷史",
+    "openRepoHint": "Open Repo",
     "noMatchTitle": "沒有符合搜尋的 commit",
     "noCommitTitle": "沒有 commit 可顯示",
     "noMatchSub": "調整關鍵字，或關閉「只看符合」改顯示全部",
