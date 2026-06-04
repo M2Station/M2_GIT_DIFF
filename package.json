@@ -40,14 +40,28 @@
     "files": [
       "electron/**",
       "dist/**",
+      "public/icon.ico",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "tools/m2gitdiff-launcher.ps1",
+        "to": "tools/m2gitdiff-launcher.ps1"
+      }
     ],
     "directories": {
       "output": "release"
     },
     "win": {
       "target": "nsis",
+      "icon": "public/icon.ico",
       "signAndEditExecutable": false
+    },
+    "nsis": {
+      "include": "installer/installer.nsh",
+      "installerIcon": "public/icon.ico",
+      "uninstallerIcon": "public/icon.ico",
+      "installerHeaderIcon": "public/icon.ico"
     }
   },
   "dependencies": {
