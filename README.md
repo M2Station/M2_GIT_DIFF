@@ -249,9 +249,36 @@ npm run build        # build the renderer into dist/
 npm run dist         # electron-builder packaging (Windows NSIS)
 npm run rebuild      # rebuild better-sqlite3 for the current Electron ABI
 npm run demo:gif     # regenerate the preview animation public/demo.gif
+npm run release      # automated release: bump + build installer + tag + GitHub Release (see below)
 ```
 
 > Generate the app icon: `node scripts/make-icon.mjs` converts `public/icon.svg` into a multi-size (16–256px, transparent) `public/icon.ico` for the context menu and packaged icon; rerun after editing `icon.svg`.
+
+### Cutting a release (`npm run release` / Release Manager agent)
+
+Releases are fully automated by `scripts/release.ps1` (exposed as `npm run release`). One command bumps the version, builds the Windows NSIS installer (handling the winCodeSign symlink workaround and the `better-sqlite3` ABI rebuild), creates the `vX.Y.Z` git tag, and publishes a GitHub Release with the installer attached.
+
+```powershell
+npm run release                              # re-publish the current version in package.json
+npm run release -- -Bump patch               # 0.1.0 → 0.1.1
+npm run release -- -Bump minor               # 0.1.0 → 0.2.0
+npm run release -- -Bump major               # 0.1.0 → 1.0.0
+npm run release -- -Version 1.0.0 -Notes "First stable release."
+npm run release -- -SkipPush -Bump patch     # dry run: build + tag locally only, do NOT publish
+npm run release -- -Bump minor -Branch main  # release from a specific branch (default: main)
+```
+
+| Parameter | Meaning |
+| --- | --- |
+| `-Version X.Y.Z` | Set an explicit version (must be valid semver). |
+| `-Bump patch\|minor\|major` | Auto-increment from the current `package.json` version. |
+| `-Notes "..."` | Markdown release notes (default: an auto-generated note). |
+| `-Branch <name>` | Branch to release from (default `main`). |
+| `-SkipPush` | Build and tag locally but do **not** push the tag or create the GitHub Release — use this to verify a build first. |
+
+Prerequisites: `git` and the GitHub CLI (`gh`) on `PATH`, `gh auth login` already done, a clean working tree on the target branch. The script aborts if the tag already exists or the build fails (publishing is irreversible).
+
+**Release Manager agent** — instead of running the script manually, open the **Release Manager** custom agent in VS Code (Copilot Chat agent picker) and say e.g. *"ship a 0.2.0 release"*. It confirms the version, runs the pre-flight git checks, suggests a dry build (`-SkipPush`) first, asks for confirmation before publishing, then reports the release URL. It draws release notes from `git log <prevTag>..HEAD --oneline` and never force-pushes or bypasses a failed build. The agent definition lives in `.github/agents/release-manager.agent.md`.
 
 ### Launch and auto-open repros (-L / -R)
 
