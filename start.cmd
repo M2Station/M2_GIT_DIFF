@@ -1,8 +1,7 @@
 @echo off
 setlocal enabledelayedexpansion
 chcp 65001 >nul
-set "SCRIPT_DIR=%~dp0"
-cd /d "%SCRIPT_DIR%"
+cd /d "%~dp0"
 
 echo ========================================
 echo   M2_GIT_DIFF - Launcher (NORMAL MODE)
@@ -75,7 +74,7 @@ if not exist "node_modules" (
 REM --- 檢查 / 修復 Electron 二進位檔 (網路磁碟常會掉檔) ---
 if not exist "node_modules\electron\dist\electron.exe" (
     echo [修復] Electron 二進位檔遺失，執行修復程序...
-    powershell -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%repair-electron.ps1"
+    powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0repair-electron.ps1"
     if errorlevel 1 (
         echo.
         echo [錯誤] Electron 修復失敗。
@@ -86,7 +85,7 @@ if not exist "node_modules\electron\dist\electron.exe" (
 )
 
 REM --- 檢查 / 修復 better-sqlite3 原生模組 (Electron 版本變動會導致 ABI 不符) ---
-powershell -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%check-sqlite.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0check-sqlite.ps1"
 if errorlevel 1 (
     echo [修復] better-sqlite3 與目前 Electron 版本不符，執行重新編譯 ^(npm run rebuild^)...
     call npm run rebuild
@@ -94,7 +93,7 @@ if errorlevel 1 (
         echo.
         echo [警告] better-sqlite3 重新編譯失敗，將退回記憶體快取 ^(功能正常，僅快取不持久^)。
     ) else (
-        powershell -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%check-sqlite.ps1" -Mark
+        powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0check-sqlite.ps1" -Mark
         echo [完成] better-sqlite3 重新編譯完成。
     )
     echo.
@@ -104,7 +103,7 @@ REM --- 建置前端 (production，僅在原始碼有變更時才重建 dist/) -
 REM 比較 dist\index.html 與所有來源檔的最後修改時間；來源較新或 dist 不存在才重建。
 set "NEED_BUILD=1"
 if not exist "dist\index.html" goto do_build
-powershell -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%check-build.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0check-build.ps1"
 if not errorlevel 1 set "NEED_BUILD=0"
 
 if "%NEED_BUILD%"=="0" goto skip_build
