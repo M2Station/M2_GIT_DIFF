@@ -107,7 +107,7 @@ function applyHyperlink(cell, url) {
  * @param {object} data
  *   data.leftName / data.rightName  - column headers
  *   data.rows[]  - { left, right, link }
- *       left/right = { short, sha, subject, author, date, color, note } | null
+ *       left/right = { short, sha, subject, author, date, color, note, vtag, tags } | null
  *       link = 'common' | 'cherry' | 'patch' | 'manual' | null
  *   data.manualLinks[] - { leftShort, leftSubject, rightShort, rightSubject }
  * @returns {Promise<Buffer>}
@@ -127,11 +127,13 @@ async function buildWorkbook(data) {
 
   ws.columns = [
     { header: `${leftName} · SHA`, key: 'lsha', width: 12 },
+    { header: `${leftName} · Tag`, key: 'ltag', width: 16 },
     { header: `${leftName} · Subject`, key: 'lsub', width: 52 },
     { header: 'Author', key: 'lauth', width: 18 },
     { header: 'Date', key: 'ldate', width: 12 },
     { header: '↔', key: 'link', width: 6 },
     { header: `${rightName} · SHA`, key: 'rsha', width: 12 },
+    { header: `${rightName} · Tag`, key: 'rtag', width: 16 },
     { header: `${rightName} · Subject`, key: 'rsub', width: 52 },
     { header: 'Author', key: 'rauth', width: 18 },
     { header: 'Date', key: 'rdate', width: 12 }
@@ -141,7 +143,7 @@ async function buildWorkbook(data) {
   const head = ws.getRow(1);
   head.font = { bold: true, color: { argb: 'FFFFFFFF' } };
   head.alignment = { vertical: 'middle' };
-  for (let c = 1; c <= 9; c++) {
+  for (let c = 1; c <= 11; c++) {
     head.getCell(c).fill = {
       type: 'pattern',
       pattern: 'solid',
@@ -152,16 +154,24 @@ async function buildWorkbook(data) {
 
   const shortDate = (iso) => (iso ? String(iso).slice(0, 10) : '');
 
+  // Combine a commit's virtual tag (first) and git tags into one display string.
+  const tagText = (cell) => {
+    const git = Array.isArray(cell.tags) ? cell.tags : [];
+    return [cell.vtag, ...git].filter(Boolean).join(', ');
+  };
+
   rows.forEach((r) => {
     const L = r.left;
     const R = r.right;
     const row = ws.addRow({
       lsha: L ? L.short : '',
+      ltag: L ? tagText(L) : '',
       lsub: L ? L.subject : '',
       lauth: L ? L.author : '',
       ldate: L ? shortDate(L.date) : '',
       link: r.link ? LINK_SYMBOL[r.link] || '↔' : '',
       rsha: R ? R.short : '',
+      rtag: R ? tagText(R) : '',
       rsub: R ? R.subject : '',
       rauth: R ? R.author : '',
       rdate: R ? shortDate(R.date) : ''
@@ -174,6 +184,8 @@ async function buildWorkbook(data) {
       applyFill(row.getCell('lsub'), hex);
       applyNote(row.getCell('lsub'), L.note);
       applyHyperlink(row.getCell('lsha'), commitWebUrl(leftRemoteUrl, L.sha));
+      // A virtual tag follows the manual-link color, matching the UI badge.
+      if (L.vtag) applyFill(row.getCell('ltag'), MANUAL_HEX);
     }
     if (R) {
       const hex = toHex6(R.color);
@@ -181,6 +193,7 @@ async function buildWorkbook(data) {
       applyFill(row.getCell('rsub'), hex);
       applyNote(row.getCell('rsub'), R.note);
       applyHyperlink(row.getCell('rsha'), commitWebUrl(rightRemoteUrl, R.sha));
+      if (R.vtag) applyFill(row.getCell('rtag'), MANUAL_HEX);
     }
 
     // Manual links get a distinct purple connector so they stand out.
