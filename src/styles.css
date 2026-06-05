@@ -633,6 +633,22 @@ body {
   outline: none;
   border-color: var(--accent);
 }
+.vtag-input {
+  width: 100%;
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 8px;
+  box-sizing: border-box;
+  font-family: inherit;
+}
+.vtag-input:focus {
+  outline: none;
+  border-color: var(--manual-bd);
+}
 .np-footer {
   display: flex;
   align-items: center;
@@ -1644,6 +1660,12 @@ mark.cd-hl {
   background: var(--accent, #e0a44a);
   border: 1px solid rgba(0, 0, 0, 0.25);
   white-space: nowrap;
+}
+
+/* virtual tag — a user-defined version label; follows the manual-link color */
+.commit-tag.vtag {
+  background: var(--manual-bd, #a371ff);
+  color: #fff;
 }
 
 .commit-row.common {

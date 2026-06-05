@@ -152,9 +152,16 @@
     "deleteTitle": "刪除此註記",
     "delete": "🗑 Delete"
   },
+  "vtag": {
+    "title": "🏷️ 虛擬 TAG",
+    "placeholder": "輸入版號數值…  (Enter 儲存)",
+    "deleteTitle": "刪除此虛擬 TAG"
+  },
   "rowMenu": {
     "editNote": "編輯註記",
     "addNote": "新增註記",
+    "addVtag": "新增虛擬 TAG",
+    "editVtag": "編輯虛擬 TAG",
     "forceColor": "強制背景顏色",
     "customColor": "自訂顏色 {color}",
     "customColorPick": "自訂顏色…",

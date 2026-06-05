@@ -13,6 +13,7 @@ import RepoGitBar from './components/RepoGitBar.jsx';
 import ConnectionLines from './components/ConnectionLines.jsx';
 import SearchPanel from './components/SearchPanel.jsx';
 import NotePopup from './components/NotePopup.jsx';
+import VtagPopup from './components/VtagPopup.jsx';
 import RowMenu from './components/RowMenu.jsx';
 import CommitDetail from './components/CommitDetail.jsx';
 import GitTerminalPopup from './components/GitTerminalPopup.jsx';
@@ -94,6 +95,15 @@ export default function App() {
   const [rowMenu, setRowMenu] = useState(null);
   const colorsHydratedRef = useRef(null);
   const colorsSkipSaveRef = useRef(false);
+
+  // Per-commit virtual tag: { [`${side}:${sha}`]: text }. A user-defined version
+  // label shown inline like a git tag but painted in the manual-link color.
+  // Persisted alongside notes/colors (same repo-pair key). `vtagPopup` drives
+  // the floating single-line editor: { side, sha, x, y } | null.
+  const [vtags, setVtags] = useState({});
+  const [vtagPopup, setVtagPopup] = useState(null);
+  const vtagsHydratedRef = useRef(null);
+  const vtagsSkipSaveRef = useRef(false);
 
   // User-defined custom swatch (a `#rrggbb` hex), shown as the 5th quick color
   // in the right-click menu. Persisted globally (not per repo-pair).
@@ -447,6 +457,7 @@ export default function App() {
         localStorage.setItem('mlink:' + newKey, JSON.stringify(swappedLinks));
         localStorage.setItem('note:' + newKey, JSON.stringify(swapPrefix(notes)));
         localStorage.setItem('color:' + newKey, JSON.stringify(swapPrefix(colors)));
+        localStorage.setItem('vtag:' + newKey, JSON.stringify(swapPrefix(vtags)));
       } catch {
         /* storage unavailable -> swap lives for this session only */
       }
@@ -460,6 +471,7 @@ export default function App() {
     setPendingNode((p) => (p ? { ...p, side: p.side === 'L' ? 'R' : 'L' } : null));
     setNotePopup(null);
     setRowMenu(null);
+    setVtagPopup(null);
 
     // Mirror in-memory annotations too. When a persistence key exists the
     // hydration effect re-reads the (pre-swapped) storage to the same result;
@@ -475,7 +487,8 @@ export default function App() {
     setManualLinks((ls) => ls.map((l) => ({ leftSha: l.rightSha, rightSha: l.leftSha })));
     setNotes((n) => flipPrefix(n));
     setColors((c) => flipPrefix(c));
-  }, [left, right, manualLinks, notes, colors]);
+    setVtags((v) => flipPrefix(v));
+  }, [left, right, manualLinks, notes, colors, vtags]);
 
   // ---- Manual links: persistence (resume the same repro pair) ----
   const linkKey = left.path && right.path ? `${left.path}|${right.path}` : null;
@@ -748,6 +761,79 @@ export default function App() {
     });
     return { L, R };
   }, [colors]);
+
+  // ---- Per-commit virtual tags: persistence (same repo-pair key) ----
+  useEffect(() => {
+    if (!linkKey) return;
+    let parsed = {};
+    try {
+      const raw = localStorage.getItem('vtag:' + linkKey);
+      if (raw) parsed = JSON.parse(raw);
+    } catch {
+      parsed = {};
+    }
+    vtagsSkipSaveRef.current = true;
+    vtagsHydratedRef.current = linkKey;
+    setVtags(parsed && typeof parsed === 'object' ? parsed : {});
+    setVtagPopup(null);
+  }, [linkKey]);
+
+  useEffect(() => {
+    if (!linkKey || vtagsHydratedRef.current !== linkKey) return;
+    if (vtagsSkipSaveRef.current) {
+      vtagsSkipSaveRef.current = false;
+      return;
+    }
+    try {
+      localStorage.setItem('vtag:' + linkKey, JSON.stringify(vtags));
+    } catch {
+      /* storage unavailable -> virtual tags live for this session only */
+    }
+  }, [vtags, linkKey]);
+
+  const vtagIdOf = (side, sha) => `${side}:${sha}`;
+
+  // Open the floating single-line virtual-tag editor at the click position.
+  const openVtag = useCallback((side, sha, x, y) => {
+    setVtagPopup({ side, sha, x, y });
+  }, []);
+
+  // Save (or clear when empty) the virtual tag for one commit.
+  const saveVtag = useCallback((side, sha, text) => {
+    const id = `${side}:${sha}`;
+    setVtags((prev) => {
+      const next = { ...prev };
+      const trimmed = (text || '').trim();
+      if (trimmed) next[id] = trimmed;
+      else delete next[id];
+      return next;
+    });
+  }, []);
+
+  // Delete the virtual tag for one commit and close the popup.
+  const deleteVtag = useCallback((side, sha) => {
+    const id = `${side}:${sha}`;
+    setVtags((prev) => {
+      if (!(id in prev)) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    setVtagPopup(null);
+  }, []);
+
+  // Per-side maps of SHA -> virtual tag text (for the inline tag badge).
+  const vtagMap = useMemo(() => {
+    const L = {};
+    const R = {};
+    Object.keys(vtags).forEach((id) => {
+      const sep = id.indexOf(':');
+      const side = id.slice(0, sep);
+      const sha = id.slice(sep + 1);
+      (side === 'L' ? L : R)[sha] = vtags[id];
+    });
+    return { L, R };
+  }, [vtags]);
 
   // Open a commit detail popup (Ctrl+Click). Ignores commits already shown so
   // clicking an open one doesn't spawn a duplicate; cascades new windows a bit.
@@ -1498,13 +1584,35 @@ export default function App() {
             x={rowMenu.x}
             y={rowMenu.y}
             hasNote={!!notes[noteIdOf(rowMenu.side, rowMenu.sha)]}
+            hasVtag={!!vtags[vtagIdOf(rowMenu.side, rowMenu.sha)]}
             color={colors[noteIdOf(rowMenu.side, rowMenu.sha)] || null}
             customColor={customSwatch}
             onAddNote={openNote}
+            onAddVtag={openVtag}
             onSetColor={setColor}
             onPickCustom={pickCustomColor}
             onClearColor={clearColor}
             onClose={() => setRowMenu(null)}
+          />
+        );
+      })()}
+
+      {vtagPopup && (() => {
+        const arr = vtagPopup.side === 'L' ? left.commits : right.commits;
+        const c = arr.find((x) => x.sha === vtagPopup.sha);
+        return (
+          <VtagPopup
+            key={vtagPopup.side + ':' + vtagPopup.sha}
+            side={vtagPopup.side}
+            sha={vtagPopup.sha}
+            short={c?.short || vtagPopup.sha.slice(0, 7)}
+            subject={c?.subject || ''}
+            x={vtagPopup.x}
+            y={vtagPopup.y}
+            value={vtags[vtagIdOf(vtagPopup.side, vtagPopup.sha)] || ''}
+            onSave={saveVtag}
+            onDelete={deleteVtag}
+            onClose={() => setVtagPopup(null)}
           />
         );
       })()}
@@ -1659,6 +1767,7 @@ export default function App() {
             noteShas={noteShas.L}
             onNoteOpen={openNote}
             colorMap={colorMap.L}
+            vtagMap={vtagMap.L}
             onRowMenu={openRowMenu}
             plain={!!single}
             onDetail={openDetail}
@@ -1697,6 +1806,7 @@ export default function App() {
             noteShas={noteShas.R}
             onNoteOpen={openNote}
             colorMap={colorMap.R}
+            vtagMap={vtagMap.R}
             onRowMenu={openRowMenu}
             plain={!!single}
             onDetail={openDetail}

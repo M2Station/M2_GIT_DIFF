@@ -36,7 +36,7 @@ function hexToTint(hex, alpha) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-function CommitRow({ commit, side, query, dimmed, isHit, selected, height, top, onSelect, manualLinked, pending, onNode, activeHit, hasNote, onNoteOpen, color, onRowMenu, onDetail }) {
+function CommitRow({ commit, side, query, dimmed, isHit, selected, height, top, onSelect, manualLinked, pending, onNode, activeHit, hasNote, onNoteOpen, color, vtag, onRowMenu, onDetail }) {
   const t = useT();
   // A `#rrggbb` color is a user-defined custom swatch: paint it inline since it
   // has no `.force-*` CSS class. Named keys still use the class.
@@ -127,6 +127,11 @@ function CommitRow({ commit, side, query, dimmed, isHit, selected, height, top, 
       <span className="sha">{highlight(commit.short, query)}</span>
       <span className="date">{shortDate(commit.authorDate)}</span>
       <span className="subject">
+        {vtag && (
+          <span className="commit-tag vtag" title={`virtual tag: ${vtag}`}>
+            {vtag}
+          </span>
+        )}
         {Array.isArray(commit.tags) &&
           commit.tags.map((tag) => (
             <span key={tag} className="commit-tag" title={`tag: ${tag}`}>

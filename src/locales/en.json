@@ -152,9 +152,16 @@
     "deleteTitle": "Delete this note",
     "delete": "🗑 Delete"
   },
+  "vtag": {
+    "title": "🏷️ Virtual tag",
+    "placeholder": "Type a version label…  (Enter to save)",
+    "deleteTitle": "Delete this virtual tag"
+  },
   "rowMenu": {
     "editNote": "Edit note",
     "addNote": "Add note",
+    "addVtag": "Add virtual tag",
+    "editVtag": "Edit virtual tag",
     "forceColor": "Forced background color",
     "customColor": "Custom color {color}",
     "customColorPick": "Custom color…",

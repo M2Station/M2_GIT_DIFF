@@ -21,7 +21,7 @@ const COLORS = [
 
 // Right-click context menu for a commit row: add/edit a note or force-override
 // the row background color. Closes on outside click, Escape, or after a choice.
-export default function RowMenu({ side, sha, short, x, y, hasNote, color, customColor, onAddNote, onSetColor, onPickCustom, onClearColor, onClose }) {
+export default function RowMenu({ side, sha, short, x, y, hasNote, hasVtag, color, customColor, onAddNote, onAddVtag, onSetColor, onPickCustom, onClearColor, onClose }) {
   const t = useT();
   const ref = useRef(null);
   const [pos, setPos] = useState(() => ({
@@ -66,6 +66,17 @@ export default function RowMenu({ side, sha, short, x, y, hasNote, color, custom
         }}
       >
         📝 {hasNote ? t('rowMenu.editNote') : t('rowMenu.addNote')}
+      </button>
+
+      <button
+        type="button"
+        className="rm-item"
+        onClick={() => {
+          onAddVtag(side, sha, pos.x, pos.y);
+          onClose();
+        }}
+      >
+        🏷️ {hasVtag ? t('rowMenu.editVtag') : t('rowMenu.addVtag')}
       </button>
 
       <div className="rm-sep" />
