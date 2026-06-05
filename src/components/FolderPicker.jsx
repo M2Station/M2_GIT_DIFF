@@ -33,6 +33,16 @@ function baseName(p) {
   return parts.length ? parts[parts.length - 1] : p;
 }
 
+// Check if a string looks like a valid path (Windows or POSIX).
+function looksLikePath(str) {
+  if (!str) return false;
+  // Windows absolute path: C:\, D:\, etc.
+  if (/^[A-Za-z]:[\\\/]/.test(str)) return true;
+  // POSIX absolute path
+  if (str.startsWith('/')) return true;
+  return false;
+}
+
 export default function FolderPicker({ onPick, onClose }) {
   const t = useT();
   const [view, setView] = useState(null); // { path, parent, canGoUp, isRepo, isDriveList, entries }
@@ -196,6 +206,11 @@ export default function FolderPicker({ onPick, onClose }) {
       }
       if (e.key === 'Enter') {
         e.preventDefault();
+        // Check if filter looks like a path and try to navigate to it
+        if (filter.trim() && looksLikePath(filter.trim())) {
+          load(filter.trim());
+          return;
+        }
         if (e.ctrlKey) {
           // Force-select the highlighted folder (or the current dir).
           const target = entries[index];
@@ -221,7 +236,7 @@ export default function FolderPicker({ onPick, onClose }) {
         setIndex(0);
       }
     },
-    [entries, index, filter, view, goUp, descend, activate, select, onClose]
+    [entries, index, filter, view, goUp, descend, activate, select, onClose, load]
   );
 
   const current = view?.path && view.path !== DRIVES ? view.path : t('picker.thisPc');
