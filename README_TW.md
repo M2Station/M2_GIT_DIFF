@@ -37,6 +37,7 @@
 | **每列註記（Note）** | 右鍵任一 commit → 新增/編輯註記（浮動可拖曳編輯框，`Ctrl+Enter` 儲存）；有註記者顯示 📝 圖示，點圖示可檢視/編輯/刪除 | — |
 | **強制背景顏色** | 右鍵 commit → 選 綠 / 亮紅 / 藍 / 黃 強制覆蓋該列背景；可清除單列或一次清除全部 | 綠/亮紅/藍/黃 |
 | **自訂顏色（第五色）** | 右鍵選單最後一個色票為 `<input type="color">` 取色器，選色後即套用該列，並把該色記成全域第五個「快速」色票（存 `localStorage` 的 `customSwatch`），之後右鍵選單會多出一格自訂色可重複使用 | 任意 HEX |
+| **每列虛擬 TAG** | 右鍵 commit → 🏷️ 新增/編輯虛擬 TAG：一個使用者自訂的版本標籤（例如 release 名稱），像 git tag 一樣顯示在 commit 旁，但以**手動連結的紫色**繪製。以 repro pair 為 key 存進 `localStorage`（`vtag:<左路徑>|<右路徑>`），重開時還原；可在同一個單行編輯框（`Enter` 儲存）清除 | 紫色 TAG |
 | **Git 操作浮窗（terminal）** | 工具列每側的 Git bar 執行 pull / fetch 等操作後，跳出可拖曳的浮動視窗顯示該次 `git` 指令與完整 stdout/stderr 與 exit code；成功為綠框、失敗為紅框；只有成功才重新載入該 repo | 綠/紅框 |
 | **切換分支（Switch branch）** | 每側 Git bar 的 **⎇ Switch branch** 按鈕會開啟可拖曳、可縮放的浮動視窗，以可收摺的樹狀結構（預設全收摺）列出該 repo 的所有分支——**本地分支**加上每個 remote（如 `origin`）各一組，並為**目前分支**加上徽章。搜尋框可做不分大小寫的子串過濾（命中項自動展開）；支援完整鍵盤導覽（↑/↓ 移動、→ 展開／進入、← 收摺／返回上層、`Enter` 選取後切換、`Ctrl+F` 跳到搜尋、`Esc` 關閉），右鍵目錄／群組可展開收摺。選定分支並確認後透過 IPC 執行 `git switch`；remote ref 會去掉 remote 前綴讓 git DWIM 簽出本地追蹤分支，結果會在同一個 Git 操作浮窗顯示後再重新載入該側 | — |
 | **匯出 Excel（.xlsx）** | 工具列右上 **⬇ Export Excel**：把左右對齊後的 commit、強制顏色、註記與手動連結一併輸出成 styled `.xlsx`（ExcelJS）。儲存格底色對應強制顏色、註記以 cell 註解（像 tip）呈現、配對 commit 以空白 cell 對齊；另含一張 **Manual Links** 工作表列出所有手動連結 | 與畫面同色 |
@@ -45,6 +46,7 @@
 | **可點擊的 commit 連結** | Commit 詳情浮窗在 SHA 旁顯示多個連結：**🔗 Web** 以系統預設瀏覽器開啟該 commit 的遠端頁面（自動辨識 GitHub / GitLab / Gitea / ADO / Bitbucket）；**🔀 PR {n}** 開啟每個 Merged PR 的頁面；**🔍 #{n}** 對每個關聯的 work-item id 開啟該 host 的程式碼搜尋。Excel 匯出時 SHA 儲存格也會超連結到同一遠端 URL | — |
 | **VS Code Chat 整合** | Commit 詳情浮窗的 **💬 Chat** 按鈕，呼叫本機安裝的 VS Code（`code chat`）並以該 repo 為工作區開啟 Copilot Chat（agent 模式），自動帶入該 commit 的英文說明 prompt（可在 chat 內執行 `git show <sha>` 看完整 diff）；未安裝 VS Code 時於浮窗顯示提示 | — |
 | 虛擬化 | 只渲染視窗內的列，支援大型倉庫（數千 commit）順暢捲動 | — |
+| **鍵盤導覽與回到頂端** | 方向鍵走訪 commit 列表：`↑`/`↓` 在目前欄位內移動焦點游標（在頂／底**夾住不繞回**），`←`/`→` 切換欄位（落在最接近的列），`Enter` 開啟焦點 commit 的詳情浮窗。當游標移到該欄**最後一筆** commit 時，會浮現一個**回到頂端**按鈕（▲），平滑捲回該欄頂端 | — |
 | **快捷鍵說明（Help）** | 工具列右上 **❓ Help** 開啟置中彈窗，列出全部快捷鍵（鍵帽樣式）；底部含可點擊的 `Powered by OA Hsiao` 徽章連到作者 GitHub。背景點擊 / ✕ / `Esc` 皆可關閉 | — |
 | **多國語言（i18n）** | 工具列右上 **⚙ Settings** 開啟設定彈窗，可切換介面語言（目前內建 **English** 與 **中文（繁體）**）。語系字串放在 `src/locales/*.json`，程式以 Vite `import.meta.glob` **自動掃描該目錄**決定支援哪些語言——新增一個 `xx.json` 即自動出現在語言清單，無需改程式。選擇存於 `localStorage` 的 `appLang`，重開仍記住 | — |
 | **多主題配色（Theme）** | 同一個 **⚙ Settings** 彈窗可切換配色主題（內建 **Low Key**（預設深色）、**Daylight**（淺色）、**Solarized**、**Matrix**、**Army**（軍綠／沙漠棕／水泥灰））。主題定義放在 `src/themes/*.json`，每個檔以 `vars` 物件對應 CSS 自訂屬性（如 `--accent`、`--bg`）；程式以 Vite `import.meta.glob` **自動掃描該目錄**——丟一個 `xx.json` 進去即自動出現在主題清單，無需改程式。切換時把 `vars` 寫到 `<html>` 並設 `data-theme` 屬性。選擇存於 `localStorage` 的 `appTheme`，且在 React 渲染前即套用以避免閃爍（FOUC） | — |
@@ -59,9 +61,9 @@
 
 **暫存位置**：手動連結存在 renderer 的 `localStorage`，key 為 `mlink:<左repo路徑>|<右repo路徑>`，value 為 `[{ leftSha, rightSha }, …]` 的 JSON。工具列上的紫色 **◗ Clear manual links** 按鈕（與手動連結同色）會一次取消目前 repro pair 的**所有手動連結並刪除該暫存**（有連結時顯示數量，無連結時 disabled）。
 
-**註記與強制顏色暫存**：每列註記與強制背景顏色同樣以兩側 repo 路徑為 key 存進 `localStorage`——註記為 `note:<左repo路徑>|<右repo路徑>`、顏色為 `color:<左repo路徑>|<右repo路徑>`，value 皆為 `{ "<side>:<sha>": <值> }` 物件。工具列另有 **📝 Clear notes**、**🎨 Clear colors** 按鈕可分別一次清空。
+**註記與強制顏色暫存**：每列註記與強制背景顏色同樣以兩側 repo 路徑為 key 存進 `localStorage`——註記為 `note:<左repo路徑>|<右repo路徑>`、顏色為 `color:<左repo路徑>|<右repo路徑>`，value 皆為 `{ "<side>:<sha>": <值> }` 物件。每列**虛擬 TAG** 同樣以 `vtag:<左repo路徑>|<右repo路徑>` 暫存。工具列另有 **📝 Clear notes**、**🎨 Clear colors** 按鈕可分別一次清空。
 
-**右鍵選單與詳情浮窗**：右鍵任一 commit 會跳出情境選單（新增/編輯註記、強制背景顏色綠/亮紅/藍/黃、清除顏色）。`Ctrl`+左鍵則開啟 commit 詳情浮窗：上方清楚標示 SHA / 作者 / 日期，內文以內建輕量 Markdown 渲染器（`src/lib/markdown.js`，先 HTML escape 再上標記，連結不導航以策安全）顯示；內文中僅 PR 的識別編號（`Merged PR` 後的數字）與 `Related work items:` 清單中的每個 id 會以強調色加底線凸顯，其餘數字與行內 `code` 片段則維持原樣；若該 commit 有配對，會以紫色高亮的 **Related item** 區塊顯示對側 commit，點擊可再開一個浮窗。浮窗右上角有 **HL** 輸入格，輸入字串會在該浮窗內即時高亮所有符合的文字（不區大小寫），且開啟時會自動帶入目前的全域搜尋字。浮窗可由標題拖曳移動、由任一邊/角拖拉縮放，初始寬度依內容長度自動估算，並可同時開啟多個（重複點同一 commit 不會重開），按 `Esc` 一次關閉全部。
+**右鍵選單與詳情浮窗**：右鍵任一 commit 會跳出情境選單（新增/編輯註記、新增/編輯 🏷️ 虛擬 TAG、強制背景顏色綠/亮紅/藍/黃、清除顏色）。`Ctrl`+左鍵則開啟 commit 詳情浮窗：上方清楚標示 SHA / 作者 / 日期，內文以內建輕量 Markdown 渲染器（`src/lib/markdown.js`，先 HTML escape 再上標記，連結不導航以策安全）顯示；內文中僅 PR 的識別編號（`Merged PR` 後的數字）與 `Related work items:` 清單中的每個 id 會以強調色加底線凸顯，其餘數字與行內 `code` 片段則維持原樣；若該 commit 有配對，會以紫色高亮的 **Related item** 區塊顯示對側 commit，點擊可再開一個浮窗。浮窗右上角有 **HL** 輸入格，輸入字串會在該浮窗內即時高亮所有符合的文字（不區大小寫），且開啟時會自動帶入目前的全域搜尋字。浮窗可由標題拖曳移動、由任一邊/角拖拉縮放，初始寬度依內容長度自動估算，並可同時開啟多個（重複點同一 commit 不會重開），按 `Esc` 一次關閉全部。
 
 **搜尋面板與註記導航**：`Ctrl`+`F` 開啟浮動可拖曳的搜尋面板，可選搜尋範圍（Title / Body / SHA / Author / Date）、以 ↑ / ↓ 或 `F3` / `Shift`+`F3` 循環命中項、以 Filter 只顯示命中列。面板下方另有一個與搜尋分開的 **📝 Notes** 導航區，以 ↑ / ↓ 在每個有註記的 commit 間跳躍（顯示列順序、左欄先於右欄），捲動置中並高亮。只要搜尋面板開啟，按 `Esc`（不論焦點在哪裡）即關閉面板並清空字串與高亮。
 
@@ -101,7 +103,8 @@ Renderer (React + Vite)
    ├─ ConnectionLines.jsx  中央 gutter 的 SVG 連接線（端點同列時退化為水平線）
    ├─ SearchPanel.jsx      浮動可拖曳搜尋面板（可選搜尋範圍、上/下則、Filter，並含獨立的 📝 Notes 導航區）
    ├─ NotePopup.jsx        浮動註記編輯/檢視器（可拖曳）
-   ├─ RowMenu.jsx          右鍵情境選單（註記 + 強制背景顏色 + 自訂取色第五色）
+   ├─ VtagPopup.jsx        浮動單行虛擬 TAG（版本標籤）編輯器（可拖曳）
+   ├─ RowMenu.jsx          右鍵情境選單（註記 + 虛擬 TAG + 強制背景顏色 + 自訂取色第五色）
    ├─ RepoGitBar.jsx       每側 Git 操作列（pull / fetch…）
    ├─ GitTerminalPopup.jsx Git 操作結果浮窗（可拖曳，顯示指令/輸出/exit code，成功綠框失敗紅框）
    ├─ BranchSwitchPopup.jsx 分支選擇器（可拖曳/縮放，本地＋各 remote 的可收摺樹、搜尋框、完整鍵盤導覽，透過 IPC 執行 git switch）
@@ -379,10 +382,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\uninstall-context-menu
 | `Esc`（搜尋面板開啟時，任何焦點） | 關閉搜尋面板，同時清空搜尋字與高亮、焦點回到比對區 |
 | `F3` | 循環跳到**下一個**搜尋命中的 commit，捲動置中並以青色外框高亮 |
 | `Shift` + `F3` | 循環跳到**上一個**搜尋命中的 commit |
-| `↑` / `↓` | 在**目前所在欄位**內把焦點游標移到上一筆 / 下一筆 commit（捲動置中） |
+| `↑` / `↓` | 在**目前所在欄位**內把焦點游標移到上一筆 / 下一筆 commit；在頂／底**夾住不繞回**，並捲動置中 |
 | `←` / `→` | 把焦點游標切換到左欄 / 右欄，落在 displayIndex 最接近的 commit |
-| `Enter`（焦點在比對區時） | 開啟目前焦點 commit 的詳情浮窗 |
-| 搜尋面板 📝 Notes  ↑ / ↓ | 在每個有註記的 commit 間跳躍（與搜尋功能分開），捲動置中並高亮 |
+| `Enter`（焦點在比對區時） | 開啟目前焦點 commit 的詳情浮窗 || 浮動 ▲ 回到頂端按鈕 | 僅在焦點游標位於該欄**最後一筆** commit 時出現；點擊即平滑捲回該欄頂端 || 搜尋面板 📝 Notes  ↑ / ↓ | 在每個有註記的 commit 間跳躍（與搜尋功能分開），捲動置中並高亮 |
 | Commit 詳情浮窗右上 HL 輸入格 | 在該浮窗內即時高亮符合的文字；開啟時自動帶入目前搜尋字 |
 | `Esc`（焦點在比對區時） | 取消目前選取的連線、取消進行中的手動連結、關閉所有詳情浮窗
 | `Delete` / `Backspace` | 刪除目前選取的**手動連結** |
@@ -390,7 +392,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\uninstall-context-menu
 | 點擊空白處 | 取消選取與進行中的手動連結 |
 | 點擊節點 ◗（未配對列） | 開始 / 完成 / 斷開手動連結（左右各點一個） |
 | `Ctrl` + 左鍵點 commit | 開啟該 commit 的詳情浮窗（可多開；重複點同一個不重開） |
-| 右鍵點 commit | 跳出情境選單：新增/編輯註記、強制背景顏色（綠/亮紅/藍/黃）、清除顏色 |
+| 右鍵點 commit | 跳出情境選單：新增/編輯註記、新增/編輯虛擬 TAG、強制背景顏色（綠/亮紅/藍/黃）、清除顏色 |
 | 點 commit 上的 📝 圖示 | 檢視 / 編輯 / 刪除該列註記 |
 | 工具列 ≈ Fuzzy Match 開關 / 門檻框 | 開關內容相似度模糊配對；門檻框設定相似度百分比（0–100%，預設 80%） |
 | 工具列 View（Compare / Left only / Right only） | 切換雙邊比對或單邊放大模式 |
@@ -437,11 +439,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\uninstall-context-menu
 | 連接線畫法（直角轉折 / 可點選） | `src/components/ConnectionLines.jsx` |
 | 選取 focus / Esc / 點空白取消 | `src/App.jsx`（`handleSelect` / `onBodyClick` / keydown） |
 | 快捷鍵（Ctrl+F / Esc / F3） | `src/App.jsx`（`cycleHit` / keydown / `onSearchKeyDown` / `closeSearch`） |
-| 鍵盤游標導覽（↑↓←→ / Enter） | `src/App.jsx`（`navRows` / `moveCursor` / `moveCursorSide` / `openCursorDetail` / `activeHit`） |
+| 鍵盤游標導覽（↑↓←→ / Enter）與回到頂端 | `src/App.jsx`（`navRows` / `moveCursor` / `moveCursorSide` / `openCursorDetail` / `activeHit` / `atListBottom` / `jumpToTop`）、`.scroll-top-fab` |
 | 快捷鍵說明彈窗（Help） | `src/components/HelpPopup.jsx`、`src/components/Toolbar.jsx`（`onOpenHelp`）、`src/App.jsx`（`helpOpen`） |
 | 多國語言（i18n / 語系字串 / 自動掃描） | `src/locales/*.json`、`src/lib/i18n.js`（`I18nProvider`/`useT`/`makeT`/`import.meta.glob`）、`src/components/SettingsPopup.jsx`、`src/main.jsx`（`I18nProvider` 包覆） |
 | 浮動搜尋面板 / 📝 Notes 導航 | `src/components/SearchPanel.jsx`、`src/App.jsx`（`noteHits` / `cycleNote`） |
 | 註記（Note）浮窗 / 邏輯 | `src/components/NotePopup.jsx`、`src/App.jsx`（`openNote`/`saveNote`/`deleteNote`/`clearNotes`） |
+| 每列虛擬 TAG（🏷️） | `src/components/VtagPopup.jsx`、`src/App.jsx`（`openVtag`/`vtags`/`vtagMap`）、`src/components/RowMenu.jsx`（`onAddVtag`） |
 | 右鍵選單 / 強制顏色 | `src/components/RowMenu.jsx`、`src/App.jsx`（`openRowMenu`/`setColor`/`clearColors`）、`src/styles.css`（`.commit-row.force-*`） |
 | Commit 詳情浮窗 / Markdown / HL 高亮 | `src/components/CommitDetail.jsx`、`src/lib/markdown.js`、`src/App.jsx`（`openDetail`/`resolveDetail`/`details`） |
 | 可點擊 commit 連結（🌐 Web / 遠端 URL） | `src/components/CommitDetail.jsx`、`electron/git.js`（`getRemoteUrl` / `loadRepo` remoteUrl）、`electron/main.js`（`shell:openExternal`）、`electron/excel.js`（SHA 超連結） |
