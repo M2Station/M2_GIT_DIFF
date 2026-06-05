@@ -265,7 +265,7 @@ export default function FolderPicker({ onPick, onClose }) {
           >
             ↰
           </button>
-          <div className="fp-path" title={current}>{current}</div>
+          <div className="fp-path" title={current}><bdi>{current}</bdi></div>
           <label className={`fp-toggle${reposOnly ? ' on' : ''}`} title={t('picker.reposOnlyTitle')}>
             <input
               type="checkbox"
