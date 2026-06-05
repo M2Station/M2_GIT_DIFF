@@ -1,4 +1,4 @@
-# M2_GIT_DIFF
+﻿# M2_GIT_DIFF
 # Copyright (c) 2026 OA Hsiao
 # SPDX-License-Identifier: MIT
 #
