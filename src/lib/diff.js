@@ -26,14 +26,18 @@ export function normalizeSubject(s = '') {
 // inside the files, not the commit message). The diff text is supplied by the
 // main process as a deduped array of normalized "+line" / "-line" strings.
 //
-// We score with a containment ratio rather than a symmetric one:
+// We score with a symmetric Jaccard ratio:
 //
-//     score = |A \u2229 B| / min(|A|, |B|)
+//     score = |A ∩ B| / |A ∪ B|
 //
-// so a commit whose edits are a SUBSET of another's still scores ~1.0. That is
-// exactly the target case: TOT bundles edits for two projects, while a personal
-// branch only touches one \u2014 the shared project's lines are fully contained, so
-// the pair links even though TOT changed more.
+// so a pair only links when the two commits are GENUINELY similar in BOTH
+// directions. An earlier asymmetric "containment" score (|A ∩ B| / min(|A|,|B|))
+// was dropped because it produced false matches between unrelated PRs: a small
+// commit whose lines happen to sit inside a much larger unrelated one — or two
+// big commits that share a generated/firmware/ACPI block — both scored ~1.0
+// even though the commits had nothing to do with each other. Jaccard stays low
+// in those cases (the non-shared remainder dominates the union) while a real
+// cherry-pick, whose edits are nearly identical on both sides, stays high.
 const FUZZY_MIN_LINES = 3; // ignore tiny diffs to avoid spurious matches
 
 // Per-document cache of sha -> changed-line Set. Keyed on the diffTexts
@@ -57,13 +61,15 @@ function diffLineSet(diffTexts, sha) {
   return set;
 }
 
-function containment(aSet, bSet) {
+function jaccard(aSet, bSet) {
+  if (aSet.size === 0 || bSet.size === 0) return 0;
+  // Iterate the smaller set for the intersection count, then normalize by the
+  // union so extra lines on EITHER side pull the score down.
   const small = aSet.size <= bSet.size ? aSet : bSet;
   const big = small === aSet ? bSet : aSet;
-  if (small.size === 0) return 0;
   let inter = 0;
   for (const v of small) if (big.has(v)) inter++;
-  return inter / small.size;
+  return inter / (aSet.size + bSet.size - inter);
 }
 
 // Read a patch-id for a sha from either a Map or a plain object (the latter
@@ -226,7 +232,7 @@ function computeStats(rows) {
 // Fuzzy (approximate content) matching as a standalone pass over an existing
 // computeDiff result. Clones the rows/links so the input (typically a memoized
 // exact-match result) is never mutated, then pairs commits STILL marked unique
-// by how much their CHANGED LINES overlap (containment ratio). Returns a new
+// by how much their CHANGED LINES overlap (Jaccard similarity). Returns a new
 // result object; pass-through (no clone) when fuzzy is disabled.
 export function applyFuzzy(base, fuzzy) {
   if (!fuzzy || !fuzzy.enabled) return base;
@@ -266,7 +272,7 @@ export function applyFuzzy(base, fuzzy) {
       for (const r of bucket) {
         if (seen.has(r.row.index)) continue;
         seen.add(r.row.index);
-        const score = containment(l.set, r.set);
+        const score = jaccard(l.set, r.set);
         if (score >= thr) pairs.push({ li: l.row.index, ri: r.row.index, score });
       }
     }
