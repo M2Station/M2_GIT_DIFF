@@ -58,7 +58,9 @@
     "language": "語言 / Language",
     "languageHint": "選擇介面語言，設定會自動儲存。",
     "theme": "主題 / Theme",
-    "themeHint": "選擇配色主題，設定會自動儲存。"
+    "themeHint": "選擇配色主題，設定會自動儲存。",
+    "commitLimit": "載入筆數 / Commits to load",
+    "commitLimitHint": "每個 repo 載入的 commit 筆數（0 = 不限制）。預設 2,000 筆，於下次載入或重新整理時生效。"
   },
   "search": {
     "title": "🔍 Search",

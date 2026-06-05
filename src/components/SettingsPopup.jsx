@@ -6,9 +6,10 @@
  * This source code is licensed under the MIT License found in the
  * LICENSE file in the root directory of this source tree.
  */
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useI18n } from '../lib/i18n.js';
 import { useTheme } from '../lib/theme.js';
+import { getCommitLimit, setCommitLimit, COMMIT_LIMIT_MIN, COMMIT_LIMIT_MAX } from '../lib/settings.js';
 
 // Centered modal opened from the toolbar ⚙ Settings button. Hosts the language
 // and theme pickers; both lists are discovered automatically from the JSON
@@ -17,6 +18,7 @@ import { useTheme } from '../lib/theme.js';
 export default function SettingsPopup({ onClose }) {
   const { t, lang, setLang, locales } = useI18n();
   const { theme, setTheme, themes } = useTheme();
+  const [commitLimit, setCommitLimitState] = useState(() => String(getCommitLimit()));
 
   useEffect(() => {
     const onKey = (e) => {
@@ -79,10 +81,28 @@ export default function SettingsPopup({ onClose }) {
             </select>
             <p className="settings-hint">{t('settings.themeHint')}</p>
           </div>
+
+          <div className="settings-field">
+            <label className="settings-label" htmlFor="settings-commit-limit">
+              {t('settings.commitLimit')}
+            </label>
+            <input
+              id="settings-commit-limit"
+              className="settings-select"
+              type="number"
+              min={COMMIT_LIMIT_MIN}
+              max={COMMIT_LIMIT_MAX}
+              step="100"
+              value={commitLimit}
+              onChange={(e) => setCommitLimitState(e.target.value)}
+              onBlur={() => setCommitLimitState(String(setCommitLimit(commitLimit)))}
+            />
+            <p className="settings-hint">{t('settings.commitLimitHint')}</p>
+          </div>
         </div>
 
         <div className="settings-foot">
-          <button type="button" className="btn primary" onClick={onClose}>
+          <button type="button" className="btn primary" onClick={() => { setCommitLimit(commitLimit); onClose(); }}>
             {t('common.ok')}
           </button>
         </div>

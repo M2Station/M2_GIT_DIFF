@@ -58,7 +58,9 @@
     "language": "Language",
     "languageHint": "Choose the interface language. Your choice is saved automatically.",
     "theme": "Theme",
-    "themeHint": "Choose the colour theme. Your choice is saved automatically."
+    "themeHint": "Choose the colour theme. Your choice is saved automatically.",
+    "commitLimit": "Commits to load",
+    "commitLimitHint": "How many commits to load per repo (0 = no limit). Default is 2,000. Applies on the next repo load or refresh."
   },
   "search": {
     "title": "🔍 Search",

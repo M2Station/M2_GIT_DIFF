@@ -23,7 +23,8 @@ import SettingsPopup from './components/SettingsPopup.jsx';
 import FolderPicker from './components/FolderPicker.jsx';
 import logoUrl from './assets/logo.svg';
 import { computeDiff, applyFuzzy, matchesQuery, alignLayout } from './lib/diff.js';
-import { ROW_HEIGHT, GUTTER_WIDTH, DEFAULT_LIMIT } from './lib/constants.js';
+import { ROW_HEIGHT, GUTTER_WIDTH } from './lib/constants.js';
+import { getCommitLimit } from './lib/settings.js';
 import { useT } from './lib/i18n.js';
 
 const emptyRepo = { path: '', name: '', branch: '', head: '', commits: [] };
@@ -203,7 +204,7 @@ export default function App() {
       if (!folder || !side) return;
       setLoading((s) => ({ ...s, [side]: true }));
       try {
-        const repo = await window.api.loadRepo({ repoPath: folder, limit: DEFAULT_LIMIT });
+        const repo = await window.api.loadRepo({ repoPath: folder, limit: getCommitLimit() });
         if (side === 'L') setLeft(repo);
         else setRight(repo);
       } catch (e) {
@@ -220,7 +221,7 @@ export default function App() {
     if (!repoPath) return;
     setLoading((s) => ({ ...s, [side]: true }));
     try {
-      const repo = await window.api.loadRepo({ repoPath, limit: DEFAULT_LIMIT });
+      const repo = await window.api.loadRepo({ repoPath, limit: getCommitLimit() });
       if (side === 'L') setLeft(repo);
       else setRight(repo);
     } catch (e) {
@@ -253,7 +254,7 @@ export default function App() {
     if (!repo.path) return;
     setLoading((s) => ({ ...s, [side]: true }));
     try {
-      const fresh = await window.api.loadRepo({ repoPath: repo.path, limit: DEFAULT_LIMIT });
+      const fresh = await window.api.loadRepo({ repoPath: repo.path, limit: getCommitLimit() });
       if (side === 'L') setLeft(fresh);
       else setRight(fresh);
     } catch (e) {
@@ -284,7 +285,7 @@ export default function App() {
         exitCode: typeof res?.exitCode === 'number' ? res.exitCode : res?.ok === false ? 1 : 0
       });
       if (res?.ok !== false) {
-        const fresh = await window.api.loadRepo({ repoPath: repo.path, limit: DEFAULT_LIMIT });
+        const fresh = await window.api.loadRepo({ repoPath: repo.path, limit: getCommitLimit() });
         if (side === 'L') setLeft(fresh);
         else setRight(fresh);
       }
@@ -344,7 +345,7 @@ export default function App() {
         exitCode: typeof res?.exitCode === 'number' ? res.exitCode : res?.ok === false ? 1 : 0
       });
       if (res?.ok !== false) {
-        const fresh = await window.api.loadRepo({ repoPath: repo.path, limit: DEFAULT_LIMIT });
+        const fresh = await window.api.loadRepo({ repoPath: repo.path, limit: getCommitLimit() });
         if (side === 'L') setLeft(fresh);
         else setRight(fresh);
       }
@@ -1596,7 +1597,7 @@ export default function App() {
                 <div className="stage-empty-sub">
                   {t('app.loadingSub', {
                     sides: loading.L && loading.R ? t('app.loadingSubBoth') : loading.L ? t('app.loadingSubLeft') : t('app.loadingSubRight'),
-                    limit: DEFAULT_LIMIT.toLocaleString()
+                    limit: getCommitLimit().toLocaleString()
                   })}
                 </div>
               </>
