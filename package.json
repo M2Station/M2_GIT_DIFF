@@ -16,7 +16,8 @@
     "dist": "vite build && electron-builder",
     "release": "powershell -ExecutionPolicy Bypass -File scripts/release.ps1",
     "demo:gif": "node scripts/make-demo-gif.mjs",
-    "check:license": "node scripts/check-license-headers.mjs"
+    "check:license": "node scripts/check-license-headers.mjs",
+    "check:cmd-ascii": "node scripts/check-cmd-ascii.mjs"
   },
   "optionalDependencies": {
     "better-sqlite3": "^11.8.1"
