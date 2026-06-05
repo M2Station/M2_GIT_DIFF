@@ -46,6 +46,7 @@ export default function RepoColumn({
   noteShas,
   onNoteOpen,
   colorMap,
+  vtagMap,
   onRowMenu,
   plain,
   onDetail
@@ -93,6 +94,7 @@ export default function RepoColumn({
               hasNote={!!noteShas && noteShas.has(c.sha)}
               onNoteOpen={onNoteOpen}
               color={colorMap ? colorMap[c.sha] : undefined}
+              vtag={vtagMap ? vtagMap[c.sha] : undefined}
               onRowMenu={onRowMenu}
               onDetail={onDetail}
             />
