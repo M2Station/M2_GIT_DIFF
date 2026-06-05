@@ -1050,7 +1050,9 @@ export default function App() {
       author: commit.author,
       date: commit.authorDate,
       color: colors[noteIdOf(side, commit.sha)] || null,
-      note: notes[noteIdOf(side, commit.sha)] || null
+      note: notes[noteIdOf(side, commit.sha)] || null,
+      vtag: vtags[vtagIdOf(side, commit.sha)] || null,
+      tags: Array.isArray(commit.tags) ? commit.tags : []
     });
 
     view.L.rows.forEach((r) => {
@@ -1092,7 +1094,7 @@ export default function App() {
       });
 
     return { rows, manualLinks };
-  }, [view, colors, notes, diff]);
+  }, [view, colors, notes, vtags, diff]);
 
   // Step 1: clicking Export opens the row-count prompt (default ALL).
   const openExportPrompt = useCallback(() => {
