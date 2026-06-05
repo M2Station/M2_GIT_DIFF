@@ -20,6 +20,18 @@ Set-Location -Path $PSScriptRoot
 
 function Write-Step { param([string]$Msg) Write-Host $Msg }
 
+# Pause on error so the user can read the message before the window closes — but
+# only when there is a real interactive console. When launched non-interactively
+# (e.g. spawned hidden from the context-menu launcher, or with stdin redirected /
+# piped for automation), Read-Host would block forever waiting for input that
+# never comes, which looks like "按了沒反應". Skip the prompt in those cases.
+function Wait-Exit {
+    if ($env:M2GITDIFF_NONINTERACTIVE -eq '1') { return }
+    if (-not [Environment]::UserInteractive) { return }
+    try { if ([Console]::IsInputRedirected) { return } } catch { }
+    Read-Host '按 Enter 結束'
+}
+
 Write-Host '========================================'
 Write-Host '  M2_GIT_DIFF - Launcher (NORMAL MODE)'
 Write-Host '========================================'
@@ -34,7 +46,7 @@ if ($L -or $R) { Write-Host '' }
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
     Write-Host '[錯誤] 找不到 Node.js，請先安裝: https://nodejs.org/'
     Write-Host ''
-    Read-Host '按 Enter 結束'
+    Wait-Exit
     exit 1
 }
 
@@ -42,7 +54,7 @@ if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
 if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
     Write-Host '[錯誤] 找不到 npm，請確認 Node.js 安裝是否完整。'
     Write-Host ''
-    Read-Host '按 Enter 結束'
+    Wait-Exit
     exit 1
 }
 
@@ -57,7 +69,7 @@ if (-not (Test-Path 'node_modules')) {
     if ($LASTEXITCODE -ne 0) {
         Write-Host ''
         Write-Host '[錯誤] npm install 失敗。'
-        Read-Host '按 Enter 結束'
+        Wait-Exit
         exit 1
     }
     Write-Host '[完成] 套件安裝完成。'
@@ -74,7 +86,7 @@ if (-not (Test-Path 'node_modules\electron\dist\electron.exe')) {
     if ($LASTEXITCODE -ne 0) {
         Write-Host ''
         Write-Host '[錯誤] Electron 修復失敗。'
-        Read-Host '按 Enter 結束'
+        Wait-Exit
         exit 1
     }
     Write-Host ''
@@ -109,7 +121,7 @@ if ($needBuild) {
     if ($LASTEXITCODE -ne 0) {
         Write-Host ''
         Write-Host '[錯誤] 建置失敗。'
-        Read-Host '按 Enter 結束'
+        Wait-Exit
         exit 1
     }
     Write-Host '[完成] 建置完成。'
