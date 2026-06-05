@@ -179,6 +179,13 @@ export default function FolderPicker({ onPick, onClose }) {
 
   const onKeyDown = useCallback(
     (e) => {
+      // This modal owns all keyboard input while open. Stop the event here so
+      // it never reaches the window-level global handler in App. Without this,
+      // React 18 flushes the picker-closing state update at the end of its
+      // synthetic dispatch — re-registering App's keydown listener with the
+      // picker already considered closed — so the SAME Enter that selects a
+      // folder would also bubble to window and pop open a commit-detail.
+      e.stopPropagation();
       if (e.key === 'Escape') {
         e.preventDefault();
         onClose();
