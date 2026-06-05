@@ -89,6 +89,21 @@ if ($Action -eq 'select') {
 $pendingFile = Join-Path $stateDir 'compare-pending.txt'
 $lockFile    = Join-Path $stateDir 'compare-leader.lock'
 
+# Expire a stale remembered "left" folder. Without this, a single-folder compare
+# would silently pair with a folder selected long ago (or left over from an
+# abandoned "select"), which looks like a malfunction. TTL is configurable via
+# M2GITDIFF_SELECT_TTL_MIN (minutes, default 5).
+if (Test-Path -LiteralPath $leftFile) {
+    $ttlMin = 5
+    if ($env:M2GITDIFF_SELECT_TTL_MIN -and ($env:M2GITDIFF_SELECT_TTL_MIN -as [int])) {
+        $ttlMin = [int]$env:M2GITDIFF_SELECT_TTL_MIN
+    }
+    $selectAge = (Get-Date) - (Get-Item -LiteralPath $leftFile).LastWriteTime
+    if ($selectAge.TotalMinutes -ge $ttlMin) {
+        Remove-Item -LiteralPath $leftFile -ErrorAction SilentlyContinue
+    }
+}
+
 # (A) Classic two-step takes priority when a left folder was remembered.
 if (Test-Path -LiteralPath $leftFile) {
     $left = (Get-Content -LiteralPath $leftFile -Raw).Trim()
@@ -112,6 +127,19 @@ if (-not (Test-Path -LiteralPath $stateDir)) {
     New-Item -ItemType Directory -Path $stateDir -Force | Out-Null
 }
 
+# Collection window: long enough for Explorer to spin up one PowerShell per
+# selected folder, which is noticeably slower on network drives. Too short and a
+# genuine 2-folder selection degrades to a single-folder (L=R) compare.
+# Configurable via M2GITDIFF_COLLECT_MS (milliseconds, default 1500).
+$collectMs = 1500
+if ($env:M2GITDIFF_COLLECT_MS -and ($env:M2GITDIFF_COLLECT_MS -as [int])) {
+    $collectMs = [int]$env:M2GITDIFF_COLLECT_MS
+}
+# A leader's lock counts as stale only once it is older than the collection
+# window plus a safety margin, so an overlapping fresh selection is not reset
+# mid-collect even when the window is widened.
+$staleLockSec = [Math]::Max(5, [int]($collectMs / 1000) + 3)
+
 $mutex = New-Object System.Threading.Mutex($false, 'M2GitDiffCompareCollect')
 [void]$mutex.WaitOne()
 $isLeader = $false
@@ -119,7 +147,7 @@ try {
     # Reset a stale collection left over by a previous (crashed) run.
     if (Test-Path -LiteralPath $lockFile) {
         $age = (Get-Date) - (Get-Item -LiteralPath $lockFile).LastWriteTime
-        if ($age.TotalSeconds -ge 5) {
+        if ($age.TotalSeconds -ge $staleLockSec) {
             Remove-Item -LiteralPath $lockFile, $pendingFile -ErrorAction SilentlyContinue
         }
     }
@@ -141,8 +169,8 @@ if (-not $isLeader) {
     exit 0
 }
 
-# Leader: wait briefly for sibling invocations to append their paths, then read.
-Start-Sleep -Milliseconds 800
+# Leader: wait for sibling invocations to append their paths, then read.
+Start-Sleep -Milliseconds $collectMs
 
 $mutex = New-Object System.Threading.Mutex($false, 'M2GitDiffCompareCollect')
 [void]$mutex.WaitOne()
