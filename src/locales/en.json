@@ -217,6 +217,7 @@
     "gitOpFail": "git {op} failed: {msg}",
     "branchListFail": "Failed to list branches: {msg}",
     "fuzzyPending": "Fuzzy matching…",
+    "backToTop": "Back to top",
     "loadingTitle": "Reading commits…",
     "loadingSubBoth": "both",
     "loadingSubLeft": "the left",

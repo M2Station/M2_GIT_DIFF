@@ -217,6 +217,7 @@
     "gitOpFail": "git {op} 失敗：{msg}",
     "branchListFail": "讀取分支清單失敗：{msg}",
     "fuzzyPending": "模糊比對中…",
+    "backToTop": "回到頂端",
     "loadingTitle": "讀取 commit 中…",
     "loadingSubBoth": "左右兩個",
     "loadingSubLeft": "左側",

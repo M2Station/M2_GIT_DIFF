@@ -1290,7 +1290,10 @@ export default function App() {
       }
       const sideRows = navRows.filter((r) => r.side === cur.side);
       const idx = sideRows.findIndex((r) => r.key === cur.key);
-      const next = (idx + dir + sideRows.length) % sideRows.length;
+      // Clamp at the ends: at the top, Up stays at top; at the bottom, Down
+      // stays at the bottom. No wrap-around.
+      const next = Math.max(0, Math.min(idx + dir, sideRows.length - 1));
+      if (next === idx) return;
       const row = sideRows[next];
       setActiveHit(row.key);
       const el = scrollRef.current;
@@ -1302,6 +1305,28 @@ export default function App() {
     },
     [navRows, activeHit]
   );
+
+  // True only when the cursor sits on the LAST row of its column, i.e. there is
+  // nowhere further down to go. Used to reveal the floating "back to top" button.
+  const atListBottom = useMemo(() => {
+    if (!activeHit || navRows.length === 0) return false;
+    const cur = navRows.find((r) => r.key === activeHit);
+    if (!cur) return false;
+    const sideRows = navRows.filter((r) => r.side === cur.side);
+    return sideRows.length > 0 && sideRows[sideRows.length - 1].key === cur.key;
+  }, [navRows, activeHit]);
+
+  // Jump straight back to the very top of the current column and scroll there.
+  const jumpToTop = useCallback(() => {
+    if (navRows.length === 0) return;
+    const cur = navRows.find((r) => r.key === activeHit);
+    const side = cur ? cur.side : navRows[0].side;
+    const sideRows = navRows.filter((r) => r.side === side);
+    const first = sideRows[0] || navRows[0];
+    setActiveHit(first.key);
+    const el = scrollRef.current;
+    if (el) el.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [navRows, activeHit]);
 
   // Move the focused row to the OTHER side (ArrowLeft -> 'L', ArrowRight ->
   // 'R'), staying on the row whose displayIndex is closest to the current one.
@@ -1685,6 +1710,7 @@ export default function App() {
         )}
       </div>
 
+      <div className="stage-wrap">
       <div
         className={'diff-body' + (pendingNode ? ' linking' : '')}
         ref={scrollRef}
@@ -1815,6 +1841,20 @@ export default function App() {
           />
           )}
         </div>
+      </div>
+      {atListBottom && (
+        <button
+          type="button"
+          className="scroll-top-fab"
+          onClick={jumpToTop}
+          title={t('app.backToTop')}
+          aria-label={t('app.backToTop')}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M12 19V6M6 12l6-6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+      )}
       </div>
 
       <div className="legend">
