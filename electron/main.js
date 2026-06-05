@@ -19,6 +19,8 @@ const fsdialog = require('./fsdialog');
 const isDev = process.env.NODE_ENV === 'development';
 
 const APP_NAME = 'M2_GIT_DIFF';
+// Window title shows the app version (read from package.json via Electron).
+const APP_TITLE = `${APP_NAME} v${app.getVersion()}`;
 
 let mainWindow = null;
 
@@ -63,7 +65,7 @@ function createWindow() {
     minWidth: 900,
     minHeight: 600,
     backgroundColor: '#0a0e14',
-    title: APP_NAME,
+    title: APP_TITLE,
     icon: path.join(__dirname, '..', 'public', 'icon.ico'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -71,6 +73,13 @@ function createWindow() {
       nodeIntegration: false,
       sandbox: false
     }
+  });
+
+  // The bundled page ships its own <title>; keep the versioned window title by
+  // overriding the page-driven update.
+  mainWindow.on('page-title-updated', (e) => {
+    e.preventDefault();
+    if (mainWindow) mainWindow.setTitle(APP_TITLE);
   });
 
   if (isDev) {
