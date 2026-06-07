@@ -23,3 +23,7 @@ export const DEFAULT_AUTOFILL = 100;
 // How many annotation edits (notes / colors / virtual tags / manual links) the
 // shared undo history keeps. Older snapshots fall off the bottom of the stack.
 export const HISTORY_LIMIT = 100;
+
+// How many log entries the in-app error/log panel retains. Older entries fall
+// off the bottom of the ring buffer so the store can't grow without bound.
+export const LOG_LIMIT = 300;

@@ -82,7 +82,9 @@ export default function Toolbar({
   onExport,
   canExport,
   onOpenHelp,
-  onOpenSettings
+  onOpenSettings,
+  onOpenLog,
+  logBadge
 }) {
   const t = useT();
   return (
@@ -217,6 +219,15 @@ export default function Toolbar({
             title={t('toolbar.exportExcelTitle')}
           >
             {t('toolbar.exportExcel')}
+          </button>
+          <button
+            className={'btn log-btn' + (logBadge > 0 ? ' has-issues' : '')}
+            onClick={onOpenLog}
+            title={t('toolbar.logTitle')}
+            aria-label={t('toolbar.log')}
+          >
+            {t('toolbar.log')}
+            {logBadge > 0 ? <span className="log-badge">{logBadge > 99 ? '99+' : logBadge}</span> : null}
           </button>
           <button
             className="btn help-btn"

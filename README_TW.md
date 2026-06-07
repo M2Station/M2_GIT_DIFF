@@ -41,6 +41,7 @@
 | **每列虛擬 TAG** | 右鍵 commit → 🏷️ 新增/編輯虛擬 TAG：一個使用者自訂的版本標籤（例如 release 名稱），像 git tag 一樣顯示在 commit 旁，但以**手動連結的紫色**繪製。以 repro pair 為 key 存進 `localStorage`（`vtag:<左路徑>|<右路徑>`），重開時還原；可在同一個單行編輯框（`Enter` 儲存）清除 | 紫色 TAG |
 | **復原 / 重做（Undo / Redo）** | `Ctrl`+`Z` 復原、`Ctrl`+`Y`（或 `Ctrl`+`Shift`+`Z`）重做上一個對註記、強制顏色、虛擬 TAG 或手動連結的編輯，誤刪或選錯色都能一鍵救回。工具列的 **↶ Undo** / **↷ Redo** 按鈕效果相同。單一共用歷史（最多 100 步）依編輯順序涵蓋全部四種註記；切換或交換 repro pair 會重啟歷史 | — |
 | **Git 操作浮窗（terminal）** | 工具列每側的 Git bar 執行 pull / fetch 等操作後，跳出可拖曳的浮動視窗顯示該次 `git` 指令與完整 stdout/stderr 與 exit code；成功為綠框、失敗為紅框；只有成功才重新載入該 repo | 綠/紅框 |
+| **錯誤 / 日誌面板** | 工具列右上的 **🧾 Log** 把所有診斷集中在一處——git 指令失敗（含完整 transcript）、cache 儲存問題（註記無法寫入 `localStorage` 時）、repo 載入 / 分頁錯誤、匯出失敗——不再讓訊息消失在短暫的橫幅裡。每筆都有時間戳、等級（錯誤／警告／資訊）、分類標籤與可展開的細節；可依等級過濾、**全部複製**到剪貼簿或清除。按鈕會以紅色徽章顯示「自上次開啟後的新問題數」，底部錯誤列也可點擊直接開啟 | 紅色徽章 |
 | **切換分支（Switch branch）** | 每側 Git bar 的 **⎇ Switch branch** 按鈕會開啟可拖曳、可縮放的浮動視窗，以可收摺的樹狀結構（預設全收摺）列出該 repo 的所有分支——**本地分支**加上每個 remote（如 `origin`）各一組，並為**目前分支**加上徽章。搜尋框可做不分大小寫的子串過濾（命中項自動展開）；支援完整鍵盤導覽（↑/↓ 移動、→ 展開／進入、← 收摺／返回上層、`Enter` 選取後切換、`Ctrl+F` 跳到搜尋、`Esc` 關閉），右鍵目錄／群組可展開收摺。選定分支並確認後透過 IPC 執行 `git switch`；remote ref 會去掉 remote 前綴讓 git DWIM 簽出本地追蹤分支，結果會在同一個 Git 操作浮窗顯示後再重新載入該側 | — |
 | **匯出 Excel（.xlsx）** | 工具列右上 **⬇ Export Excel**：把左右對齊後的 commit、強制顏色、註記與手動連結一併輸出成 styled `.xlsx`（ExcelJS）。儲存格底色對應強制顏色、註記以 cell 註解（像 tip）呈現、配對 commit 以空白 cell 對齊；另含一張 **Manual Links** 工作表列出所有手動連結 | 與畫面同色 |
 | **匯出筆數確認** | 按下匯出前先跳出對話框詢問要輸出多少筆（預設 **全部 ALL**，或指定前 N 筆），資料量大時提醒，避免一次輸出過多造成卡頓 | — |
@@ -444,6 +445,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\uninstall-context-menu
 | 工具列 View（Compare / Left only / Right only） | 切換雙邊比對或單邊放大模式 |
 | 工具列 ↶ Undo / ↷ Redo | 在註記、強制顏色、虛擬 TAG 與手動連結的編輯間往前 / 往後一步（等同 `Ctrl`+`Z` / `Ctrl`+`Y`）；無可復原 / 重做時 disabled |
 | 工具列 ◗ Clear manual links / 📝 Clear notes / 🎨 Clear colors | 一次清除目前 repro pair 的手動連結 / 註記 / 強制顏色及其 `localStorage` 暫存 |
+| 工具列 🧾 Log | 開啟集中的錯誤 / 診斷日誌（git 失敗、cache 問題、匯出錯誤）；可依等級過濾、全部複製或清除。紅色徽章顯示新問題數；底部錯誤列也可點擊開啟 |
 | 工具列 ⬇ Export Excel | 匯出對齊後的 commit＋顏色＋註記＋手動連結為 `.xlsx`（先詢問筆數，預設 ALL） |
 | 工具列 ❓ Help | 開啟快捷鍵說明彈窗（列出全部快捷鍵；`Esc` / ✕ / 點背景關閉） |
 | 工具列 ⚙ Settings | 開啟設定彈窗：介面語言、配色主題、載入筆數上限、自動補齊範圍（English / 中文；`Esc` / ✕ / 點背景關閉） |

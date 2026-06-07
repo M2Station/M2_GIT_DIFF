@@ -24,11 +24,13 @@ import ExportPrompt from './components/ExportPrompt.jsx';
 import HelpPopup from './components/HelpPopup.jsx';
 import SettingsPopup from './components/SettingsPopup.jsx';
 import FolderPicker from './components/FolderPicker.jsx';
+import LogPanel from './components/LogPanel.jsx';
 import logoUrl from './assets/logo.svg';
 import { computeDiff, applyFuzzy, matchesQuery, alignLayout, patchSimilarity } from './lib/diff.js';
 import { ROW_HEIGHT, GUTTER_WIDTH, PAGE_BATCH, HISTORY_LIMIT } from './lib/constants.js';
 import { getCommitLimit, getAutoFillRange } from './lib/settings.js';
 import { useT } from './lib/i18n.js';
+import { useLog, logError, logWarn, logInfo, clearLog } from './lib/logStore.js';
 
 const emptyRepo = { path: '', name: '', branch: '', head: '', commits: [], hasMore: false };
 
@@ -169,6 +171,22 @@ export default function App() {
   const [helpOpen, setHelpOpen] = useState(false);
   // Settings modal (language picker, etc.).
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Centralized error / log panel (git failures, cache problems, export errors).
+  // `logEntries` is the live store snapshot; `logSeenId` marks the newest entry
+  // the user has already seen so the toolbar badge can count only NEW problems.
+  const [logOpen, setLogOpen] = useState(false);
+  const logEntries = useLog();
+  const [logSeenId, setLogSeenId] = useState(0);
+  // Toolbar badge: how many error/warn entries arrived since the panel was last
+  // opened. Opening the panel marks everything seen so the badge clears.
+  const logBadge = useMemo(
+    () => logEntries.reduce((n, e) => (e.id > logSeenId && e.level !== 'info' ? n + 1 : n), 0),
+    [logEntries, logSeenId]
+  );
+  const openLog = useCallback(() => {
+    setLogOpen(true);
+    setLogSeenId(logEntries.length ? logEntries[logEntries.length - 1].id : 0);
+  }, [logEntries]);
   // Single-repo mode: null = dual compare; 'L' or 'R' = show only that repo,
   // full width. Toggled from the toolbar.
   const [single, setSingle] = useState(null);
@@ -249,7 +267,9 @@ export default function App() {
         else setRight(repo);
         pagedRef.current = false; // fresh pair -> let the on-open balancer act
       } catch (e) {
-        setError(String(e?.message || e));
+        const msg = String(e?.message || e);
+        logError('repo', `Open repo failed: ${folder}`, msg);
+        setError(msg);
       } finally {
         setLoading((s) => ({ ...s, [side]: false }));
       }
@@ -267,7 +287,9 @@ export default function App() {
       else setRight(repo);
       pagedRef.current = false; // fresh pair -> let the on-open balancer act
     } catch (e) {
-      setError(String(e?.message || e));
+      const msg = String(e?.message || e);
+      logError('repo', `Open repo failed: ${repoPath}`, msg);
+      setError(msg);
     } finally {
       setLoading((s) => ({ ...s, [side]: false }));
     }
@@ -300,7 +322,9 @@ export default function App() {
       if (side === 'L') setLeft(fresh);
       else setRight(fresh);
     } catch (e) {
-      setError(String(e?.message || e));
+      const msg = String(e?.message || e);
+      logError('repo', `Reload failed: ${repo.name || repo.path}`, msg);
+      setError(msg);
     } finally {
       setLoading((s) => ({ ...s, [side]: false }));
     }
@@ -338,7 +362,9 @@ export default function App() {
       else setRight(next);
       return fresh.length;
     } catch (e) {
-      setError(String(e?.message || e));
+      const msg = String(e?.message || e);
+      logError('repo', `Load more failed: ${repo.name || repo.path}`, msg);
+      setError(msg);
       return 0;
     } finally {
       loadingMoreRef.current[side] = false;
@@ -408,6 +434,14 @@ export default function App() {
         output: res?.output || '',
         exitCode: typeof res?.exitCode === 'number' ? res.exitCode : res?.ok === false ? 1 : 0
       });
+      // Mirror the result into the centralized log: failures as errors (kept
+      // for later review even after the popup is dismissed), successes as info.
+      const cmd = res?.command || `git ${op}`;
+      if (res?.ok === false) {
+        logError('git', `${repo.name || repo.path}: ${cmd} (exit ${res?.exitCode ?? 1})`, res?.output || '');
+      } else {
+        logInfo('git', `${repo.name || repo.path}: ${cmd}`, res?.output || '');
+      }
       if (res?.ok !== false) {
         const fresh = await window.api.loadRepo({ repoPath: repo.path, limit: getCommitLimit() });
         if (side === 'L') setLeft(fresh);
@@ -424,6 +458,7 @@ export default function App() {
         output: msg,
         exitCode: 1
       });
+      logError('git', `${repo.name || repo.path}: git ${op} failed`, msg);
       setError(t('app.gitOpFail', { op, msg }));
     } finally {
       setLoading((s) => ({ ...s, [side]: false }));
@@ -440,7 +475,9 @@ export default function App() {
       const data = await window.api.listBranches({ repoPath: repo.path });
       setBranchPopup({ side, repoName: repo.name || repo.path, data });
     } catch (e) {
-      setError(t('app.branchListFail', { msg: String(e?.message || e) }));
+      const msg = String(e?.message || e);
+      logError('git', `${repo.name || repo.path}: list branches failed`, msg);
+      setError(t('app.branchListFail', { msg }));
     }
   }, [left, right, t]);
 
@@ -468,6 +505,12 @@ export default function App() {
         output: res?.output || '',
         exitCode: typeof res?.exitCode === 'number' ? res.exitCode : res?.ok === false ? 1 : 0
       });
+      const swCmd = res?.command || `git switch ${selected.ref}`;
+      if (res?.ok === false) {
+        logError('git', `${repoName}: ${swCmd} (exit ${res?.exitCode ?? 1})`, res?.output || '');
+      } else {
+        logInfo('git', `${repoName}: ${swCmd}`, res?.output || '');
+      }
       if (res?.ok !== false) {
         const fresh = await window.api.loadRepo({ repoPath: repo.path, limit: getCommitLimit() });
         if (side === 'L') setLeft(fresh);
@@ -475,15 +518,17 @@ export default function App() {
       }
     } catch (e) {
       setBranchPopup(null);
+      const msg = String(e?.message || e);
       setGitTerminal({
         side,
         op: t('branchSwitch.opLabel'),
         repoName,
         ok: false,
         command: `git switch ${selected.ref}`,
-        output: String(e?.message || e),
+        output: msg,
         exitCode: 1
       });
+      logError('git', `${repoName}: git switch ${selected.ref} failed`, msg);
     } finally {
       setBranchBusy(false);
     }
@@ -759,8 +804,8 @@ export default function App() {
     }
     try {
       localStorage.setItem('mlink:' + linkKey, JSON.stringify(manualLinks));
-    } catch {
-      /* storage full / unavailable -> links live for this session only */
+    } catch (e) {
+      logWarn('cache', 'Failed to persist manual links (kept for this session only)', String(e?.message || e));
     }
   }, [manualLinks, linkKey]);
 
@@ -849,8 +894,8 @@ export default function App() {
     }
     try {
       localStorage.setItem('note:' + linkKey, JSON.stringify(notes));
-    } catch {
-      /* storage unavailable -> notes live for this session only */
+    } catch (e) {
+      logWarn('cache', 'Failed to persist notes (kept for this session only)', String(e?.message || e));
     }
   }, [notes, linkKey]);
 
@@ -942,8 +987,8 @@ export default function App() {
     }
     try {
       localStorage.setItem('color:' + linkKey, JSON.stringify(colors));
-    } catch {
-      /* storage unavailable -> colors live for this session only */
+    } catch (e) {
+      logWarn('cache', 'Failed to persist forced colors (kept for this session only)', String(e?.message || e));
     }
   }, [colors, linkKey]);
 
@@ -1050,8 +1095,8 @@ export default function App() {
     }
     try {
       localStorage.setItem('vtag:' + linkKey, JSON.stringify(vtags));
-    } catch {
-      /* storage unavailable -> virtual tags live for this session only */
+    } catch (e) {
+      logWarn('cache', 'Failed to persist virtual tags (kept for this session only)', String(e?.message || e));
     }
   }, [vtags, linkKey]);
 
@@ -1499,7 +1544,9 @@ export default function App() {
           exitCode: 0
         });
       } catch (e) {
-        setError('匯出 Excel 失敗：' + String(e?.message || e));
+        const msg = String(e?.message || e);
+        logError('export', 'Excel export failed', msg);
+        setError('匯出 Excel 失敗：' + msg);
       } finally {
         setExporting(false);
       }
@@ -1939,6 +1986,8 @@ export default function App() {
         canExport={canExport}
         onOpenHelp={() => setHelpOpen(true)}
         onOpenSettings={() => setSettingsOpen(true)}
+        onOpenLog={openLog}
+        logBadge={logBadge}
       />
 
       {searchOpen && (
@@ -2046,7 +2095,18 @@ export default function App() {
         );
       })}
 
-      {error && <div className="error-bar" role="alert" aria-live="assertive">⚠ {error}</div>}
+      {error && (
+        <div
+          className="error-bar"
+          role="alert"
+          aria-live="assertive"
+          onClick={openLog}
+          title={t('log.openFromError')}
+        >
+          ⚠ {error}
+          <span className="error-bar-more">{t('log.openFromErrorHint')}</span>
+        </div>
+      )}
 
       {comparePick.length > 0 && (
         <div className="compare-basket" role="region" aria-label={t('compare.basketAria')}>
@@ -2112,6 +2172,14 @@ export default function App() {
         <GitTerminalPopup
           info={gitTerminal}
           onClose={() => setGitTerminal(null)}
+        />
+      )}
+
+      {logOpen && (
+        <LogPanel
+          entries={logEntries}
+          onClear={clearLog}
+          onClose={() => setLogOpen(false)}
         />
       )}
 

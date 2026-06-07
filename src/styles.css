@@ -1232,6 +1232,19 @@ mark.cd-hl {
   color: var(--unique-bd);
   padding: 6px 14px;
   font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.error-bar:hover {
+  background: rgba(235, 70, 80, 0.24);
+}
+.error-bar-more {
+  margin-left: auto;
+  font-size: 11px;
+  opacity: 0.8;
+  white-space: nowrap;
 }
 
 /* ---------------- Per-repo Git toolbar ---------------- */
@@ -2193,6 +2206,219 @@ mark {
   padding: 8px 12px;
   border-top: 1px solid var(--line);
   background: var(--bg-soft);
+}
+
+/* ---------------- Error / Log panel ---------------- */
+/* Toolbar Log button + unread-issue badge. */
+.btn.log-btn {
+  position: relative;
+}
+.btn.log-btn.has-issues {
+  border-color: var(--unique-bd, #eb4650);
+  color: var(--unique-bd, #eb4650);
+}
+.log-badge {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--unique-bd, #eb4650);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+}
+
+.log-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 122;
+  background: rgba(4, 8, 14, 0.35);
+}
+.log-panel {
+  position: fixed;
+  max-width: calc(100vw - 24px);
+  max-height: 72vh;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--accent, #36d6ff);
+  border-radius: 10px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.log-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--bg-soft);
+  border-bottom: 1px solid var(--line);
+  cursor: move;
+  user-select: none;
+}
+.log-title {
+  font-weight: 700;
+  color: var(--text);
+}
+.log-counts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+}
+.log-c {
+  font-weight: 700;
+}
+.log-c.err {
+  color: #ff5663;
+}
+.log-c.warn {
+  color: #e0a44a;
+}
+.log-c.muted {
+  color: var(--muted);
+  font-weight: 500;
+}
+.log-spacer {
+  flex: 1 1 auto;
+}
+.log-x {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+.log-x:hover {
+  background: var(--bg);
+  color: var(--text);
+}
+.log-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+}
+.log-filters {
+  display: inline-flex;
+  gap: 4px;
+}
+.log-filter {
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.log-filter.on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.btn.log-copy,
+.btn.log-clear {
+  font-size: 11px;
+  padding: 3px 10px;
+}
+.btn.log-clear {
+  border-color: #e0a44a;
+  color: #e0a44a;
+}
+.log-body {
+  overflow: auto;
+  padding: 4px 0;
+}
+.log-empty {
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+}
+.log-row {
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+}
+.log-row-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: default;
+}
+.log-row-head[data-has-detail='true'] {
+  cursor: pointer;
+}
+.log-row-head[data-has-detail='true']:hover {
+  background: var(--bg-soft);
+}
+.log-ico {
+  flex: 0 0 auto;
+  font-size: 12px;
+}
+.log-time {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 11px;
+}
+.log-cat {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+.log-cat.error {
+  color: #ff5663;
+  border-color: rgba(255, 86, 99, 0.5);
+}
+.log-cat.warn {
+  color: #e0a44a;
+  border-color: rgba(224, 164, 74, 0.5);
+}
+.log-msg {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.log-caret {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 10px;
+}
+.log-detail {
+  margin: 0;
+  padding: 8px 12px 10px 38px;
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--muted);
+  background: var(--bg);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 /* ---------------- Switch-branch tree modal ---------------- */
