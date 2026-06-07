@@ -19,3 +19,7 @@ export const PAGE_BATCH = 500;
 // per-head ceiling on how many commits the backfill may auto-load to close the
 // gap. User-overridable in Settings; 0 turns auto-fill off entirely.
 export const DEFAULT_AUTOFILL = 100;
+
+// How many annotation edits (notes / colors / virtual tags / manual links) the
+// shared undo history keeps. Older snapshots fall off the bottom of the stack.
+export const HISTORY_LIMIT = 100;

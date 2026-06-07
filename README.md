@@ -38,6 +38,7 @@ A desktop tool dedicated to **comparing the commit history of two local Git repo
 | **Forced background colour** | Right-click a commit → choose green / bright red / blue / yellow to force-override that row's background; clear a single row or all at once | Green/Bright red/Blue/Yellow |
 | **Custom colour (5th colour)** | The last swatch in the context menu is an `<input type="color">` picker; after picking, it applies to that row and is recorded as the global 5th "quick" swatch (stored in `localStorage` as `customSwatch`); thereafter the context menu shows an extra custom swatch for reuse | Any HEX |
 | **Per-commit virtual tag** | Right-click a commit → 🏷️ add/edit a virtual tag: a user-defined version label (e.g. a release name) shown inline next to the commit like a git tag, but painted in the **manual-link purple**. Saved per repo-pair in `localStorage` (`vtag:<left path>|<right path>`) and restored on reopening; clear it from the same single-line editor (`Enter` to save) | Purple tag |
+| **Undo / redo** | `Ctrl`+`Z` undoes — and `Ctrl`+`Y` (or `Ctrl`+`Shift`+`Z`) redoes — the last edit to notes, forced colours, virtual tags, or manual links, so an accidental delete or wrong colour is one keystroke away from recovery. The toolbar's **↶ Undo** / **↷ Redo** buttons do the same. One shared history (up to 100 steps) covers all four annotation types in edit order; switching or swapping the repo pair starts a fresh history | — |
 | **Git operation popup (terminal)** | After the per-side Git bar runs pull / fetch etc., a draggable floating window pops up showing that `git` command with full stdout/stderr and exit code; green border on success, red on failure; only a successful op reloads that repo | Green/Red border |
 | **Switch branch** | The per-side Git bar **⎇ Switch branch** button opens a draggable, resizable floating modal listing every branch of that repo — **local branches** plus one group per remote (e.g. `origin`) — in a collapsible tree (collapsed by default), with the **current branch** badged. A search box does case-insensitive substring filtering (auto-expanding matches); full keyboard navigation works (↑/↓ move, → expand / descend, ← collapse / ascend, `Enter` select-then-switch, `Ctrl+F` jump to search, `Esc` close), and right-clicking a folder/group toggles it. Picking a branch and confirming runs `git switch` via IPC; remote refs strip the remote prefix so git DWIM checks out a local tracking branch, and the result appears in the same Git operation popup before that side reloads | — |
 | **Excel export (.xlsx)** | Toolbar top-right **⬇ Export Excel**: outputs the aligned commits, forced colours, notes, and manual links together into a styled `.xlsx` (ExcelJS). Cell fill colours map to forced colours, notes appear as cell comments (like tooltips), matched commits are aligned with blank cells; also includes a **Manual Links** worksheet listing all manual links | Same colours as the screen |
@@ -427,7 +428,9 @@ How it works:
 | Search panel 📝 Notes ↑ / ↓ | Jump between every commit with a note (separate from search), scrolling to centre and highlighting |
 | Commit detail popup top-right HL input | Live-highlight matching text within that popup; auto-filled with the current search term when opened |
 | `Esc` (when focus is in the comparison area) | Deselect the current line, cancel an in-progress manual link, close all detail popups |
-| `Delete` / `Backspace` | Delete the currently selected **manual link** |
+| `Delete` / `Backspace` | Delete the currently selected **manual link** (recoverable with `Ctrl`+`Z`) |
+| `Ctrl` + `Z` | **Undo** the last note / forced-colour / virtual-tag / manual-link edit |
+| `Ctrl` + `Y` / `Ctrl` + `Shift` + `Z` | **Redo** the last undone edit |
 | Click a row with a link / click the connection line | Highlight that match line and dim the rest; move focus to the comparison area and **sync the keyboard cursor** to that row (subsequent ↑↓←→ start from it) |
 | Click an empty area | Deselect and cancel an in-progress manual link |
 | Click the node ◗ (unmatched row) | Start / complete / detach a manual link (one click on each side) |
@@ -436,6 +439,7 @@ How it works:
 | Click the 📝 icon on a commit | View / edit / delete that row's note |
 | Toolbar ≈ Fuzzy Match toggle / threshold box | Toggle content-similarity fuzzy matching; the threshold box sets the similarity percentage (0–100%, default 80%) |
 | Toolbar View (Compare / Left only / Right only) | Switch between dual-side comparison and single-side enlarged mode |
+| Toolbar ↶ Undo / ↷ Redo | Step backward / forward through note, forced-colour, virtual-tag and manual-link edits (same as `Ctrl`+`Z` / `Ctrl`+`Y`); disabled when there is nothing to undo / redo |
 | Toolbar ◗ Clear manual links / 📝 Clear notes / 🎨 Clear colors | Clear the current repro pair's manual links / notes / forced colours and their `localStorage` storage at once |
 | Toolbar ⬇ Export Excel | Export the aligned commits + colours + notes + manual links as `.xlsx` (asks for a count first, default ALL) |
 | Toolbar ❓ Help | Open the keyboard shortcuts help popup (lists all shortcuts; `Esc` / ✕ / click backdrop to close) |

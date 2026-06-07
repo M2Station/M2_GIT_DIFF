@@ -31,7 +31,9 @@ const SHORTCUT_KEYS = [
   ['Shift', 'Click'],
   ['Esc'],
   ['Del'],
-  ['Ctrl', 'Enter']
+  ['Ctrl', 'Enter'],
+  ['Ctrl', 'Z'],
+  ['Ctrl', 'Y']
 ];
 
 function openGitHub(e) {

@@ -68,6 +68,10 @@ export default function Toolbar({
   onClearNotes,
   colorCount,
   onClearColors,
+  canUndo,
+  canRedo,
+  onUndo,
+  onRedo,
   single,
   onSetSingle,
   onSwapSides,
@@ -158,6 +162,24 @@ export default function Toolbar({
         </div>
 
         <div className="search-block">
+          <button
+            className="btn history-undo"
+            onClick={onUndo}
+            disabled={!canUndo}
+            title={t('toolbar.undoTitle')}
+            aria-label={t('toolbar.undo')}
+          >
+            {t('toolbar.undo')}
+          </button>
+          <button
+            className="btn history-redo"
+            onClick={onRedo}
+            disabled={!canRedo}
+            title={t('toolbar.redoTitle')}
+            aria-label={t('toolbar.redo')}
+          >
+            {t('toolbar.redo')}
+          </button>
           <button className="btn" onClick={onOpenSearch} title={t('toolbar.searchTitle')}>
             {t('toolbar.search')}
           </button>

@@ -40,6 +40,10 @@
     "rightOnlyTitle": "只顯示右側 Repo（放大）",
     "search": "🔍 Search",
     "searchTitle": "Search (Ctrl+F)",
+    "undo": "↶ Undo",
+    "undoTitle": "復原上一個註記 / 顏色 / 虛擬 TAG / 手動連結的編輯（Ctrl+Z）",
+    "redo": "↷ Redo",
+    "redoTitle": "重做上一個已復原的編輯（Ctrl+Y / Ctrl+Shift+Z）",
     "clearManual": "◗ Clear manual links",
     "clearManualTitle": "刪除所有手動連結並清除暫存",
     "clearNotes": "📝 Clear notes",
@@ -104,7 +108,9 @@
       "選取此 commit 以比對（選兩個後按比對）",
       "關閉所有彈窗 / 取消選取 / 取消連結中",
       "刪除目前選取的手動連結",
-      "在註記視窗中：儲存並關閉"
+      "在註記視窗中：儲存並關閉",
+      "復原上一個註記 / 顏色 / 虛擬 TAG / 手動連結的編輯",
+      "重做上一個已復原的編輯"
     ]
   },
   "gitBar": {
