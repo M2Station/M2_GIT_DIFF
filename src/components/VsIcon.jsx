@@ -8,11 +8,11 @@
  */
 import React from 'react';
 
-// Stylized "VS" lightning mark used on the Compare pill and the compare
-// window header. Drawn in a single `currentColor` so it inherits the
-// surrounding text color and adapts to every theme. A bold V (left) and S
-// (right) flank a diagonal lightning bolt whose pointed ends extend above and
-// below the letters — the classic "versus" look.
+// Circled "VS" versus badge used on the Compare pill, the compare-basket "go"
+// button, and the side-by-side compare window header: a thin ring enclosing a
+// bold V and a blocky, angular varsity-style S. Drawn entirely in
+// `currentColor` so it inherits the surrounding text color and adapts to every
+// theme (accent pill, basket button, muted popup header alike).
 export default function VsIcon({ className, title }) {
   return (
     <svg
@@ -24,18 +24,14 @@ export default function VsIcon({ className, title }) {
       focusable="false"
     >
       {title ? <title>{title}</title> : null}
-      {/* V (left) */}
-      <path d="M2.5 9.5 L14 38 L25.5 9.5 L19.5 9.5 L14 24 L8.5 9.5 Z" fill="currentColor" />
-      {/* lightning bolt divider, upper-right to lower-left */}
-      <path d="M34 0 L23 22 L28.5 22 L16 48 L27 24 L21.5 24 Z" fill="currentColor" />
-      {/* S (right) */}
+      {/* enclosing ring */}
+      <circle cx="24" cy="24" r="21" fill="none" stroke="currentColor" strokeWidth="3" />
+      {/* bold V */}
+      <path d="M8.5 14.5 L13 14.5 L16.5 27 L20 14.5 L24.5 14.5 L18.7 33.5 L14.3 33.5 Z" fill="currentColor" />
+      {/* blocky angular S */}
       <path
-        d="M45.5 15.5 C45.5 10.5 38.5 9.5 35 12 C31.5 14.5 32 19 37 21.5 C42 24 43 28.5 39.5 31.5 C36 34.5 30 33.5 29 29"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        d="M39 15 L29 15 L26.5 17.5 L26.5 23 L29 25.5 L35 25.5 L35 29.5 L26.5 29.5 L26.5 33.5 L36.5 33.5 L39 31 L39 25 L36.5 22.5 L30.5 22.5 L30.5 19 L39 19 Z"
+        fill="currentColor"
       />
     </svg>
   );
