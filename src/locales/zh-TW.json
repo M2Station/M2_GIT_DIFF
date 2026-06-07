@@ -50,8 +50,8 @@
     "clearNotesTitle": "刪除所有註記並清除暫存",
     "clearColors": "🎨 Clear colors",
     "clearColorsTitle": "清除所有強制背景顏色",
-    "exportExcel": "⬇ Export Excel",
-    "exportExcelTitle": "匯出對齊後的差異到 Excel（含 NOTE 提示、強制顏色、手動連結）",
+    "export": "⬇ Export",
+    "exportTitle": "開啟匯出選項，可輸出 Excel 或 Markdown review report",
     "log": "🧾 Log",
     "logTitle": "開啟錯誤 / 診斷日誌（git 失敗、cache 問題、匯出錯誤）",
     "help": "❓ Help",
@@ -167,15 +167,22 @@
     "resize": "拖曳以調整大小"
   },
   "export": {
-    "head": "⬇ 匯出 Excel",
+    "head": "⬇ 匯出 / Export",
+    "formatAria": "匯出格式",
+    "excelName": "Excel",
+    "markdownName": "Markdown",
+    "excelTitle": "Excel workbook (.xlsx)",
+    "excelDesc": "對齊列、強制顏色、NOTE 註解、超連結與 Manual Links 工作表。",
+    "markdownTitle": "Markdown review report (.md)",
+    "markdownDesc": "以表格整理摘要、未處理 unique、fuzzy 風險、手動連結與 notes。",
     "question": "目前可匯出 {total} 筆資料，要輸出多少筆？",
     "all": "全部 (ALL)",
     "allSuffix": "— {total} 筆",
     "limitPrefix": "只輸出前",
     "limitSuffix": "筆",
     "warn": "⚠ 資料量較大，匯出可能需要一些時間或產生較大的檔案。",
-    "exportAll": "匯出 全部",
-    "exportN": "匯出 {count} 筆"
+    "exportAll": "全部匯出為 {format}",
+    "exportN": "匯出 {count} 筆為 {format}"
   },
   "note": {
     "title": "📝 Note",

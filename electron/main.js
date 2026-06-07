@@ -328,6 +328,24 @@ ipcMain.handle('excel:export', async (_evt, payload) => {
   return { ok: true, path: result.filePath };
 });
 
+// Export a shareable Markdown review report using the same aligned rows as the
+// Excel export. The report is table-heavy so it can be pasted into PRs, issues,
+// Teams, or archived beside review notes without requiring Excel.
+ipcMain.handle('markdown:export', async (_evt, payload) => {
+  const data = payload || {};
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: 'Export review report to Markdown',
+    defaultPath: (data.defaultName || 'git-diff-review') + '.md',
+    filters: [{ name: 'Markdown', extensions: ['md'] }]
+  });
+  if (result.canceled || !result.filePath) return { canceled: true };
+
+  const markdown = require('./markdownReport');
+  const text = markdown.buildMarkdown(data);
+  await fs.promises.writeFile(result.filePath, text, 'utf8');
+  return { ok: true, path: result.filePath };
+});
+
 // Open an external URL in the user's default browser. Only http(s) URLs are
 // allowed so the renderer can never launch arbitrary protocols / executables.
 ipcMain.handle('shell:openExternal', async (_evt, url) => {
