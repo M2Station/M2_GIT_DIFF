@@ -67,12 +67,21 @@ function createWindow() {
     backgroundColor: '#0a0e14',
     title: APP_TITLE,
     icon: path.join(__dirname, '..', 'public', 'icon.ico'),
+    // Keep the window hidden until the renderer has painted its first frame.
+    // Showing it immediately makes Electron flash an empty frame (the dark
+    // backgroundColor) while the React bundle loads, which reads as the app
+    // "freezing" for a moment on open. `ready-to-show` removes that stall.
+    show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false
     }
+  });
+
+  mainWindow.once('ready-to-show', () => {
+    if (mainWindow) mainWindow.show();
   });
 
   // The bundled page ships its own <title>; keep the versioned window title by
@@ -97,8 +106,13 @@ function createWindow() {
 app.whenReady().then(() => {
   app.setName(APP_NAME);
   if (process.platform === 'win32') app.setAppUserModelId('com.tool.gitreprodiff');
-  db.init(app.getPath('userData'));
+  // Create the window first so the renderer starts loading right away, then
+  // initialise the cache DB (loading the native better-sqlite3 module is a
+  // synchronous, blocking step). The cache is only read once the user opens a
+  // repo, which is well after first paint, so this ordering shaves the DB
+  // startup cost off the time-to-window.
   createWindow();
+  db.init(app.getPath('userData'));
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
