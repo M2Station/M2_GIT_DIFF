@@ -11,6 +11,9 @@
     "--muted": "#5f8a5f",
     "--accent": "#39ff14",
     "--accent-dim": "#1f7a14",
+    "--selection-bg": "rgba(57, 255, 20, 0.18)",
+    "--selection-bd": "#39ff14",
+    "--selection-shadow": "rgba(57, 255, 20, 0.35)",
 
     "--common-bg": "rgba(120, 150, 120, 0.16)",
     "--common-bd": "#5b7d5b",
