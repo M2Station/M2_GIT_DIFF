@@ -60,7 +60,9 @@
     "theme": "Theme",
     "themeHint": "Choose the colour theme. Your choice is saved automatically.",
     "commitLimit": "Commits to load",
-    "commitLimitHint": "How many commits to load per repo (0 = no limit). Default is 2,000. Applies on the next repo load or refresh."
+    "commitLimitHint": "How many commits to load per repo (0 = no limit). Default is 2,000. Applies on the next repo load or refresh.",
+    "autoFill": "Auto-fill commit range",
+    "autoFillHint": "When the two sides stop at different points in history, automatically load the shallower side deeper to realign matched commits hidden by truncation (0 = off). Also caps how many commits each side may auto-load per pass. Default is 100."
   },
   "search": {
     "title": "🔍 Search",
@@ -113,7 +115,11 @@
     "fetchTitle": "git fetch --all --prune\nUpdates only the remote-tracking refs (origin/*); it does not change your local commits.\nThe view usually stays the same — use Pull to apply updates.",
     "pull": "⬇ Pull",
     "pullTitle": "git pull --ff-only",
-    "reloadTitle": "Reload this repo"
+    "reloadTitle": "Reload this repo",
+    "loadMore": "⭳ Load more",
+    "loadMoreTitle": "Load more / align\nWhen the two sides are misaligned, the first click lines them back up (loads the shallower side down to the other side's depth). Each further click then loads more on both sides together.",
+    "commitsLoadedTitle": "Commits loaded",
+    "commitsTruncatedTitle": "Commits loaded (truncated — older history not yet loaded)"
   },
   "gitTerm": {
     "success": "succeeded",
@@ -251,6 +257,10 @@
     "loadingSubLeft": "the left",
     "loadingSubRight": "the right",
     "loadingSub": "Loading {sides} repository history (up to {limit} commits)",
+    "aligningTitle": "Aligning…",
+    "aligningSub": "Loading the shallower side down to the same depth so matched commits line up. This can take a moment for a large gap.",
+    "pagingMoreTitle": "Loading more…",
+    "pagingMoreSub": "Pulling in the next batch of older commits on both sides.",
     "noRepoTitle": "No repository selected",
     "noRepoSub": "Pick the left and right Git folders from the toolbar above to start comparing commit history",
     "openRepoHint": "Open Repo",

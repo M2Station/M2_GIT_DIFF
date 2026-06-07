@@ -45,8 +45,13 @@ function init(userDataDir) {
   }
 }
 
+// Bump when the cached repo payload shape changes so stale entries written by
+// an older build are ignored instead of silently served back without the new
+// fields (e.g. `hasMore`, which gates lazy pagination / backfill).
+const CACHE_VERSION = 2;
+
 function cacheKey(repoPath, branch, limit) {
-  return `${repoPath}::${branch || 'HEAD'}::${limit}`;
+  return `v${CACHE_VERSION}::${repoPath}::${branch || 'HEAD'}::${limit}`;
 }
 
 function get(key, head) {

@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('api', {
   pickerTopParents: (n) => ipcRenderer.invoke('picker:topParents', { n }),
   pickerRecentRepos: (n) => ipcRenderer.invoke('picker:recentRepos', { n }),
   loadRepo: (opts) => ipcRenderer.invoke('repo:load', opts),
+  loadMore: (opts) => ipcRenderer.invoke('repo:loadMore', opts),
   getPatchIds: (opts) => ipcRenderer.invoke('repo:patchIds', opts),
   getDiffTexts: (opts) => ipcRenderer.invoke('repo:diffTexts', opts),
   getCommitDiff: (opts) => ipcRenderer.invoke('repo:commitDiff', opts),

@@ -11,9 +11,10 @@ import { useT } from '../lib/i18n.js';
 
 // Per-repo Git toolbar shown above each commit column. Exposes the common
 // remote operations (Fetch / Pull / Push) plus a reload, scoped to one side.
-export default function RepoGitBar({ side, repo, loading, onGitOp, onReload, onSwitchBranch }) {
+export default function RepoGitBar({ side, repo, loading, backfilling, onGitOp, onReload, onLoadMore, onSwitchBranch }) {
   const t = useT();
   const disabled = !repo.path || loading;
+  const count = repo.commits ? repo.commits.length : 0;
   return (
     <div className="git-bar" data-side={side}>
       <span className="git-bar-label">
@@ -22,6 +23,14 @@ export default function RepoGitBar({ side, repo, loading, onGitOp, onReload, onS
           <>
             <span className="git-bar-name" title={repo.path}>{repo.name}</span>
             <span className="git-bar-branch" title={t('common.currentBranch')}>⎇ {repo.branch}</span>
+            {count > 0 && (
+              <span
+                className={'git-bar-count' + (repo.hasMore ? ' truncated' : '')}
+                title={repo.hasMore ? t('gitBar.commitsTruncatedTitle') : t('gitBar.commitsLoadedTitle')}
+              >
+                {count}{repo.hasMore ? '+' : ''}
+              </span>
+            )}
           </>
         ) : (
           <span className="git-bar-name muted">{t('gitBar.noRepository')}</span>
@@ -29,6 +38,16 @@ export default function RepoGitBar({ side, repo, loading, onGitOp, onReload, onS
       </span>
 
       <span className="git-bar-actions">
+        {repo.path && repo.hasMore && (
+          <button
+            className="btn git-op"
+            onClick={() => onLoadMore(side)}
+            disabled={disabled || backfilling}
+            title={t('gitBar.loadMoreTitle')}
+          >
+            {backfilling ? '…' : t('gitBar.loadMore')}
+          </button>
+        )}
         <button className="btn git-op" onClick={() => onSwitchBranch(side)} disabled={disabled} title={t('gitBar.switchBranchTitle')}>
           {t('gitBar.switchBranch')}
         </button>

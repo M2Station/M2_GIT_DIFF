@@ -1271,6 +1271,21 @@ mark.cd-hl {
   color: var(--accent);
   white-space: nowrap;
 }
+.git-bar-count {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  padding: 1px 6px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+/* A truncated window still has older history not yet loaded — flag it so the
+   "+" count reads as "and more" rather than an exact total. */
+.git-bar-count.truncated {
+  color: var(--accent);
+  border-color: var(--accent);
+}
 .git-bar-actions {
   display: flex;
   align-items: center;
@@ -1529,6 +1544,48 @@ mark.cd-hl {
     opacity: 1;
     transform: scale(1.15);
   }
+}
+
+/* Full-stage progress overlay shown during a manual "Load more". The align
+   phase can pull a lot of history at once, so this reassures the work is in
+   flight and blocks clicks until it settles. */
+.paging-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--bg, #0c0f14) 62%, transparent);
+  backdrop-filter: blur(1.5px);
+  animation: paging-fade 0.12s ease-out;
+}
+.paging-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 24px 30px;
+  border-radius: 14px;
+  background: var(--panel, #11161d);
+  border: 1px solid color-mix(in srgb, var(--accent, #4ea1ff) 40%, transparent);
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.5);
+  max-width: 320px;
+  text-align: center;
+}
+.paging-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text, #e6edf3);
+}
+.paging-sub {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted, #8b98a5);
+}
+@keyframes paging-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .diff-scroll {

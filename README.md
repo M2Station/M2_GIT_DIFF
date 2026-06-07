@@ -150,6 +150,37 @@ Uses custom delimiters (`\x1f` for fields, `\x1e` for records) to avoid commit m
 Corresponding fields: `sha / short / parents / author / authorEmail / authorDate / commitDate / subject / body`.
 Default `limit = 2000` (see `DEFAULT_LIMIT`).
 
+### Lazy pagination & cross-repo alignment
+
+Each side loads its newest `limit` commits independently. Instead of a hard cut at
+`limit`, `getCommits` requests one extra row (`-n{limit+1}`) and returns a
+`hasMore` flag so the renderer knows older history remains. The per-repo git bar
+then shows the loaded count (e.g. `2000+`) and a **Load more** button.
+
+Because each side loads its newest commits independently, the two windows can
+stop at different dates. A commit present in **both** repos then shows as
+`unique` only because the shallower side truncated before reaching it — which
+also pushes every later row out of alignment. Two mechanisms keep the columns
+lined up:
+
+- **On open**, an automatic balancer in `App.jsx` compares the oldest loaded
+  commit on each side and pages the time-shallower one deeper until both windows
+  cover the same range, bounded per head by the auto-fill range (a Settings
+  value, default `100`, `0` = off).
+- **Load more** is a two-phase manual control that takes over once clicked. When
+  the sides are misaligned the first click *aligns* them — it pulls the shallower
+  side straight down to the other side's oldest date in a single `--since`
+  request (`git.loadMoreCommits` via the `repo:loadMore` IPC). Once aligned, each
+  further click simply *loads more* on both sides together (a `PAGE_BATCH = 500`
+  `git log --skip`). A progress overlay (“Aligning…” / “Loading more…”) covers
+  the stage while the work is in flight, since the align pull can be large.
+
+New commits are appended and deduped by SHA, so the existing diff / patch-id /
+fuzzy passes re-run and enrich only the newcomers. The lazy `repo:loadMore` IPC
+is deliberately uncached, and the per-head load cache is versioned (`CACHE_VERSION`
+in `db.js`) so a payload-shape change like `hasMore` invalidates stale entries
+instead of silently serving them back.
+
 ---
 
 ## 4. Comparison Algorithm (src/lib/diff.js)
@@ -408,7 +439,7 @@ How it works:
 | Toolbar ◗ Clear manual links / 📝 Clear notes / 🎨 Clear colors | Clear the current repro pair's manual links / notes / forced colours and their `localStorage` storage at once |
 | Toolbar ⬇ Export Excel | Export the aligned commits + colours + notes + manual links as `.xlsx` (asks for a count first, default ALL) |
 | Toolbar ❓ Help | Open the keyboard shortcuts help popup (lists all shortcuts; `Esc` / ✕ / click backdrop to close) |
-| Toolbar ⚙ Settings | Open the settings popup to switch the UI language (English / 中文; `Esc` / ✕ / click backdrop to close) |
+| Toolbar ⚙ Settings | Open the settings popup: UI language, colour theme, commits-to-load limit, and auto-fill range (English / 中文; `Esc` / ✕ / click backdrop to close) |
 | The colour picker at the end of the context menu | Apply any custom colour to that row and record it as the global 5th quick swatch |
 
 > `F3`'s cycle order is display rows top-to-bottom, left column before right within a row; the cursor resets when the hit set changes (editing the search term). `Ctrl`+`F` and `F3` are listened globally and work even when focus is in the search box. `Esc` is listened globally: whenever the search panel is open, it closes regardless of focus. The **📝 Notes** section below the search panel is entirely separate from search, jumping between all commits with a note using ↑ / ↓ (display-row order, left column before right).

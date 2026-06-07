@@ -114,14 +114,34 @@ function parseTags(refs) {
  * @param {string} cwd repo path
  * @param {object} opts { limit, branch }
  */
+/**
+ * Read a window of commits from a repo.
+ *
+ * Supports paging via `opts.skip` (how many of the newest commits to skip) and
+ * `opts.limit` (how many to return). To tell the renderer whether MORE history
+ * exists beyond the window — so it can lazily page / backfill instead of hard
+ * truncating — we request one extra row (`limit + 1`) and pop it back off,
+ * surfacing its existence as `hasMore`.
+ *
+ * @param {string} cwd repo path
+ * @param {{limit?:number, skip?:number, branch?:string}} opts
+ * @returns {Promise<{commits:object[], hasMore:boolean}>}
+ */
 async function getCommits(cwd, opts = {}) {
   if (!isGitRepo(cwd)) {
     throw new Error(`Not a git repository: ${cwd}`);
   }
 
   const limit = Number.isFinite(opts.limit) ? opts.limit : 2000;
+  const skip = Number.isFinite(opts.skip) && opts.skip > 0 ? Math.floor(opts.skip) : 0;
+  // Optional date floor: load only commits newer than `since`. Used to ALIGN one
+  // side down to the other side's oldest loaded date in a single request.
+  const since = typeof opts.since === 'string' && opts.since ? opts.since : null;
   const args = ['log', `--pretty=format:${LOG_FORMAT}`, '--date=iso-strict'];
-  if (limit > 0) args.push(`-n${limit}`);
+  // Pull one extra commit so we can detect (and then discard) "there is more".
+  if (limit > 0) args.push(`-n${limit + 1}`);
+  if (since) args.push(`--since=${since}`);
+  if (skip > 0) args.push(`--skip=${skip}`);
   if (opts.branch) args.push(opts.branch);
 
   const out = await run(args, cwd);
@@ -146,7 +166,49 @@ async function getCommits(cwd, opts = {}) {
       tags: parseTags(f[9])
     });
   }
-  return commits;
+
+  // The (limit + 1)-th row exists only to prove more history remains; trim it
+  // so callers always get at most `limit` commits.
+  let hasMore = false;
+  if (limit > 0 && commits.length > limit) {
+    hasMore = true;
+    commits.length = limit;
+  }
+
+  // A `--since` (align) load hides everything older than the date floor, so the
+  // `limit + 1` trick can't tell whether more history remains below it. Probe
+  // for the next older commit (ignoring the date bound) so the renderer keeps
+  // its "Load more" affordance after an alignment pull.
+  if (since && !hasMore) {
+    try {
+      const probeArgs = ['log', `--skip=${skip + commits.length}`, '-n1', '--pretty=%H'];
+      if (opts.branch) probeArgs.push(opts.branch);
+      hasMore = (await run(probeArgs, cwd)).trim().length > 0;
+    } catch {
+      /* leave hasMore as-is if the probe fails */
+    }
+  }
+  return { commits, hasMore };
+}
+
+/**
+ * Page in the NEXT batch of older commits for a repo whose initial window was
+ * truncated. Thin wrapper over getCommits that skips the rows the renderer
+ * already holds. Returns the same `{ commits, hasMore }` shape.
+ *
+ * @param {string} cwd repo path
+ * @param {{branch?:string, skip?:number, batch?:number, since?:string}} opts
+ * @returns {Promise<{commits:object[], hasMore:boolean}>}
+ */
+function loadMoreCommits(cwd, opts = {}) {
+  const skip = Number.isFinite(opts.skip) && opts.skip > 0 ? Math.floor(opts.skip) : 0;
+  const batch = Number.isFinite(opts.batch) && opts.batch > 0 ? Math.floor(opts.batch) : 500;
+  const since = typeof opts.since === 'string' && opts.since ? opts.since : null;
+  // A date-bounded align load may need to pull far more than one page to catch
+  // up to the other side's depth, so give it a high ceiling; plain paging keeps
+  // the modest batch.
+  const limit = since ? 5000 : batch;
+  return getCommits(cwd, { branch: opts.branch || undefined, limit, skip, since });
 }
 
 /**
@@ -271,7 +333,7 @@ async function getCommitDiff(cwd, sha) {
 }
 
 async function loadRepo(cwd, opts = {}) {
-  const [branch, head, commits, remoteUrl] = await Promise.all([
+  const [branch, head, page, remoteUrl] = await Promise.all([
     getCurrentBranch(cwd),
     getHeadSha(cwd),
     getCommits(cwd, opts),
@@ -283,7 +345,10 @@ async function loadRepo(cwd, opts = {}) {
     branch,
     head,
     remoteUrl,
-    commits
+    commits: page.commits,
+    // True when the initial window was truncated and older commits remain,
+    // so the renderer can page / backfill instead of treating it as the end.
+    hasMore: page.hasMore
   };
 }
 
@@ -400,6 +465,7 @@ module.exports = {
   isGitRepo,
   getCurrentBranch,
   getCommits,
+  loadMoreCommits,
   getPatchIds,
   getDiffTexts,
   getCommitDiff,

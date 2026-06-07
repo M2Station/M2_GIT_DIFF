@@ -216,6 +216,18 @@ ipcMain.handle('repo:load', async (_evt, payload) => {
   return { ...repo, cached: false };
 });
 
+// Page in the next batch of older commits for a truncated repo window. Kept
+// out of the cache (it's a cheap, bounded `git log --skip`) so pagination never
+// pollutes the per-head load cache.
+ipcMain.handle('repo:loadMore', async (_evt, payload) => {
+  const { repoPath, branch, skip, batch, since } = payload || {};
+  if (!repoPath) throw new Error('repoPath is required');
+  if (!git.isGitRepo(repoPath)) {
+    throw new Error(`Not a git repository: ${repoPath}`);
+  }
+  return git.loadMoreCommits(repoPath, { branch, skip, batch, since });
+});
+
 // Record an opened repo so the picker can learn frequent folders and recents.
 // Called explicitly by the renderer when the user picks a repo, so automatic
 // reloads/branch-switches don't inflate the counts.
