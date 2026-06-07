@@ -64,6 +64,9 @@
       "icon": "public/icon.ico"
     },
     "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
       "include": "installer/installer.nsh",
       "installerIcon": "public/icon.ico",
       "uninstallerIcon": "public/icon.ico",
