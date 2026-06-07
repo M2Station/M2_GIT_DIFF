@@ -12,6 +12,9 @@ out/
 .cache/
 *.tsbuildinfo
 
+# Test coverage output
+coverage/
+
 # Native module build artifacts (better-sqlite3 / electron-rebuild)
 prebuilds/
 *.node

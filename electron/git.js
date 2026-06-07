@@ -472,5 +472,6 @@ module.exports = {
   loadRepo,
   gitOp,
   listBranches,
-  switchBranch
+  switchBranch,
+  parseTags
 };
