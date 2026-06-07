@@ -27,6 +27,7 @@
 | Cherry-pick（標題） | **標題相同但 SHA 不同**，並用線左右對齊連接 | 黃色背景＋黃色虛線 |
 | Cherry-pick（內容 / patch-id） | 標題**不同**但 `git patch-id`（實際變更內容指紋）相同 → 標題被改寫的 cherry-pick 也能配對 | 黃色背景＋黃色點線 |
 | **Fuzzy Match（內容相似度）** | 工具列可開關的模糊配對：當 SHA / 標題 / patch-id **都比對不上**時，比較兩個 commit **實際變更的程式碼行**，相似度（包含率）≥ 門檻（預設 **80%**，可調 0–100%）即配對。適合「TOT 把多個專案一起改、personal branch 只改其中一個專案」這種**子集**情境 | 粉紅色背景＋粉紅色粗虛線 |
+| **並排比對（行內 diff）** | 選取任一已連線的配對（點連接線或已連線的列）→ 連接線上會出現 **⚡VS 比對** 膠囊鈕並預顯相似度 %。或者 **Shift+點選任意兩個 commit**（即使未連線、甚至同一欄）加入選取籃，再按 **比對**。兩者都會彈出可拖曳縮放的視窗，抓取**兩個 commit 各自的完整 unified diff**，依檔案路徑對齊後**並排逐行**呈現（`+`/`-` 上色），並顯示整體與**逐檔** Jaccard 相似度 %。用來回答「這次 cherry-pick 到底有沒有保持一致、還是程式碼已悄悄走鐘？」 | 綠色新增／紅色刪除行 |
 | **左右對齊版面** | 配對成功的列（灰＋黃＋粉）會被排到**同一個顯示列**，連接線變成水平直線；無法配對者填補空檔 | — |
 | 搜尋 | 可搜尋 標題 / 內文 / SHA / 作者 / 日期，命中高亮、其餘變暗，顯示命中數量 | — |
 | Filter 模式 | 開啟後只保留命中的 commit（壓縮排列），關閉則只是變暗 | — |
@@ -57,6 +58,8 @@
 
 **Fuzzy Match（內容相似度模糊配對）**：工具列 Swap 左側的 **≈ Fuzzy Match** 按鈕（關閉時灰階、開啟時亮粉紅）可切換模糊配對，旁邊的數字框是相似度門檻（0–100%，**預設 80%**）。開啟後，對於 SHA / 標題 / patch-id 都配不上的 commit，會透過 IPC 抓取兩側 commit 的**實際變更行**（diff 的 `+`/`-` 內容，去除檔頭、去重），以**包含率** $\frac{|A\cap B|}{\min(|A|,|B|)}$ 計分；分數 ≥ 門檻即以**粉紅色粗虛線**配對，每個 commit 最多配一次（取分數高者優先）。用 min 當分母代表**子集也能高分**：例如 TOT 的某次提交同時改了兩個專案，而 personal branch 只改其中一個專案，共同專案的變更行被完全包含 → 接近 100%，仍會連起來。為避免極小 diff 誤判，少於 3 行變更的 commit 不參與。
 
+**並排比對（行內 diff）**：選取一對已配對的 commit（點連接線，或點灰/黃/粉/紫的已連線列）後，中央 gutter 上被選取的連接線會出現一個 **⚡VS 比對** 膠囊鈕（一個風格化的「VS」閃電圖標），先行顯示兩個 commit 的內容相似度 %（有 fuzzy 分數時取之、common 因 SHA 相同直接 100%、否則對任何已快取的變更行做快速 Jaccard）。你也可以 **Shift+點選任意兩個 commit**（不需已連線，甚至可在同一欄／同一 repo）加入視窗底部浮動的「選取比對籃」；選滿兩個後，其 **比對** 按鈕即為這個臨時配對開啟同一視窗。點任一入口都會開啟浮動的**並排 diff 視窗**：renderer 透過 IPC（`repo:commitDiff` → `git show --no-color --first-parent`）抓取每個 commit 的完整 unified diff，以 `parseUnifiedDiff`（`src/lib/diff.js`）解析成檔案／hunk，再把兩份 patch 以**依檔案路徑對齊的兩欄**排版，每行 `+`/`-` 上色。標頭顯示兩個 commit 變更行的**整體** Jaccard 相似度，而每個檔案列顯示其**逐檔**相似度 %；僅單側更動的檔案會被標示。視窗可由標頭拖曳、可從任一邊／角縮放（與 commit 詳情浮窗一致）；按 `Esc` 關閉。如此即可輕鬆驗證 cherry-pick／fuzzy 配對是否真的帶了相同程式碼，或已悄悄分歧。視窗本身也有**內建搜尋**（標頭下方的搜尋列，或在視窗聚焦時按 `Ctrl/Cmd+F`）：會在兩欄與檔名中高亮命中、顯示命中數，並以 `Enter` / `F3` 循環（`Shift` 往前）。此搜尋與 App 本體的 `Ctrl+F` **完全獨立**——視窗的快捷鍵不會外洩、也不會干擾主搜尋——但開啟時會方便地**帶入** App 目前的搜尋關鍵字。
+
 **手動連結**：把滑鼠移到未配對（紅）的 commit 上，靠中央側會出現一個圓形節點 ◗；先點左邊一個、再點右邊一個即建立紫色手動連線。再次點擊已連結的節點可斷開，或選取該連線後按 `Delete` / `Backspace` 移除。手動連結以兩側 repo 路徑為 key 存進 `localStorage`，**打開一模一樣的 repro 會自動 RESUME 還原**（以 SHA 記錄，新增 commit 後仍可還原）。
 
 **暫存位置**：手動連結存在 renderer 的 `localStorage`，key 為 `mlink:<左repo路徑>|<右repo路徑>`，value 為 `[{ leftSha, rightSha }, …]` 的 JSON。工具列上的紫色 **◗ Clear manual links** 按鈕（與手動連結同色）會一次取消目前 repro pair 的**所有手動連結並刪除該暫存**（有連結時顯示數量，無連結時 disabled）。
@@ -84,7 +87,7 @@
 Electron (主行程)
 ├─ electron/main.js      視窗建立、IPC handler、資料夾選擇對話框、Excel 匯出存檔對話框
 ├─ electron/preload.js   contextBridge 安全橋接，暴露 window.api（含 exportExcel）
-├─ electron/git.js       呼叫系統 git，解析 git log → 結構化 commit；getPatchIds / getDiffTexts（Fuzzy 變更行）；gitOp 回傳完整 stdout/stderr 與 exit code
+├─ electron/git.js       呼叫系統 git，解析 git log → 結構化 commit；getPatchIds / getDiffTexts（Fuzzy 變更行）/ getCommitDiff（並排比對用的完整 unified diff）；gitOp 回傳完整 stdout/stderr 與 exit code
 ├─ electron/excel.js     ExcelJS 產生 styled .xlsx（顏色填滿、註記 cell 註解、SHA 超連結到遠端 commit URL、Manual Links 工作表）
 ├─ electron/fsdialog.js  內建 FolderPicker 的目錄列舉（dialog:listDir / dialog:rememberDir）
 └─ electron/db.js        better-sqlite3 快取層（缺少時自動退回記憶體快取）
@@ -93,7 +96,7 @@ Renderer (React + Vite)
 ├─ src/main.jsx                 React 入口
 ├─ src/App.jsx                  狀態管理、diff 計算、虛擬化捲動、過濾邏輯
 ├─ src/styles.css               HUD 深色主題樣式
-├─ src/lib/diff.js              核心比對演算法（灰/紅/黃分類、連線、搜尋、左右對齊 alignLayout）
+├─ src/lib/diff.js              核心比對演算法（灰/紅/黃分類、連線、搜尋、左右對齊 alignLayout；並排比對用的 parseUnifiedDiff / changedLineSet / patchSimilarity）
 ├─ src/lib/constants.js         版面常數（列高、gutter 寬、overscan…）
 ├─ src/assets/logo.svg          工具列 LOGO（青色 M2 字標）
 └─ src/components/
@@ -113,6 +116,7 @@ Renderer (React + Vite)
    ├─ HelpPopup.jsx       快捷鍵說明彈窗（置中 Modal、鍵帽列表、OA Hsiao 徽章，`Esc`/背景關閉）
    ├─ SettingsPopup.jsx   設定彈窗（語言選擇器 + 主題選擇器；語系由 `src/locales`、主題由 `src/themes` 自動掃描）
    └─ CommitDetail.jsx     Commit 詳情浮窗（Markdown 渲染、Related item、SHA 旁 🔗 Web / 🔀 PR / 🔍 程式碼搜尋連結、可移動縮放、可多開、💬 Chat 開 VS Code）
+   └─ DiffComparePopup.jsx 並排行內 diff 比對視窗（抓取兩個 commit 的 unified diff、依檔案對齊的雙欄 +/- 檢視、整體＋逐檔相似度 %、可拖曳縮放）
 ```
 
 **多主題配色（Theme）**：主題定義存於 `src/themes/*.json`（每個檔案一個主題，檔名去掉 `.json` 即主題 id，檔內 `_meta.name` 為顯示名稱，`vars` 為 CSS 自訂屬性對應表）。`src/lib/theme.js` 以 Vite `import.meta.glob('../themes/*.json', { eager: true })` 在建置時**自動掃描**該目錄，掃到幾個檔就提供幾種主題——新增 `xx.json` 即自動出現於設定清單，無需改程式。`ThemeProvider` 包住 `App`（`src/main.jsx`）；切換時 `applyTheme()` 把該主題的 `vars` 逐一寫到 `document.documentElement` 的 inline style 並設 `data-theme` 屬性，`src/styles.css` 內所有顏色皆以 `var(--…)` 引用，因此即時換膚。選擇存於 `localStorage` 的 `appTheme`（預設：已存值 → `low_key` → 掃描到的第一個），且模組載入時即先套用一次以避免畫面閃爍（FOUC）。內建 **Low Key**（原生深色）、**Daylight**（淺色）、**Solarized**、**Matrix**、**Army**（軍綠／沙漠棕／水泥灰）五種。

@@ -304,6 +304,73 @@ export function applyFuzzy(base, fuzzy) {
 }
 
 // ---------------------------------------------------------------------------
+// Side-by-side compare helpers
+//
+// Used by the Compare popup ("行內 Diff 並排檢視") to (a) pre-show how alike two
+// linked commits' ACTUAL edits are and (b) render each commit's patch line by
+// line. Pure functions — no git / IPC.
+// ---------------------------------------------------------------------------
+
+// Build the Set of normalized changed lines (added/removed) from a raw unified
+// diff. Mirrors the main process's getDiffTexts normalization (sign kept, body
+// trimmed, trivial lines dropped) so the Compare similarity % is consistent
+// with the fuzzy-match score.
+export function changedLineSet(patch) {
+  const set = new Set();
+  if (!patch) return set;
+  for (const raw of patch.split('\n')) {
+    if (raw.length < 2) continue;
+    const c = raw[0];
+    if (c !== '+' && c !== '-') continue;
+    if (raw.startsWith('+++') || raw.startsWith('---')) continue;
+    const text = raw.slice(1).trim();
+    if (text.length < 2) continue;
+    set.add(c + text);
+  }
+  return set;
+}
+
+// Symmetric Jaccard similarity (0..1) of two changed-line sets. Exposed so the
+// Compare popup can pre-compute how alike two commits' edits are.
+export function patchSimilarity(aSet, bSet) {
+  if (!aSet || !bSet || aSet.size === 0 || bSet.size === 0) return 0;
+  return jaccard(aSet, bSet);
+}
+
+// Parse a raw unified diff into a list of files, each with hunks of typed lines,
+// for the side-by-side Compare view. Line `type` is 'add' | 'del' | 'ctx'.
+//   files: [{ path, oldPath, hunks: [{ header, lines: [{ type, text }] }] }]
+export function parseUnifiedDiff(patch) {
+  const files = [];
+  if (!patch) return files;
+  let file = null;
+  let hunk = null;
+  for (const raw of patch.split('\n')) {
+    if (raw.startsWith('diff --git')) {
+      const m = raw.match(/^diff --git a\/(.+?) b\/(.+)$/);
+      const newPath = m ? m[2] : raw.slice('diff --git '.length).trim();
+      file = { path: newPath, oldPath: m ? m[1] : newPath, hunks: [] };
+      files.push(file);
+      hunk = null;
+      continue;
+    }
+    if (!file) continue;
+    if (raw.startsWith('@@')) {
+      hunk = { header: raw, lines: [] };
+      file.hunks.push(hunk);
+      continue;
+    }
+    if (!hunk) continue; // file-header noise (index/mode/rename/+++/---)
+    const c = raw[0];
+    if (c === '+') hunk.lines.push({ type: 'add', text: raw.slice(1) });
+    else if (c === '-') hunk.lines.push({ type: 'del', text: raw.slice(1) });
+    else if (c === '\\') continue; // "\ No newline at end of file"
+    else hunk.lines.push({ type: 'ctx', text: raw.startsWith(' ') ? raw.slice(1) : raw });
+  }
+  return files;
+}
+
+// ---------------------------------------------------------------------------
 // Alignment layout
 //
 // Places matched pairs (common + cherry-pick) on the SAME display row so the

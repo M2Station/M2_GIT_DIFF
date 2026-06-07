@@ -49,7 +49,10 @@ export default function RepoColumn({
   vtagMap,
   onRowMenu,
   plain,
-  onDetail
+  onDetail,
+  onPick,
+  pickedShas,
+  pickOrder
 }) {
   const bodyHeight = totalRows * ROW_HEIGHT;
 
@@ -75,6 +78,8 @@ export default function RepoColumn({
           const selected =
             selectedMatch != null && c.matchId != null && c.matchId === selectedMatch;
           const rowKey = c.sha + ':' + c.index;
+          const pickKey = side + ':' + c.sha;
+          const pickIdx = pickOrder ? pickOrder.get(pickKey) : undefined;
           return (
             <CommitRow
               key={rowKey}
@@ -97,6 +102,9 @@ export default function RepoColumn({
               vtag={vtagMap ? vtagMap[c.sha] : undefined}
               onRowMenu={onRowMenu}
               onDetail={onDetail}
+              onPick={onPick}
+              picked={!!pickedShas && pickedShas.has(pickKey)}
+              pickIndex={pickIdx}
             />
           );
         })

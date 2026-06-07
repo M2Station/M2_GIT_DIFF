@@ -36,7 +36,7 @@ function hexToTint(hex, alpha) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-function CommitRow({ commit, side, query, dimmed, isHit, selected, height, top, onSelect, manualLinked, pending, onNode, activeHit, hasNote, onNoteOpen, color, vtag, onRowMenu, onDetail }) {
+function CommitRow({ commit, side, query, dimmed, isHit, selected, height, top, onSelect, manualLinked, pending, onNode, activeHit, hasNote, onNoteOpen, color, vtag, onRowMenu, onDetail, onPick, picked, pickIndex }) {
   const t = useT();
   // A `#rrggbb` color is a user-defined custom swatch: paint it inline since it
   // has no `.force-*` CSS class. Named keys still use the class.
@@ -50,6 +50,7 @@ function CommitRow({ commit, side, query, dimmed, isHit, selected, height, top, 
     selected ? 'selected' : '',
     commit.matchId ? 'linkable' : '',
     manualLinked ? 'manual' : '',
+    picked ? 'picked' : '',
     hasNote ? 'has-note' : '',
     color && !isHex ? 'force-' + color : ''
   ]
@@ -64,8 +65,26 @@ function CommitRow({ commit, side, query, dimmed, isHit, selected, height, top, 
     if (side === 'R') rowStyle.borderRightColor = color;
   }
 
+  // Shift+Click extends the browser's native text selection (caret -> click),
+  // which paints a big blue smear across rows. The selection is created on
+  // mousedown, so we have to cancel it there — preventDefault in the click
+  // handler fires too late. Only suppress it for the Shift+Click pick gesture.
+  const handleMouseDown = (e) => {
+    if (e.shiftKey && typeof onPick === 'function') {
+      e.preventDefault();
+    }
+  };
+
   const handleClick = (e) => {
     e.stopPropagation();
+    // Shift+Click -> add/remove this commit to the pick-to-compare basket.
+    if (e.shiftKey && typeof onPick === 'function') {
+      e.preventDefault();
+      // Clear any stray selection the gesture may have left behind.
+      window.getSelection?.()?.removeAllRanges?.();
+      onPick(side, commit.sha);
+      return;
+    }
     // Ctrl/Cmd+Click -> open the floating commit detail popup.
     if ((e.ctrlKey || e.metaKey) && typeof onDetail === 'function') {
       e.preventDefault();
@@ -120,10 +139,12 @@ function CommitRow({ commit, side, query, dimmed, isHit, selected, height, top, 
       className={cls}
       style={rowStyle}
       onClick={handleClick}
+      onMouseDown={handleMouseDown}
       onContextMenu={handleContextMenu}
       title={title}
       data-side={side}
     >
+      {picked && <span className="pick-badge" title={t('compare.pickBadge')}>{pickIndex}</span>}
       <span className="sha">{highlight(commit.short, query)}</span>
       <span className="date">{shortDate(commit.authorDate)}</span>
       <span className="subject">

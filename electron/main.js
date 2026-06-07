@@ -272,6 +272,14 @@ ipcMain.handle('repo:diffTexts', async (_evt, payload) => {
   return Object.fromEntries(map);
 });
 
+ipcMain.handle('repo:commitDiff', async (_evt, payload) => {
+  const { repoPath, sha } = payload || {};
+  if (!repoPath || !sha) return '';
+  if (!git.isGitRepo(repoPath)) return '';
+  // Returns the raw unified-diff text the commit introduced (or '' on failure).
+  return git.getCommitDiff(repoPath, sha);
+});
+
 ipcMain.handle('repo:gitOp', async (_evt, payload) => {
   const { repoPath, op } = payload || {};
   if (!repoPath) throw new Error('repoPath is required');

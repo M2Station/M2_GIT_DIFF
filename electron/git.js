@@ -231,6 +231,45 @@ async function getDiffTexts(cwd, shas) {
   return map;
 }
 
+/**
+ * Fetch the full, human-readable unified diff a single commit introduced (its
+ * change vs. its first parent) so the renderer can show a side-by-side, line-by
+ * -line view. Unlike getDiffTexts — which dedups and strips context lines for
+ * fuzzy scoring — this preserves file headers, hunk headers, context lines and
+ * the +/- markers needed for a readable patch.
+ *
+ * Returns the raw `git show` patch text (starting at the first `diff --git`).
+ * The commit-message header is dropped because the renderer already has that
+ * metadata from the loaded commit row. Best-effort: returns '' on failure or
+ * for commits with no diff (e.g. an empty/merge commit).
+ *
+ * @param {string} cwd repo path
+ * @param {string} sha full or abbreviated commit sha
+ * @returns {Promise<string>} unified diff text
+ */
+async function getCommitDiff(cwd, sha) {
+  const id = String(sha || '').trim();
+  // Validate to a bare hex object name so the renderer can never inject git
+  // options or extra path arguments.
+  if (!/^[0-9a-fA-F]{4,64}$/.test(id)) {
+    throw new Error(`Invalid commit sha: ${sha}`);
+  }
+  if (!isGitRepo(cwd)) throw new Error(`Not a git repository: ${cwd}`);
+  try {
+    // --first-parent keeps merge commits to the mainline change; -m would
+    // explode them into per-parent diffs. --format= drops the commit header so
+    // only the patch body remains.
+    const out = await run(
+      ['show', '--no-color', '--first-parent', '--format=', id],
+      cwd
+    );
+    const start = out.indexOf('diff --git');
+    return start === -1 ? '' : out.slice(start);
+  } catch {
+    return '';
+  }
+}
+
 async function loadRepo(cwd, opts = {}) {
   const [branch, head, commits, remoteUrl] = await Promise.all([
     getCurrentBranch(cwd),
@@ -363,6 +402,7 @@ module.exports = {
   getCommits,
   getPatchIds,
   getDiffTexts,
+  getCommitDiff,
   loadRepo,
   gitOp,
   listBranches,

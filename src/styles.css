@@ -2917,3 +2917,524 @@ mark {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* ---------------- Compare pill (in the gutter) ---------------- */
+/* Floating action on the selected match: opens the side-by-side diff. Anchored
+   at the link's mid-row (inline `top`) and centered in the gutter. */
+.compare-pill {
+  position: absolute;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #04121b;
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+}
+.compare-pill:hover {
+  filter: brightness(1.08);
+}
+.compare-pill-ico {
+  display: inline-flex;
+  line-height: 1;
+}
+.compare-pill-ico svg {
+  width: 15px;
+  height: 15px;
+  display: block;
+}
+.compare-pill-sim {
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(4, 18, 27, 0.22);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------- Side-by-side compare popup ---------------- */
+.diff-compare {
+  position: fixed;
+  z-index: 80;
+  min-width: 520px;
+  background: linear-gradient(180deg, var(--bg-soft) 0%, var(--panel) 60%);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  backdrop-filter: blur(2px);
+}
+.dc-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0));
+  border-bottom: 1px solid rgba(120, 160, 200, 0.16);
+  cursor: grab;
+  user-select: none;
+}
+.dc-header:active {
+  cursor: grabbing;
+}
+.dc-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+.dc-sim {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+}
+.dc-sim.high { background: var(--common-bg); color: var(--text); border: 1px solid var(--cherry-bd); }
+.dc-sim.mid { background: var(--cherry-bg); color: var(--text); border: 1px solid var(--cherry-bd); }
+.dc-sim.low { background: var(--unique-bg); color: var(--text); border: 1px solid var(--unique-bd); }
+.dc-spacer { flex: 1 1 auto; }
+.dc-close {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+.dc-close:hover { background: rgba(255, 255, 255, 0.08); color: var(--text); }
+
+.dc-subhead {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-soft);
+}
+.dc-chip {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+}
+.dc-chip-side {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: #04121b;
+}
+.dc-chip.L .dc-chip-side { background: var(--accent); }
+.dc-chip.R .dc-chip-side { background: #e0a44a; }
+.dc-chip-sha {
+  flex: 0 0 auto;
+  font-family: var(--mono, ui-monospace, monospace);
+  color: var(--accent);
+}
+.dc-chip-subject {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dc-vs {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  display: block;
+  color: var(--muted);
+}
+
+/* In-popup search bar — isolated from the app's own Ctrl+F search. */
+.dc-find {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+.dc-find-ico {
+  flex: 0 0 auto;
+  font-size: 11px;
+  opacity: 0.7;
+}
+.dc-find-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg-soft);
+  color: var(--text);
+  font-size: 12px;
+  outline: none;
+}
+.dc-find-input:focus {
+  border-color: var(--accent);
+}
+.dc-find-count {
+  flex: 0 0 auto;
+  min-width: 44px;
+  text-align: right;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.dc-find-case {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+.dc-find-case input {
+  margin: 0;
+  cursor: pointer;
+}
+.dc-find-btn {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg-soft);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+.dc-find-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.dc-find-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.dc-find-hit {
+  background: rgba(224, 164, 74, 0.32);
+  color: inherit;
+  border-radius: 2px;
+}
+.dc-find-hit.active {
+  background: var(--accent);
+  color: #04121b;
+}
+
+.dc-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 12px;
+}
+.dc-scroll::-webkit-scrollbar { width: 10px; height: 10px; }
+.dc-scroll::-webkit-scrollbar-thumb {
+  background: rgba(120, 160, 200, 0.25);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.dc-scroll::-webkit-scrollbar-thumb:hover { background: rgba(120, 160, 200, 0.4); background-clip: padding-box; }
+
+.dc-status-msg {
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--muted);
+  font-family: inherit;
+}
+.dc-status-msg.dc-err { color: #ff8a8a; }
+
+.dc-file {
+  border-bottom: 1px solid var(--line);
+}
+.dc-file-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+.dc-file-path {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dc-file-sim {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+}
+.dc-file-sim.high { background: var(--common-bg); color: var(--text); }
+.dc-file-sim.mid { background: var(--cherry-bg); color: var(--text); }
+.dc-file-sim.low { background: var(--unique-bg); color: var(--text); }
+.dc-file-only {
+  flex: 0 0 auto;
+  font-size: 10px;
+  color: var(--muted);
+}
+.dc-file-body {
+  display: flex;
+  align-items: stretch;
+}
+.dc-col {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow-x: auto;
+  padding: 2px 0;
+}
+.dc-col-empty {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  color: var(--muted);
+  font-size: 11px;
+  font-style: italic;
+}
+.dc-col-divider {
+  flex: 0 0 auto;
+  width: 1px;
+  background: var(--line);
+}
+.dc-hunk { padding: 1px 0; }
+.dc-hunk-head {
+  padding: 1px 10px;
+  color: var(--accent);
+  background: rgba(120, 160, 200, 0.08);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.dc-line {
+  display: flex;
+  align-items: flex-start;
+  padding: 0 10px 0 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.dc-gutter-sign {
+  flex: 0 0 auto;
+  width: 18px;
+  text-align: center;
+  color: var(--muted);
+  user-select: none;
+}
+.dc-line-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--text);
+}
+.dc-line.add { background: var(--diff-add-bg, rgba(46, 160, 67, 0.18)); }
+.dc-line.add .dc-gutter-sign { color: var(--diff-add-fg, #3fb950); }
+.dc-line.del { background: var(--diff-del-bg, rgba(248, 81, 73, 0.16)); }
+.dc-line.del .dc-gutter-sign { color: var(--diff-del-fg, #f85149); }
+.dc-line.ctx .dc-line-text { color: var(--muted); }
+
+/* ---------------- Pick-to-compare (Shift+Click) ---------------- */
+/* A small numbered badge on a commit row the user picked for ad-hoc compare. */
+.pick-badge {
+  position: absolute;
+  left: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #04121b;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+.commit-row.picked {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+/* Floating basket that appears once one or two commits are picked. */
+.compare-basket {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(92vw, 980px);
+  padding: 7px 10px 7px 14px;
+  background: linear-gradient(180deg, var(--bg-soft) 0%, var(--panel) 70%);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.5);
+}
+.cb-title {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.cb-items {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+}
+.cb-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 320px;
+  padding: 3px 4px 3px 3px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 12px;
+}
+.cb-chip-n {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #04121b;
+  font-size: 10px;
+  font-weight: 700;
+}
+.cb-chip-side {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.cb-chip.L .cb-chip-side { color: var(--accent); }
+.cb-chip.R .cb-chip-side { color: var(--accent); }
+.cb-chip-sha {
+  flex: 0 0 auto;
+  font-family: var(--mono, ui-monospace, monospace);
+  color: var(--text);
+}
+.cb-chip-subject {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cb-chip-x {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  font-size: 10px;
+  cursor: pointer;
+}
+.cb-chip-x:hover { background: rgba(255, 255, 255, 0.12); color: var(--text); }
+.cb-hint {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.cb-go {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  background: var(--accent);
+  color: #04121b;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.cb-go:hover:not(:disabled) { filter: brightness(1.08); }
+.cb-go:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.cb-go-ico {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+.cb-clear {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+.cb-clear:hover { color: var(--text); border-color: var(--muted); }
+
