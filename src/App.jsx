@@ -26,11 +26,11 @@ import SettingsPopup from './components/SettingsPopup.jsx';
 import FolderPicker from './components/FolderPicker.jsx';
 import logoUrl from './assets/logo.svg';
 import { computeDiff, applyFuzzy, matchesQuery, alignLayout, patchSimilarity } from './lib/diff.js';
-import { ROW_HEIGHT, GUTTER_WIDTH } from './lib/constants.js';
-import { getCommitLimit } from './lib/settings.js';
+import { ROW_HEIGHT, GUTTER_WIDTH, PAGE_BATCH } from './lib/constants.js';
+import { getCommitLimit, getAutoFillRange } from './lib/settings.js';
 import { useT } from './lib/i18n.js';
 
-const emptyRepo = { path: '', name: '', branch: '', head: '', commits: [] };
+const emptyRepo = { path: '', name: '', branch: '', head: '', commits: [], hasMore: false };
 
 export default function App() {
   const t = useT();
@@ -46,6 +46,24 @@ export default function App() {
   const [loading, setLoading] = useState({ L: false, R: false });
   const [error, setError] = useState('');
   const [selectedMatch, setSelectedMatch] = useState(null);
+
+  // Per-side "loading older commits" indicator for the lazy pagination /
+  // cross-repo backfill. Kept separate from `loading` so paging in more history
+  // doesn't grey out the whole git bar. `loadingMoreRef` guards against
+  // overlapping requests; `backfillBudget` caps how many commits the AUTOMATIC
+  // backfill may add per loaded head (keyed by `path@head`).
+  const [backfilling, setBackfilling] = useState({ L: false, R: false });
+  const loadingMoreRef = useRef({ L: false, R: false });
+  const backfillBudget = useRef(new Map());
+  // Flips true once the user clicks "Load more". From then on the automatic
+  // on-open balancer steps aside so the manual two-phase control is the single
+  // source of truth for how deep each side is paged.
+  const pagedRef = useRef(false);
+  // Drives the full-stage progress overlay during a manual "Load more". Null when
+  // idle, 'align' while pulling the shallower side down to realign, or 'more'
+  // while deepening both sides. The align pull can be large (it loads down to the
+  // other side's date), so a visible in-progress screen reassures it's working.
+  const [paging, setPaging] = useState(null);
 
   // Side ('L'/'R') whose repo is being chosen in the in-app FolderPicker, or null.
   const [pickerSide, setPickerSide] = useState(null);
@@ -229,6 +247,7 @@ export default function App() {
         const repo = await window.api.loadRepo({ repoPath: folder, limit: getCommitLimit() });
         if (side === 'L') setLeft(repo);
         else setRight(repo);
+        pagedRef.current = false; // fresh pair -> let the on-open balancer act
       } catch (e) {
         setError(String(e?.message || e));
       } finally {
@@ -246,6 +265,7 @@ export default function App() {
       const repo = await window.api.loadRepo({ repoPath, limit: getCommitLimit() });
       if (side === 'L') setLeft(repo);
       else setRight(repo);
+      pagedRef.current = false; // fresh pair -> let the on-open balancer act
     } catch (e) {
       setError(String(e?.message || e));
     } finally {
@@ -286,6 +306,88 @@ export default function App() {
     }
   }, [left, right]);
 
+  // Page in the next batch of older commits for one side and APPEND them to the
+  // already-loaded window. Deduped by sha so an overlapping skip can never
+  // double-insert. Appending creates a new repo object, which lets the existing
+  // diff + patch-id + fuzzy effects re-run and enrich only the newcomers (they
+  // dedupe via requestedShas / requestedDiffShas). Returns how many NEW commits
+  // were added so the auto-backfill loop can spend its budget accurately.
+  const loadMore = useCallback(async (side, count = getAutoFillRange() || PAGE_BATCH, auto = false, since = null) => {
+    const repo = side === 'L' ? left : right;
+    if (!repo.path || !repo.hasMore) return 0;
+    if (loadingMoreRef.current[side]) return 0;
+    loadingMoreRef.current[side] = true;
+    setBackfilling((s) => ({ ...s, [side]: true }));
+    try {
+      const res = await window.api.loadMore({
+        repoPath: repo.path,
+        branch: repo.branch,
+        skip: repo.commits.length,
+        batch: count,
+        since: since || undefined
+      });
+      const incoming = Array.isArray(res?.commits) ? res.commits : [];
+      const have = new Set(repo.commits.map((c) => c.sha));
+      const fresh = incoming.filter((c) => !have.has(c.sha));
+      const next = {
+        ...repo,
+        commits: fresh.length ? [...repo.commits, ...fresh] : repo.commits,
+        hasMore: !!res?.hasMore
+      };
+      if (side === 'L') setLeft(next);
+      else setRight(next);
+      return fresh.length;
+    } catch (e) {
+      setError(String(e?.message || e));
+      return 0;
+    } finally {
+      loadingMoreRef.current[side] = false;
+      setBackfilling((s) => ({ ...s, [side]: false }));
+    }
+  }, [left, right]);
+
+  // Manual "Load more" button (both git bars call this). Two-phase by design,
+  // matching how a person reads the two columns:
+  //   1) MISALIGNED -> ALIGN. When the sides stop at different dates, the first
+  //      click pages the time-shallower side (its oldest loaded commit is newer)
+  //      straight down to the OTHER side's oldest date in one request, so the
+  //      matched commits snap back onto the same rows instead of one column
+  //      dangling far below the other.
+  //   2) ALIGNED -> LOAD MORE. Once both windows reach the same depth, each
+  //      further click simply deepens BOTH sides by one batch, so they keep pace
+  //      and reveal older history together, regardless of alignment.
+  const manualLoadMore = useCallback(async () => {
+    pagedRef.current = true; // hand control to the manual button for this pair
+    const L = left.commits;
+    const R = right.commits;
+    const ts = (d) => Date.parse(d) || 0;
+    try {
+      if (L.length && R.length) {
+        const lOld = ts(L[L.length - 1].commitDate);
+        const rOld = ts(R[R.length - 1].commitDate);
+        // Phase 1: pull the shallower side down to the deeper side's oldest date.
+        // If it added nothing (already at that floor), fall through to phase 2.
+        if (lOld > rOld && left.hasMore) {
+          setPaging('align');
+          const n = await loadMore('L', 0, false, R[R.length - 1].commitDate);
+          if (n > 0) return;
+        } else if (rOld > lOld && right.hasMore) {
+          setPaging('align');
+          const n = await loadMore('R', 0, false, L[L.length - 1].commitDate);
+          if (n > 0) return;
+        }
+      }
+
+      // Phase 2: aligned (or only one side still has history) -> deepen by a batch.
+      setPaging('more');
+      await Promise.all([
+        left.hasMore ? loadMore('L', PAGE_BATCH, false) : Promise.resolve(0),
+        right.hasMore ? loadMore('R', PAGE_BATCH, false) : Promise.resolve(0)
+      ]);
+    } finally {
+      setPaging(null);
+    }
+  }, [left, right, loadMore]);
   // Run a whitelisted git operation (fetch/pull/push) on one side, then reload
   // that repo so the commit graph reflects the result.
   const runGitOp = useCallback(async (side, op) => {
@@ -393,6 +495,64 @@ export default function App() {
     () => computeDiff(left, right, patchIds, manualLinks),
     [left, right, patchIds, manualLinks]
   );
+
+  // Auto-balance: recover matches lost to per-side truncation by keeping the two
+  // commit windows at the SAME depth in history.
+  //
+  // Each side loads its newest commits and is cut off at the commit limit, so
+  // the two windows can stop at different dates. A commit that lives in BOTH
+  // repos then shows as "unique" only because the shallower side stopped before
+  // reaching it, which also pushes every later row out of alignment. We compare
+  // the oldest loaded commit on each side and page the time-shallower one deeper
+  // until both windows cover the same range, so those matches resurface and the
+  // columns line back up. Bounded per head by the auto-fill range (Settings,
+  // default 100, 0 = off). Once the user clicks "Load more" the manual two-phase
+  // control takes over for the rest of the session.
+  useEffect(() => {
+    if (!left.path || !right.path) return;
+    if (loading.L || loading.R) return;
+    if (backfilling.L || backfilling.R) return;
+    // Once the user takes manual control of paging, the on-open balancer stands
+    // aside so it never fights the manual two-phase "Load more" button.
+    if (pagedRef.current) return;
+
+    const range = getAutoFillRange();
+    if (range <= 0) return; // auto-fill disabled in Settings
+
+    const L = left.commits;
+    const R = right.commits;
+    if (!L.length || !R.length) return;
+
+    // Nothing to recover once every loaded commit already pairs up.
+    const hasUnmatched =
+      baseDiff.leftRows.some((r) => r.status === 'unique') ||
+      baseDiff.rightRows.some((r) => r.status === 'unique');
+    if (!hasUnmatched) return;
+
+    // Commits are newest-first, so the LAST row is the oldest one loaded. The
+    // side whose oldest commit is NEWER stopped earlier in history; pull it
+    // deeper so it catches up to the other side's depth and the matches that
+    // sit between the two boundaries can pair up.
+    const ts = (d) => Date.parse(d) || 0;
+    const lOldest = ts(L[L.length - 1].commitDate);
+    const rOldest = ts(R[R.length - 1].commitDate);
+
+    let side = null;
+    if (lOldest > rOldest && left.hasMore) side = 'L';
+    else if (rOldest > lOldest && right.hasMore) side = 'R';
+    if (!side) return;
+
+    // Bound the AUTOMATIC catch-up per head so a lopsided pair can't drag the
+    // whole history in. Manual paging bypasses this effect entirely (pagedRef).
+    const repo = side === 'L' ? left : right;
+    const key = repo.path + '@' + repo.head;
+    const spent = backfillBudget.current.get(key) || 0;
+    const remaining = range - spent;
+    if (remaining <= 0) return;
+    const grab = Math.min(PAGE_BATCH, remaining);
+    backfillBudget.current.set(key, spent + grab);
+    loadMore(side, grab, true);
+  }, [baseDiff, left, right, loading, backfilling, loadMore]);
 
   // Fuzzy pass layered on top of the cached exact result. The fuzzy matching is
   // the heaviest part of the pipeline (line-set overlap over many commits), so
@@ -1866,15 +2026,28 @@ export default function App() {
 
       <div className="git-bars">
         {single !== 'R' && (
-          <RepoGitBar side="L" repo={left} loading={loading.L} onGitOp={runGitOp} onReload={reload} onSwitchBranch={openSwitchBranch} />
+          <RepoGitBar side="L" repo={left} loading={loading.L} backfilling={backfilling.L} onGitOp={runGitOp} onReload={reload} onLoadMore={manualLoadMore} onSwitchBranch={openSwitchBranch} />
         )}
         {!single && <div className="git-bars-gutter" style={{ width: GUTTER_WIDTH }} />}
         {single !== 'L' && (
-          <RepoGitBar side="R" repo={right} loading={loading.R} onGitOp={runGitOp} onReload={reload} onSwitchBranch={openSwitchBranch} />
+          <RepoGitBar side="R" repo={right} loading={loading.R} backfilling={backfilling.R} onGitOp={runGitOp} onReload={reload} onLoadMore={manualLoadMore} onSwitchBranch={openSwitchBranch} />
         )}
       </div>
 
       <div className="stage-wrap">
+      {paging && (
+        <div className="paging-overlay" role="status" aria-live="polite">
+          <div className="paging-card">
+            <div className="stage-spinner" />
+            <div className="paging-title">
+              {paging === 'align' ? t('app.aligningTitle') : t('app.pagingMoreTitle')}
+            </div>
+            <div className="paging-sub">
+              {paging === 'align' ? t('app.aligningSub') : t('app.pagingMoreSub')}
+            </div>
+          </div>
+        </div>
+      )}
       <div
         className={'diff-body' + (pendingNode ? ' linking' : '')}
         ref={scrollRef}

@@ -60,7 +60,9 @@
     "theme": "主題 / Theme",
     "themeHint": "選擇配色主題，設定會自動儲存。",
     "commitLimit": "載入筆數 / Commits to load",
-    "commitLimitHint": "每個 repo 載入的 commit 筆數（0 = 不限制）。預設 2,000 筆，於下次載入或重新整理時生效。"
+    "commitLimitHint": "每個 repo 載入的 commit 筆數（0 = 不限制）。預設 2,000 筆，於下次載入或重新整理時生效。",
+    "autoFill": "自動補齊範圍 / Auto-fill range",
+    "autoFillHint": "當兩側歷史深度不一致時，自動把較淺的一側往下載入，以對齊因截斷而被藏起的配對（0 = 關閉）。此值同時是每次自動載入的上限。預設 100 筆。"
   },
   "search": {
     "title": "🔍 Search",
@@ -113,7 +115,11 @@
     "fetchTitle": "git fetch --all --prune\n只更新遠端追蹤 (origin/*)，不會改變本地 commit。\n畫面通常不會變動；要套用更新請用 Pull。",
     "pull": "⬇ Pull",
     "pullTitle": "git pull --ff-only",
-    "reloadTitle": "重新載入此 Repo"
+    "reloadTitle": "重新載入此 Repo",
+    "loadMore": "⭳ 載入更多",
+    "loadMoreTitle": "載入更多 / 對齊\n兩側不對齊時，第一次點擊會先把它們對齊（把較淺的一側載到與另一側相同深度）。之後每按一次，兩側就一起載入更多。",
+    "commitsLoadedTitle": "已載入的 commit 數",
+    "commitsTruncatedTitle": "已載入的 commit 數（已截斷 — 較舊的歷史尚未載入）"
   },
   "gitTerm": {
     "success": "成功",
@@ -251,6 +257,10 @@
     "loadingSubLeft": "左側",
     "loadingSubRight": "右側",
     "loadingSub": "正在載入 {sides} repository 歷史（最多 {limit} 筆）",
+    "aligningTitle": "對齊中…",
+    "aligningSub": "正在把較淺的一側載到相同深度，讓配對的 commit 對齊。落差很大時可能需要稍候。",
+    "pagingMoreTitle": "載入更多…",
+    "pagingMoreSub": "正在兩側同時載入下一批較舊的 commit。",
     "noRepoTitle": "尚未選擇 repository",
     "noRepoSub": "從上方工具列選擇左右兩個 Git 資料夾，開始比對 commit 歷史",
     "openRepoHint": "Open Repo",

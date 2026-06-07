@@ -9,7 +9,16 @@
 import React, { useEffect, useState } from 'react';
 import { useI18n } from '../lib/i18n.js';
 import { useTheme } from '../lib/theme.js';
-import { getCommitLimit, setCommitLimit, COMMIT_LIMIT_MIN, COMMIT_LIMIT_MAX } from '../lib/settings.js';
+import {
+  getCommitLimit,
+  setCommitLimit,
+  COMMIT_LIMIT_MIN,
+  COMMIT_LIMIT_MAX,
+  getAutoFillRange,
+  setAutoFillRange,
+  AUTOFILL_MIN,
+  AUTOFILL_MAX
+} from '../lib/settings.js';
 
 // Centered modal opened from the toolbar ⚙ Settings button. Hosts the language
 // and theme pickers; both lists are discovered automatically from the JSON
@@ -19,6 +28,7 @@ export default function SettingsPopup({ onClose }) {
   const { t, lang, setLang, locales } = useI18n();
   const { theme, setTheme, themes } = useTheme();
   const [commitLimit, setCommitLimitState] = useState(() => String(getCommitLimit()));
+  const [autoFill, setAutoFillState] = useState(() => String(getAutoFillRange()));
 
   useEffect(() => {
     const onKey = (e) => {
@@ -99,10 +109,28 @@ export default function SettingsPopup({ onClose }) {
             />
             <p className="settings-hint">{t('settings.commitLimitHint')}</p>
           </div>
+
+          <div className="settings-field">
+            <label className="settings-label" htmlFor="settings-autofill">
+              {t('settings.autoFill')}
+            </label>
+            <input
+              id="settings-autofill"
+              className="settings-select"
+              type="number"
+              min={AUTOFILL_MIN}
+              max={AUTOFILL_MAX}
+              step="50"
+              value={autoFill}
+              onChange={(e) => setAutoFillState(e.target.value)}
+              onBlur={() => setAutoFillState(String(setAutoFillRange(autoFill)))}
+            />
+            <p className="settings-hint">{t('settings.autoFillHint')}</p>
+          </div>
         </div>
 
         <div className="settings-foot">
-          <button type="button" className="btn primary" onClick={() => { setCommitLimit(commitLimit); onClose(); }}>
+          <button type="button" className="btn primary" onClick={() => { setCommitLimit(commitLimit); setAutoFillRange(autoFill); onClose(); }}>
             {t('common.ok')}
           </button>
         </div>

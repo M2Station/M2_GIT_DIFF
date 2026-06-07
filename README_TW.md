@@ -151,6 +151,30 @@ Renderer (React + Vite)
 對應欄位：`sha / short / parents / author / authorEmail / authorDate / commitDate / subject / body`。
 預設 `limit = 2000`（見 `DEFAULT_LIMIT`）。
 
+### 懶載入分頁與跨 Repo 對齊
+
+兩側各自獨立載入最新的 `limit` 筆 commit。相較於在 `limit` 處硬截斷，`getCommits`
+會多要一筆（`-n{limit+1}`）並回傳 `hasMore` 旗標，讓 renderer 知道仍有較舊的歷史。
+每側的 git bar 會顯示已載入筆數（例如 `2000+`）與一個 **載入更多** 按鈕。
+
+由於兩側各自載入最新的 commit，兩個視窗可能停在不同日期。一筆同時存在於**兩個**
+repo 的 commit 會因為較淺的一側在抵達它之前就被截斷而被標為 `unique`，連帶把後面
+每一列都推得無法對齊。有兩個機制讓欄位保持對齊：
+
+- **開檔時**，`App.jsx` 的自動平衡 effect 會比較兩側最舊的已載入 commit，把時間上
+  較淺的一側往下載入，直到兩個視窗涵蓋相同範圍；以每個 head 的自動補齊範圍為上限
+  （Settings 設定值，預設 `100`，`0` = 關閉）。
+- **載入更多** 是兩段式手動控制，一旦按下便接手。兩側不對齊時，第一次點擊會*對齊*
+  ——用一次 `--since` 請求（透過 `repo:loadMore` IPC 的 `git.loadMoreCommits`）把較淺
+  的一側直接拉到另一側的最舊日期。對齊之後，每次再點就只是兩側*一起載入更多*
+  （`PAGE_BATCH = 500` 的 `git log --skip`）。對齊那次可能載入較多，因此會跳出進度
+  遮罩（「對齊中…」／「載入更多…」）覆蓋畫面直到完成。
+
+新 commit 以 SHA 去重後附加，因此既有的 diff / patch-id / fuzzy 流程會重跑並只對新增
+者做增量比對。懶載入的 `repo:loadMore` IPC 刻意不快取；而每個 head 的載入快取帶有
+版本號（`db.js` 的 `CACHE_VERSION`），因此像 `hasMore` 這類 payload 結構變更會讓舊
+快取失效，而非悄悄回傳過時資料。
+
 ---
 
 ## 4. 比對演算法（src/lib/diff.js）
@@ -403,7 +427,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\uninstall-context-menu
 | 工具列 ◗ Clear manual links / 📝 Clear notes / 🎨 Clear colors | 一次清除目前 repro pair 的手動連結 / 註記 / 強制顏色及其 `localStorage` 暫存 |
 | 工具列 ⬇ Export Excel | 匯出對齊後的 commit＋顏色＋註記＋手動連結為 `.xlsx`（先詢問筆數，預設 ALL） |
 | 工具列 ❓ Help | 開啟快捷鍵說明彈窗（列出全部快捷鍵；`Esc` / ✕ / 點背景關閉） |
-| 工具列 ⚙ Settings | 開啟設定彈窗切換介面語言（English / 中文；`Esc` / ✕ / 點背景關閉） |
+| 工具列 ⚙ Settings | 開啟設定彈窗：介面語言、配色主題、載入筆數上限、自動補齊範圍（English / 中文；`Esc` / ✕ / 點背景關閉） |
 | 右鍵選單最後的取色器 | 自訂任意顏色套用該列，並記成全域第五個快速色票 |
 
 > `F3` 的循環順序為顯示列由上到下、同列時左欄先於右欄；命中集合改變（修改搜尋字）時游標自動歸零。`Ctrl`+`F` 與 `F3` 在全域監聽，即使焦點在搜尋框內也有效。`Esc` 在全域監聽：只要搜尋面板開啟，不論焦點在哪裡都會關閉它。搜尋面板下方的 **📝 Notes** 區塊與搜尋完全分開，以 ↑ / ↓ 在所有有註記的 commit 間跳躍（顯示列順序、左欄先於右欄）。
