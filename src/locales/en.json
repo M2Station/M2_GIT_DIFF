@@ -40,6 +40,10 @@
     "rightOnlyTitle": "Show only the right repo (enlarged)",
     "search": "🔍 Search",
     "searchTitle": "Search (Ctrl+F)",
+    "undo": "↶ Undo",
+    "undoTitle": "Undo the last note / color / virtual-tag / manual-link edit (Ctrl+Z)",
+    "redo": "↷ Redo",
+    "redoTitle": "Redo the last undone edit (Ctrl+Y / Ctrl+Shift+Z)",
     "clearManual": "◗ Clear manual links",
     "clearManualTitle": "Delete all manual links and clear the cache",
     "clearNotes": "📝 Clear notes",
@@ -104,7 +108,9 @@
       "Pick this commit to compare (pick two, then Compare)",
       "Close all popups / clear selection / cancel linking",
       "Delete the currently selected manual link",
-      "In the note window: save and close"
+      "In the note window: save and close",
+      "Undo the last note / color / virtual-tag / manual-link edit",
+      "Redo the last undone edit"
     ]
   },
   "gitBar": {

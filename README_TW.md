@@ -39,6 +39,7 @@
 | **強制背景顏色** | 右鍵 commit → 選 綠 / 亮紅 / 藍 / 黃 強制覆蓋該列背景；可清除單列或一次清除全部 | 綠/亮紅/藍/黃 |
 | **自訂顏色（第五色）** | 右鍵選單最後一個色票為 `<input type="color">` 取色器，選色後即套用該列，並把該色記成全域第五個「快速」色票（存 `localStorage` 的 `customSwatch`），之後右鍵選單會多出一格自訂色可重複使用 | 任意 HEX |
 | **每列虛擬 TAG** | 右鍵 commit → 🏷️ 新增/編輯虛擬 TAG：一個使用者自訂的版本標籤（例如 release 名稱），像 git tag 一樣顯示在 commit 旁，但以**手動連結的紫色**繪製。以 repro pair 為 key 存進 `localStorage`（`vtag:<左路徑>|<右路徑>`），重開時還原；可在同一個單行編輯框（`Enter` 儲存）清除 | 紫色 TAG |
+| **復原 / 重做（Undo / Redo）** | `Ctrl`+`Z` 復原、`Ctrl`+`Y`（或 `Ctrl`+`Shift`+`Z`）重做上一個對註記、強制顏色、虛擬 TAG 或手動連結的編輯，誤刪或選錯色都能一鍵救回。工具列的 **↶ Undo** / **↷ Redo** 按鈕效果相同。單一共用歷史（最多 100 步）依編輯順序涵蓋全部四種註記；切換或交換 repro pair 會重啟歷史 | — |
 | **Git 操作浮窗（terminal）** | 工具列每側的 Git bar 執行 pull / fetch 等操作後，跳出可拖曳的浮動視窗顯示該次 `git` 指令與完整 stdout/stderr 與 exit code；成功為綠框、失敗為紅框；只有成功才重新載入該 repo | 綠/紅框 |
 | **切換分支（Switch branch）** | 每側 Git bar 的 **⎇ Switch branch** 按鈕會開啟可拖曳、可縮放的浮動視窗，以可收摺的樹狀結構（預設全收摺）列出該 repo 的所有分支——**本地分支**加上每個 remote（如 `origin`）各一組，並為**目前分支**加上徽章。搜尋框可做不分大小寫的子串過濾（命中項自動展開）；支援完整鍵盤導覽（↑/↓ 移動、→ 展開／進入、← 收摺／返回上層、`Enter` 選取後切換、`Ctrl+F` 跳到搜尋、`Esc` 關閉），右鍵目錄／群組可展開收摺。選定分支並確認後透過 IPC 執行 `git switch`；remote ref 會去掉 remote 前綴讓 git DWIM 簽出本地追蹤分支，結果會在同一個 Git 操作浮窗顯示後再重新載入該側 | — |
 | **匯出 Excel（.xlsx）** | 工具列右上 **⬇ Export Excel**：把左右對齊後的 commit、強制顏色、註記與手動連結一併輸出成 styled `.xlsx`（ExcelJS）。儲存格底色對應強制顏色、註記以 cell 註解（像 tip）呈現、配對 commit 以空白 cell 對齊；另含一張 **Manual Links** 工作表列出所有手動連結 | 與畫面同色 |
@@ -415,7 +416,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\uninstall-context-menu
 | `Enter`（焦點在比對區時） | 開啟目前焦點 commit 的詳情浮窗 || 浮動 ▲ 回到頂端按鈕 | 僅在焦點游標位於該欄**最後一筆** commit 時出現；點擊即平滑捲回該欄頂端 || 搜尋面板 📝 Notes  ↑ / ↓ | 在每個有註記的 commit 間跳躍（與搜尋功能分開），捲動置中並高亮 |
 | Commit 詳情浮窗右上 HL 輸入格 | 在該浮窗內即時高亮符合的文字；開啟時自動帶入目前搜尋字 |
 | `Esc`（焦點在比對區時） | 取消目前選取的連線、取消進行中的手動連結、關閉所有詳情浮窗
-| `Delete` / `Backspace` | 刪除目前選取的**手動連結** |
+| `Delete` / `Backspace` | 刪除目前選取的**手動連結**（可用 `Ctrl`+`Z` 復原） |
+| `Ctrl` + `Z` | **復原**上一個註記 / 強制顏色 / 虛擬 TAG / 手動連結的編輯 |
+| `Ctrl` + `Y` / `Ctrl` + `Shift` + `Z` | **重做**上一個已復原的編輯 |
 | 點擊有連線的列 / 點擊連接線 | 高亮該配對連線，其餘變淡；焦點移到比對區，並把**鍵盤游標同步**到該列（之後 ↑↓←→ 由此列起算） |
 | 點擊空白處 | 取消選取與進行中的手動連結 |
 | 點擊節點 ◗（未配對列） | 開始 / 完成 / 斷開手動連結（左右各點一個） |
@@ -424,6 +427,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\uninstall-context-menu
 | 點 commit 上的 📝 圖示 | 檢視 / 編輯 / 刪除該列註記 |
 | 工具列 ≈ Fuzzy Match 開關 / 門檻框 | 開關內容相似度模糊配對；門檻框設定相似度百分比（0–100%，預設 80%） |
 | 工具列 View（Compare / Left only / Right only） | 切換雙邊比對或單邊放大模式 |
+| 工具列 ↶ Undo / ↷ Redo | 在註記、強制顏色、虛擬 TAG 與手動連結的編輯間往前 / 往後一步（等同 `Ctrl`+`Z` / `Ctrl`+`Y`）；無可復原 / 重做時 disabled |
 | 工具列 ◗ Clear manual links / 📝 Clear notes / 🎨 Clear colors | 一次清除目前 repro pair 的手動連結 / 註記 / 強制顏色及其 `localStorage` 暫存 |
 | 工具列 ⬇ Export Excel | 匯出對齊後的 commit＋顏色＋註記＋手動連結為 `.xlsx`（先詢問筆數，預設 ALL） |
 | 工具列 ❓ Help | 開啟快捷鍵說明彈窗（列出全部快捷鍵；`Esc` / ✕ / 點背景關閉） |

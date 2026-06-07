@@ -319,6 +319,18 @@ body {
   border-color: #3b82f6;
   box-shadow: 0 0 6px rgba(59, 130, 246, 0.45);
 }
+/* undo / redo history buttons — neutral until hovered, then the accent glow */
+.btn.history-undo,
+.btn.history-redo {
+  border-color: #6b7280;
+  color: #c2c8d0;
+}
+.btn.history-undo:hover:not(:disabled),
+.btn.history-redo:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 6px rgba(54, 214, 255, 0.35);
+}
 
 /* Export-to-Excel button, pinned to the top-right of the toolbar. */
 .export-block {

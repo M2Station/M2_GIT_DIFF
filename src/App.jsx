@@ -26,7 +26,7 @@ import SettingsPopup from './components/SettingsPopup.jsx';
 import FolderPicker from './components/FolderPicker.jsx';
 import logoUrl from './assets/logo.svg';
 import { computeDiff, applyFuzzy, matchesQuery, alignLayout, patchSimilarity } from './lib/diff.js';
-import { ROW_HEIGHT, GUTTER_WIDTH, PAGE_BATCH } from './lib/constants.js';
+import { ROW_HEIGHT, GUTTER_WIDTH, PAGE_BATCH, HISTORY_LIMIT } from './lib/constants.js';
 import { getCommitLimit, getAutoFillRange } from './lib/settings.js';
 import { useT } from './lib/i18n.js';
 
@@ -665,6 +665,75 @@ export default function App() {
   // ---- Manual links: persistence (resume the same repro pair) ----
   const linkKey = left.path && right.path ? `${left.path}|${right.path}` : null;
 
+  // ---- Undo / redo for annotations (notes, colors, vtags, manual links) ----
+  // One shared history stack snapshots all four annotation maps together, so a
+  // single Ctrl+Z / Ctrl+Y steps back and forth through every edit in the order
+  // it was made. `annotationsRef` always mirrors the latest committed snapshot
+  // so a mutation can record the pre-edit state without a stale closure, and so
+  // each handler can cheaply tell whether it actually changes anything (no-ops
+  // never enter the history). The stacks hold plain references to the immutable
+  // state objects React already produces, so a snapshot is essentially free.
+  const undoRef = useRef([]);
+  const redoRef = useRef([]);
+  const annotationsRef = useRef({ manualLinks, notes, colors, vtags });
+  // Bumped on every history change purely to re-render the toolbar's enabled
+  // state; the stacks themselves live in refs to dodge stale closures.
+  const [, bumpHistory] = useState(0);
+
+  useEffect(() => {
+    annotationsRef.current = { manualLinks, notes, colors, vtags };
+  }, [manualLinks, notes, colors, vtags]);
+
+  // Switching repo pairs (or swapping sides) starts a fresh history: the old
+  // annotations aren't comparable to the newly hydrated set.
+  useEffect(() => {
+    undoRef.current = [];
+    redoRef.current = [];
+    bumpHistory((n) => n + 1);
+  }, [linkKey]);
+
+  // Snapshot the current annotations onto the undo stack before a user edit.
+  // Stable identity (reads live state through the ref) so handlers can depend on
+  // it without being recreated every render.
+  const pushHistory = useCallback(() => {
+    undoRef.current.push(annotationsRef.current);
+    if (undoRef.current.length > HISTORY_LIMIT) undoRef.current.shift();
+    redoRef.current = []; // a fresh edit invalidates any redo future
+    bumpHistory((n) => n + 1);
+  }, []);
+
+  // Replace all four annotation maps at once, used by undo / redo. Transient
+  // popups are dismissed since their target row may have just changed under them.
+  const applyAnnotations = useCallback((snap) => {
+    setManualLinks(snap.manualLinks);
+    setNotes(snap.notes);
+    setColors(snap.colors);
+    setVtags(snap.vtags);
+    setPendingNode(null);
+    setNotePopup(null);
+    setVtagPopup(null);
+    setRowMenu(null);
+  }, []);
+
+  const undo = useCallback(() => {
+    if (!undoRef.current.length) return;
+    const prev = undoRef.current.pop();
+    redoRef.current.push(annotationsRef.current); // current state becomes redo
+    applyAnnotations(prev);
+    bumpHistory((n) => n + 1);
+  }, [applyAnnotations]);
+
+  const redo = useCallback(() => {
+    if (!redoRef.current.length) return;
+    const next = redoRef.current.pop();
+    undoRef.current.push(annotationsRef.current); // current state becomes undo
+    applyAnnotations(next);
+    bumpHistory((n) => n + 1);
+  }, [applyAnnotations]);
+
+  const canUndo = undoRef.current.length > 0;
+  const canRedo = redoRef.current.length > 0;
+
   // Load saved manual links whenever the repo pair changes.
   useEffect(() => {
     if (!linkKey) return;
@@ -714,6 +783,7 @@ export default function App() {
         side === 'L' ? l.leftSha === sha : l.rightSha === sha
       );
       if (existing) {
+        pushHistory();
         setManualLinks((prev) => prev.filter((l) => l !== existing));
         setPendingNode(null);
         return;
@@ -726,19 +796,23 @@ export default function App() {
       // Opposite side -> complete the link (one endpoint each side).
       const leftSha = side === 'L' ? sha : pendingNode.sha;
       const rightSha = side === 'R' ? sha : pendingNode.sha;
+      pushHistory();
       setManualLinks((prev) => [
         ...prev.filter((l) => l.leftSha !== leftSha && l.rightSha !== rightSha),
         { leftSha, rightSha }
       ]);
       setPendingNode(null);
     },
-    [manualLinks, pendingNode]
+    [manualLinks, pendingNode, pushHistory]
   );
 
   // Wipe every manual link for the current repo pair and remove its persisted
   // entry from localStorage.
   const clearManualLinks = useCallback(() => {
-    setManualLinks([]);
+    if (annotationsRef.current.manualLinks.length) {
+      pushHistory();
+      setManualLinks([]);
+    }
     setPendingNode(null);
     if (linkKey) {
       try {
@@ -747,7 +821,7 @@ export default function App() {
         /* storage unavailable -> nothing persisted to remove */
       }
     }
-  }, [linkKey]);
+  }, [linkKey, pushHistory]);
 
   // ---- Per-commit notes: persistence (same repo-pair key) ----
   // Load saved notes whenever the repo pair changes.
@@ -790,30 +864,37 @@ export default function App() {
   // Save (or clear when empty) the note for one commit.
   const saveNote = useCallback((side, sha, text) => {
     const id = `${side}:${sha}`;
+    const trimmed = (text || '').trim();
+    if ((annotationsRef.current.notes[id] || '') === trimmed) return; // unchanged
+    pushHistory();
     setNotes((prev) => {
       const next = { ...prev };
-      const trimmed = (text || '').trim();
       if (trimmed) next[id] = trimmed;
       else delete next[id];
       return next;
     });
-  }, []);
+  }, [pushHistory]);
 
   // Delete the note for one commit and close the popup.
   const deleteNote = useCallback((side, sha) => {
     const id = `${side}:${sha}`;
-    setNotes((prev) => {
-      if (!(id in prev)) return prev;
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
+    if (id in annotationsRef.current.notes) {
+      pushHistory();
+      setNotes((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+    }
     setNotePopup(null);
-  }, []);
+  }, [pushHistory]);
 
   // Wipe every note for the current repo pair and remove its persisted entry.
   const clearNotes = useCallback(() => {
-    setNotes({});
+    if (Object.keys(annotationsRef.current.notes).length) {
+      pushHistory();
+      setNotes({});
+    }
     setNotePopup(null);
     if (linkKey) {
       try {
@@ -822,7 +903,7 @@ export default function App() {
         /* storage unavailable -> nothing persisted to remove */
       }
     }
-  }, [linkKey]);
+  }, [linkKey, pushHistory]);
 
   // Per-side sets of SHAs that carry a note (for the row indicator icon).
   const noteShas = useMemo(() => {
@@ -874,13 +955,18 @@ export default function App() {
   // Set (or toggle off) the forced background color for one commit.
   const setColor = useCallback((side, sha, color) => {
     const id = `${side}:${sha}`;
+    const cur = annotationsRef.current.colors[id];
+    // Picking the color already on the row toggles it back off.
+    const next = !color || cur === color ? undefined : color;
+    if (cur === next) return; // no change
+    pushHistory();
     setColors((prev) => {
-      const next = { ...prev };
-      if (!color || prev[id] === color) delete next[id];
-      else next[id] = color;
-      return next;
+      const m = { ...prev };
+      if (next === undefined) delete m[id];
+      else m[id] = next;
+      return m;
     });
-  }, []);
+  }, [pushHistory]);
 
   // Pick a user-defined color: remember it as the 5th quick swatch (persisted)
   // and immediately apply it to the targeted commit.
@@ -894,23 +980,29 @@ export default function App() {
       /* ignore quota/availability errors */
     }
     const id = `${side}:${sha}`;
+    if (annotationsRef.current.colors[id] === value) return; // swatch saved, color unchanged
+    pushHistory();
     setColors((prev) => ({ ...prev, [id]: value }));
-  }, []);
+  }, [pushHistory]);
 
   // Remove the forced color for one commit.
   const clearColor = useCallback((side, sha) => {
     const id = `${side}:${sha}`;
+    if (!(id in annotationsRef.current.colors)) return;
+    pushHistory();
     setColors((prev) => {
-      if (!(id in prev)) return prev;
       const next = { ...prev };
       delete next[id];
       return next;
     });
-  }, []);
+  }, [pushHistory]);
 
   // Wipe every forced color for the current repo pair.
   const clearColors = useCallback(() => {
-    setColors({});
+    if (Object.keys(annotationsRef.current.colors).length) {
+      pushHistory();
+      setColors({});
+    }
     setRowMenu(null);
     if (linkKey) {
       try {
@@ -919,7 +1011,7 @@ export default function App() {
         /* storage unavailable -> nothing persisted to remove */
       }
     }
-  }, [linkKey]);
+  }, [linkKey, pushHistory]);
 
   // Per-side maps of SHA -> forced color (for the row background override).
   const colorMap = useMemo(() => {
@@ -973,26 +1065,30 @@ export default function App() {
   // Save (or clear when empty) the virtual tag for one commit.
   const saveVtag = useCallback((side, sha, text) => {
     const id = `${side}:${sha}`;
+    const trimmed = (text || '').trim();
+    if ((annotationsRef.current.vtags[id] || '') === trimmed) return; // unchanged
+    pushHistory();
     setVtags((prev) => {
       const next = { ...prev };
-      const trimmed = (text || '').trim();
       if (trimmed) next[id] = trimmed;
       else delete next[id];
       return next;
     });
-  }, []);
+  }, [pushHistory]);
 
   // Delete the virtual tag for one commit and close the popup.
   const deleteVtag = useCallback((side, sha) => {
     const id = `${side}:${sha}`;
-    setVtags((prev) => {
-      if (!(id in prev)) return prev;
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
+    if (id in annotationsRef.current.vtags) {
+      pushHistory();
+      setVtags((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+    }
     setVtagPopup(null);
-  }, []);
+  }, [pushHistory]);
 
   // Per-side maps of SHA -> virtual tag text (for the inline tag badge).
   const vtagMap = useMemo(() => {
@@ -1694,6 +1790,20 @@ export default function App() {
         openSearch();
         return;
       }
+      // Ctrl/Cmd+Z -> undo the last annotation edit (note / color / virtual tag
+      // / manual link); Ctrl+Shift+Z or Ctrl+Y -> redo. Skipped while typing so
+      // the browser's native text undo still works inside the note editor.
+      if (!typing && (e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'z' || e.key === 'Z')) {
+        e.preventDefault();
+        if (e.shiftKey) redo();
+        else undo();
+        return;
+      }
+      if (!typing && (e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'y' || e.key === 'Y')) {
+        e.preventDefault();
+        redo();
+        return;
+      }
       // F3 -> cycle through highlighted matches (Shift+F3 goes backwards).
       if (e.key === 'F3') {
         e.preventDefault();
@@ -1751,6 +1861,7 @@ export default function App() {
         const sep = body.indexOf('|');
         const leftSha = body.slice(0, sep);
         const rightSha = body.slice(sep + 1);
+        pushHistory();
         setManualLinks((prev) =>
           prev.filter((l) => !(l.leftSha === leftSha && l.rightSha === rightSha))
         );
@@ -1774,7 +1885,10 @@ export default function App() {
     openCursorDetail,
     activeHit,
     pickerSide,
-    compare
+    compare,
+    undo,
+    redo,
+    pushHistory
   ]);
 
   // Esc inside the search box closes the panel, clearing the query and its
@@ -1810,6 +1924,10 @@ export default function App() {
         onClearNotes={clearNotes}
         colorCount={Object.keys(colors).length}
         onClearColors={clearColors}
+        canUndo={canUndo}
+        canRedo={canRedo}
+        onUndo={undo}
+        onRedo={redo}
         single={single}
         onSetSingle={setSingle}
         onSwapSides={swapSides}
