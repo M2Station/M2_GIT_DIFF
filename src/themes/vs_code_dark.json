@@ -1,0 +1,28 @@
+{
+  "_meta": {
+    "name": "VS Code Dark"
+  },
+  "vars": {
+    "--bg": "#1e1e1e",
+    "--bg-soft": "#252526",
+    "--panel": "#252526",
+    "--line": "#3c3c3c",
+    "--text": "#d4d4d4",
+    "--muted": "#858585",
+    "--accent": "#0098ff",
+    "--accent-dim": "#0e639c",
+
+    "--common-bg": "rgba(120, 134, 150, 0.16)",
+    "--common-bd": "#5b6b7d",
+    "--cherry-bg": "rgba(229, 192, 123, 0.16)",
+    "--cherry-bd": "#e5c07b",
+    "--unique-bg": "rgba(224, 108, 117, 0.16)",
+    "--unique-bd": "#e06c75",
+
+    "--manual-bg": "rgba(97, 175, 239, 0.16)",
+    "--manual-bd": "#61afef",
+
+    "--fuzzy-bg": "rgba(198, 120, 221, 0.16)",
+    "--fuzzy-bd": "#c678dd"
+  }
+}
