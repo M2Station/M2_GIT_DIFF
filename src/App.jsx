@@ -1425,8 +1425,8 @@ export default function App() {
     });
   }, [pickedCommits]);
   // Export the aligned diff (notes + forced colors + manual links) to a styled
-  // .xlsx. Matched pairs already share a display row, so commits stay aligned;
-  // alignment gaps become empty cells. Notes ride along as cell tooltips.
+  // .xlsx or table-heavy Markdown review report. Matched pairs already share a
+  // display row, so commits stay aligned; alignment gaps become empty cells.
   const [exporting, setExporting] = useState(false);
   // Pre-export prompt: ask how many rows to write (guards against huge files).
   // { total } while open, null when closed. Default choice is ALL.
@@ -1441,9 +1441,18 @@ export default function App() {
     const leftByRow = new Array(total).fill(null);
     const rightByRow = new Array(total).fill(null);
 
+    const linkedShas = { L: new Set(), R: new Set() };
+    diff.links.forEach((l) => {
+      const lc = diff.leftRows[l.leftIndex];
+      const rc = diff.rightRows[l.rightIndex];
+      if (lc?.sha) linkedShas.L.add(lc.sha);
+      if (rc?.sha) linkedShas.R.add(rc.sha);
+    });
+
     const cellFor = (commit, side) => ({
       short: commit.short,
       sha: commit.sha,
+      linked: linkedShas[side].has(commit.sha),
       subject: commit.subject,
       author: commit.author,
       date: commit.authorDate,
@@ -1460,11 +1469,15 @@ export default function App() {
       if (r.displayIndex != null) rightByRow[r.displayIndex] = cellFor(r.commit, 'R');
     });
 
-    // Connector type per display row (aligned pairs land on the same row).
+    // Connector metadata per display row. Only horizontal links (both endpoints
+    // on the same display row) belong in the aligned-row table. Slanted /
+    // non-monotonic links are reported separately as explicit paired links so a
+    // display row never pretends a one-sided endpoint is a full patch/cherry pair.
     const linkByRow = new Array(total).fill(null);
     view.links.forEach((l) => {
-      if (l.leftIndex != null) linkByRow[l.leftIndex] = l.type;
-      if (l.rightIndex != null) linkByRow[l.rightIndex] = l.type;
+      if (l.leftIndex == null || l.rightIndex == null || l.leftIndex !== l.rightIndex) return;
+      const info = { type: l.type, score: typeof l.score === 'number' ? l.score : null };
+      linkByRow[l.leftIndex] = info;
     });
 
     const rows = [];
@@ -1472,31 +1485,58 @@ export default function App() {
       const lc = leftByRow[i];
       const rc = rightByRow[i];
       if (!lc && !rc) continue; // skip fully-empty rows
-      rows.push({ left: lc, right: rc, link: linkByRow[i] });
+      rows.push({
+        left: lc,
+        right: rc,
+        link: linkByRow[i]?.type || null,
+        linkScore: linkByRow[i]?.score ?? null
+      });
     }
 
-    // Every manual link spelled out (covers non-aligned/slanted pairs too).
+    const linkCounts = diff.links.reduce(
+      (acc, l) => {
+        if (Object.prototype.hasOwnProperty.call(acc, l.type)) acc[l.type] += 1;
+        return acc;
+      },
+      { common: 0, cherry: 0, patch: 0, manual: 0, fuzzy: 0 }
+    );
+
+    const pairFor = (l) => {
+      const lc = diff.leftRows[l.leftIndex];
+      const rc = diff.rightRows[l.rightIndex];
+      return {
+        type: l.type,
+        score: typeof l.score === 'number' ? l.score : null,
+        leftShort: lc?.short || '',
+        leftSha: lc?.sha || '',
+        leftSubject: lc?.subject || '',
+        rightShort: rc?.short || '',
+        rightSha: rc?.sha || '',
+        rightSubject: rc?.subject || ''
+      };
+    };
+
+    // Every non-common link that needs a paired table (covers non-aligned /
+    // slanted links too). Common SHA matches are already obvious and numerous.
+    const contentLinks = diff.links
+      .filter((l) => l.type === 'cherry' || l.type === 'patch')
+      .map(pairFor);
+
+    // Every manual/fuzzy link spelled out as original pairs.
     const manualLinks = diff.links
       .filter((l) => l.type === 'manual')
-      .map((l) => {
-        const lc = diff.leftRows[l.leftIndex];
-        const rc = diff.rightRows[l.rightIndex];
-        return {
-          leftShort: lc?.short || '',
-          leftSha: lc?.sha || '',
-          leftSubject: lc?.subject || '',
-          rightShort: rc?.short || '',
-          rightSha: rc?.sha || '',
-          rightSubject: rc?.subject || ''
-        };
-      });
+      .map(pairFor);
 
-    return { rows, manualLinks };
+    const fuzzyLinks = diff.links
+      .filter((l) => l.type === 'fuzzy')
+      .map(pairFor);
+
+    return { rows, manualLinks, fuzzyLinks, contentLinks, linkCounts };
   }, [view, colors, notes, vtags, diff]);
 
-  // Step 1: clicking Export opens the row-count prompt (default ALL).
+  // Step 1: clicking Export opens the unified export panel (default ALL).
   const openExportPrompt = useCallback(() => {
-    if (typeof window.api?.exportExcel !== 'function') {
+    if (typeof window.api?.exportExcel !== 'function' || typeof window.api?.exportMarkdown !== 'function') {
       setError('此版本不支援匯出（請更新 app）。');
       return;
     }
@@ -1508,10 +1548,11 @@ export default function App() {
     setExportPrompt({ total: rows.length });
   }, [buildExportRows]);
 
-  // Step 2: run the export. `limit` is null = ALL, or a positive row count.
+  // Step 2: run the export. `format` is excel/markdown; `limit` is null = ALL,
+  // or a positive row count.
   const runExport = useCallback(
-    async (limit) => {
-      const { rows: allRows, manualLinks } = buildExportRows();
+    async (format, limit) => {
+      const { rows: allRows, manualLinks, fuzzyLinks, contentLinks, linkCounts } = buildExportRows();
       const rows =
         limit && limit > 0 && limit < allRows.length ? allRows.slice(0, limit) : allRows;
 
@@ -1524,29 +1565,37 @@ export default function App() {
       setExporting(true);
       setError('');
       try {
-        const res = await window.api.exportExcel({
+        const payload = {
           leftName: left.name || 'LEFT',
           rightName: right.name || 'RIGHT',
           leftRemoteUrl: left.remoteUrl || '',
           rightRemoteUrl: right.remoteUrl || '',
           defaultName,
           rows,
-          manualLinks
-        });
+          manualLinks,
+          fuzzyLinks,
+          contentLinks,
+          linkCounts
+        };
+        const isMarkdown = format === 'markdown';
+        const res = isMarkdown
+          ? await window.api.exportMarkdown(payload)
+          : await window.api.exportExcel(payload);
         if (res?.canceled) return;
+        const label = isMarkdown ? 'Markdown' : 'Excel';
         setGitTerminal({
           side: 'L',
           op: 'export',
           repoName: res?.path || '',
           ok: true,
-          command: 'Excel 匯出',
+          command: `${label} 匯出`,
           output: `已匯出 ${rows.length} 列（含 ${manualLinks.length} 個手動連結）到：\n${res?.path || ''}`,
           exitCode: 0
         });
       } catch (e) {
         const msg = String(e?.message || e);
-        logError('export', 'Excel export failed', msg);
-        setError('匯出 Excel 失敗：' + msg);
+        logError('export', `${format === 'markdown' ? 'Markdown' : 'Excel'} export failed`, msg);
+        setError('匯出失敗：' + msg);
       } finally {
         setExporting(false);
       }

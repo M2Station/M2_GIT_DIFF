@@ -50,8 +50,8 @@
     "clearNotesTitle": "Delete all notes and clear the cache",
     "clearColors": "🎨 Clear colors",
     "clearColorsTitle": "Clear all forced background colors",
-    "exportExcel": "⬇ Export Excel",
-    "exportExcelTitle": "Export the aligned diff to Excel (with note tooltips, forced colors and manual links)",
+    "export": "⬇ Export",
+    "exportTitle": "Open export options for Excel or Markdown review reports",
     "log": "🧾 Log",
     "logTitle": "Open the error / diagnostics log (git failures, cache problems, export errors)",
     "help": "❓ Help",
@@ -167,15 +167,22 @@
     "resize": "Drag to resize"
   },
   "export": {
-    "head": "⬇ Export Excel",
+    "head": "⬇ Export",
+    "formatAria": "Export format",
+    "excelName": "Excel",
+    "markdownName": "Markdown",
+    "excelTitle": "Excel workbook (.xlsx)",
+    "excelDesc": "Aligned rows with colors, note comments, hyperlinks, and manual-link sheet.",
+    "markdownTitle": "Markdown review report (.md)",
+    "markdownDesc": "Table-heavy summary for sharing unique commits, fuzzy risk, manual links, and notes.",
     "question": "{total} rows are available to export. How many do you want to write?",
     "all": "All (ALL)",
     "allSuffix": "— {total} rows",
     "limitPrefix": "Only the first",
     "limitSuffix": "rows",
     "warn": "⚠ The dataset is large; exporting may take a while or produce a large file.",
-    "exportAll": "Export all",
-    "exportN": "Export {count} rows"
+    "exportAll": "Export all as {format}",
+    "exportN": "Export {count} rows as {format}"
   },
   "note": {
     "title": "📝 Note",

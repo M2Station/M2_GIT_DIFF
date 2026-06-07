@@ -42,7 +42,7 @@ A desktop tool dedicated to **comparing the commit history of two local Git repo
 | **Git operation popup (terminal)** | After the per-side Git bar runs pull / fetch etc., a draggable floating window pops up showing that `git` command with full stdout/stderr and exit code; green border on success, red on failure; only a successful op reloads that repo | Green/Red border |
 | **Error / Log panel** | A centralized **🧾 Log** (toolbar, top-right) collects every diagnostic in one place — git command failures (with the full transcript), cache save problems (when annotations can't be persisted to `localStorage`), repo-load / pagination errors, and export failures — so nothing vanishes into a transient banner. Each entry has a timestamp, level (error / warning / info), a category tag, and an expandable detail; filter by level, **copy all** to the clipboard, or clear. The button shows a red badge counting new problems since you last opened it, and the bottom error bar is clickable to jump straight in | Red badge |
 | **Switch branch** | The per-side Git bar **⎇ Switch branch** button opens a draggable, resizable floating modal listing every branch of that repo — **local branches** plus one group per remote (e.g. `origin`) — in a collapsible tree (collapsed by default), with the **current branch** badged. A search box does case-insensitive substring filtering (auto-expanding matches); full keyboard navigation works (↑/↓ move, → expand / descend, ← collapse / ascend, `Enter` select-then-switch, `Ctrl+F` jump to search, `Esc` close), and right-clicking a folder/group toggles it. Picking a branch and confirming runs `git switch` via IPC; remote refs strip the remote prefix so git DWIM checks out a local tracking branch, and the result appears in the same Git operation popup before that side reloads | — |
-| **Excel export (.xlsx)** | Toolbar top-right **⬇ Export Excel**: outputs the aligned commits, forced colours, notes, and manual links together into a styled `.xlsx` (ExcelJS). Cell fill colours map to forced colours, notes appear as cell comments (like tooltips), matched commits are aligned with blank cells; also includes a **Manual Links** worksheet listing all manual links | Same colours as the screen |
+| **Export panel** | Toolbar top-right **⬇ Export** opens one panel for all exports. Choose **Excel workbook (.xlsx)** to output aligned commits, forced colours, notes, hyperlinks, and manual links into a styled workbook, or **Markdown review report (.md)** to output a Typora-friendly, table-heavy review report. Both formats ask how many rows to export (default **ALL**) | Same data as the screen |
 | **Export count confirmation** | Before exporting, a dialog asks how many rows to output (default **ALL**, or the first N); it warns on large data sets to avoid lag from exporting too much at once | — |
 | **Commit detail popup** | `Ctrl`+left-click a commit → a floating window shows SHA / author / date (clearly labelled) plus the Markdown-rendered commit body (the identifying numbers of a **Merged PR** and each id under **Related work items** are underlined in the accent colour for quick scanning); the matched **Related item** is specially emphasised; a top-right **HL** input live-highlights matching text (auto-filled with the current search term when opened); movable, drag-resizable, auto-sized to content; **multiple can be open at once** (clicking the same one does not reopen it) | — |
 | **Clickable commit links** | The commit detail popup shows links next to the SHA: **🔗 Web** opens that commit's remote page in the system default browser (auto-detects GitHub / GitLab / Gitea / ADO / Bitbucket); **🔀 PR {n}** opens each Merged PR's page; **🔍 #{n}** opens a host code-search for each related work-item id. On Excel export the SHA cell is also hyperlinked to the same remote URL | — |
@@ -71,6 +71,8 @@ Click any row with a link (grey/yellow/pink), or **click the connection line dir
 
 **Search panel & note navigation**: `Ctrl`+`F` opens a floating draggable search panel where you can choose the search scope (Title / Body / SHA / Author / Date), cycle hits with ↑ / ↓ or `F3` / `Shift`+`F3`, and use Filter to show only matching rows. Below the panel is a separate **📝 Notes** navigation area (distinct from search) that jumps between every commit with a note using ↑ / ↓ (display-row order, left column before right), scrolling it to centre and highlighting it. While the search panel is open, pressing `Esc` (regardless of focus) closes the panel and clears the term and highlights.
 
+**Export panel**: Toolbar **⬇ Export** opens `ExportPrompt.jsx`, where you pick Excel or Markdown and choose **ALL** rows or the first N rows. Excel export keeps the workbook workflow. Markdown export is generated in `electron/markdownReport.js` via the `markdown:export` IPC and writes a review report with Summary, Cherry / Patch-id Matches, Unhandled Unique Commits, Outside Loaded Range, Fuzzy Matches To Review, Manual Links, Notes, and Aligned Review Rows. To keep Typora responsive, the final Aligned Review Rows table omits common aligned rows and reports that omitted count in the top field table; long subjects, tags, and notes are truncated for display while commit SHA cells link to the detected remote commit URL when available.
+
 ### How left-right alignment works
 
 The match lines themselves may cross each other (non-monotonic); forcing everything to align would tangle the lines. So `alignLayout()`:
@@ -86,10 +88,11 @@ The match lines themselves may cross each other (non-monotonic); forcing everyth
 
 ```
 Electron (main process)
-├─ electron/main.js      Window creation, IPC handlers, folder picker dialog, Excel export save dialog
-├─ electron/preload.js   contextBridge secure bridge, exposes window.api (incl. exportExcel)
+├─ electron/main.js      Window creation, IPC handlers, folder picker dialog, Excel / Markdown export save dialogs
+├─ electron/preload.js   contextBridge secure bridge, exposes window.api (incl. exportExcel / exportMarkdown)
 ├─ electron/git.js       Calls system git, parses git log → structured commits; getPatchIds / getDiffTexts (Fuzzy changed lines) / getCommitDiff (full unified diff for side-by-side compare); gitOp returns full stdout/stderr and exit code
 ├─ electron/excel.js     ExcelJS generates styled .xlsx (colour fills, note cell comments, SHA hyperlink to remote commit URL, Manual Links worksheet)
+├─ electron/markdownReport.js Builds the table-heavy Markdown review report (.md) with truncated display cells and remote commit links
 ├─ electron/fsdialog.js  Directory listing for the in-app FolderPicker (dialog:listDir / dialog:rememberDir)
 └─ electron/db.js        better-sqlite3 cache layer (auto-falls back to in-memory cache when absent)
 
@@ -101,7 +104,7 @@ Renderer (React + Vite)
 ├─ src/lib/constants.js         Layout constants (row height, gutter width, overscan…)
 ├─ src/assets/logo.svg          Toolbar LOGO (cyan M2 wordmark)
 └─ src/components/
-   ├─ Toolbar.jsx          Top toolbar: LOGO + name, open repo, branch badges, stats, Fuzzy Match toggle + threshold, View mode toggle, search, Clear manual/notes/colors, Export Excel
+  ├─ Toolbar.jsx          Top toolbar: LOGO + name, open repo, branch badges, stats, Fuzzy Match toggle + threshold, View mode toggle, search, Clear manual/notes/colors, Export panel
    ├─ RepoColumn.jsx       Single-column virtualized rendering (only draws rows in the viewport)
    ├─ CommitRow.jsx        Single commit row (absolute positioning + highlight + note icon + context menu + Ctrl-click detail)
    ├─ ConnectionLines.jsx  SVG connection lines in the central gutter (degenerate to a horizontal line when endpoints share a row)
@@ -113,7 +116,7 @@ Renderer (React + Vite)
    ├─ GitTerminalPopup.jsx Git operation result popup (draggable, shows command/output/exit code, green border on success red on failure)
    ├─ BranchSwitchPopup.jsx Branch picker (draggable/resizable, collapsible local + per-remote tree, search box, full keyboard nav, runs git switch via IPC)
    ├─ FolderPicker.jsx     In-app keyboard-driven repo/folder picker (replaces the OS dialog; scans for git repos incl. submodules, repos-only filter, remembers the last visited folder)
-   ├─ ExportPrompt.jsx     Pre-export count confirmation dialog (default ALL, or first N)
+  ├─ ExportPrompt.jsx     Unified export panel (Excel or Markdown, default ALL or first N rows)
    ├─ HelpPopup.jsx       Keyboard shortcuts help popup (centred modal, keycap list, OA Hsiao badge, `Esc`/backdrop to close)
    ├─ SettingsPopup.jsx   Settings popup (language selector + theme selector; locales from `src/locales`, themes from `src/themes`, both auto-scanned)
    └─ CommitDetail.jsx     Commit detail popup (Markdown rendering, Related item, 🔗 Web / 🔀 PR / 🔍 code-search links next to SHA, movable/resizable, multi-open, 💬 Chat opens VS Code)
@@ -458,7 +461,7 @@ How it works:
 | Toolbar ↶ Undo / ↷ Redo | Step backward / forward through note, forced-colour, virtual-tag and manual-link edits (same as `Ctrl`+`Z` / `Ctrl`+`Y`); disabled when there is nothing to undo / redo |
 | Toolbar ◗ Clear manual links / 📝 Clear notes / 🎨 Clear colors | Clear the current repro pair's manual links / notes / forced colours and their `localStorage` storage at once |
 | Toolbar 🧾 Log | Open the centralized error / diagnostics log (git failures, cache problems, export errors); filter by level, copy all, or clear. A red badge counts new problems; the bottom error bar is also clickable to open it |
-| Toolbar ⬇ Export Excel | Export the aligned commits + colours + notes + manual links as `.xlsx` (asks for a count first, default ALL) |
+| Toolbar ⬇ Export | Open the export panel: export aligned commits as `.xlsx` or a table-heavy Markdown review report (`.md`), both with count selection (default ALL) |
 | Toolbar ❓ Help | Open the keyboard shortcuts help popup (lists all shortcuts; `Esc` / ✕ / click backdrop to close) |
 | Toolbar ⚙ Settings | Open the settings popup: UI language, colour theme, commits-to-load limit, and auto-fill range (English / 中文; `Esc` / ✕ / click backdrop to close) |
 | The colour picker at the end of the context menu | Apply any custom colour to that row and record it as the global 5th quick swatch |
@@ -479,8 +482,8 @@ How it works:
 ## 10. Possible Future Extensions
 
 - Load by specified branch / tag / date range (`getCommits` already supports the `branch`, `limit` parameters).
-- Export comparison results (CSV / Markdown). Excel (.xlsx) export is **already implemented** (colours, notes, manual links, see §1).
-- Show the full **diff content** when clicking commits on both sides (currently Ctrl+click already shows the commit message and metadata detail, but not per-line diff yet; you can also use 💬 Chat to have VS Code Copilot explain it).
+- Additional export formats such as CSV. Excel (.xlsx) and Markdown review report (.md) export are **already implemented** (colours, notes, manual links, see §1).
+- More compare views such as range-based or file-filtered review. Side-by-side per-commit unified diff is **already implemented** via the ⚡VS Compare popup.
 
 ---
 
@@ -509,6 +512,7 @@ How it works:
 | Context menu / forced colours | `src/components/RowMenu.jsx`, `src/App.jsx` (`openRowMenu`/`setColor`/`clearColors`), `src/styles.css` (`.commit-row.force-*`) |
 | Commit detail popup / Markdown / HL highlight | `src/components/CommitDetail.jsx`, `src/lib/markdown.js`, `src/App.jsx` (`openDetail`/`resolveDetail`/`details`) |
 | Clickable commit links (🌐 Web / remote URL) | `src/components/CommitDetail.jsx`, `electron/git.js` (`getRemoteUrl` / `loadRepo` remoteUrl), `electron/main.js` (`shell:openExternal`), `electron/excel.js` (SHA hyperlink) |
+| Export panel / Excel workbook / Markdown review report | `src/components/ExportPrompt.jsx`, `src/App.jsx` (`buildExportRows` / `runExport`), `electron/preload.js` (`exportExcel` / `exportMarkdown`), `electron/main.js` (`excel:export` / `markdown:export`), `electron/excel.js`, `electron/markdownReport.js` |
 | VS Code Chat integration (💬 Chat) | `src/components/CommitDetail.jsx` (`openInChat`), `electron/preload.js` (`openInVSCodeChat`), `electron/main.js` (`vscode:chat` / `resolveCodeCommand`) |
 | App icon generation (SVG→ICO) | `scripts/make-icon.mjs`, `public/icon.svg`, `public/icon.ico` |
 | Single-repo (View) mode | `src/App.jsx` (`single` state, `view` useMemo), `src/components/Toolbar.jsx`, `src/styles.css` (`.repo-column.plain`) |

@@ -216,9 +216,9 @@ export default function Toolbar({
             className="btn export-xlsx"
             onClick={onExport}
             disabled={!canExport}
-            title={t('toolbar.exportExcelTitle')}
+            title={t('toolbar.exportTitle')}
           >
-            {t('toolbar.exportExcel')}
+            {t('toolbar.export')}
           </button>
           <button
             className={'btn log-btn' + (logBadge > 0 ? ' has-issues' : '')}

@@ -26,6 +26,7 @@ contextBridge.exposeInMainWorld('api', {
   listBranches: (opts) => ipcRenderer.invoke('repo:listBranches', opts),
   switchBranch: (opts) => ipcRenderer.invoke('repo:switchBranch', opts),
   exportExcel: (opts) => ipcRenderer.invoke('excel:export', opts),
+  exportMarkdown: (opts) => ipcRenderer.invoke('markdown:export', opts),
   openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
   getInitialRepos: () => ipcRenderer.invoke('app:getInitialRepos'),
   openInVSCodeChat: (opts) => ipcRenderer.invoke('vscode:chat', opts)

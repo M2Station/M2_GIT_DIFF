@@ -9,11 +9,12 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useT } from '../lib/i18n.js';
 
-// Pre-export dialog: asks how many rows to write to the Excel file so a very
-// large diff doesn't produce an unwieldy / failing workbook. Defaults to ALL.
-// Closes on Cancel, the backdrop, or Escape; confirms on Export / Enter.
+// Unified export panel: choose the output format (Excel or Markdown) and how
+// many aligned rows to write. Defaults to ALL. Closes on Cancel, backdrop, or
+// Escape; confirms on Export / Enter.
 export default function ExportPrompt({ total, onExport, onCancel }) {
   const t = useT();
+  const [format, setFormat] = useState('excel');
   // mode: 'all' = export everything; 'limit' = export the first N rows.
   const [mode, setMode] = useState('all');
   const [count, setCount] = useState(String(Math.min(total, 1000)));
@@ -35,8 +36,8 @@ export default function ExportPrompt({ total, onExport, onCancel }) {
   const limited = mode === 'limit';
 
   const confirm = useCallback(() => {
-    onExport(limited ? parsed : null);
-  }, [onExport, limited, parsed]);
+    onExport(format, limited ? parsed : null);
+  }, [onExport, format, limited, parsed]);
 
   const onKeyDown = (e) => {
     if (e.key === 'Enter') {
@@ -53,6 +54,27 @@ export default function ExportPrompt({ total, onExport, onCancel }) {
         <div className="export-prompt-head">{t('export.head')}</div>
 
         <div className="export-prompt-body">
+          <div className="export-format-grid" role="group" aria-label={t('export.formatAria')}>
+            <button
+              type="button"
+              className={'export-format-card' + (format === 'excel' ? ' on' : '')}
+              onClick={() => setFormat('excel')}
+              aria-pressed={format === 'excel'}
+            >
+              <span className="export-format-title">{t('export.excelTitle')}</span>
+              <span className="export-format-desc">{t('export.excelDesc')}</span>
+            </button>
+            <button
+              type="button"
+              className={'export-format-card' + (format === 'markdown' ? ' on' : '')}
+              onClick={() => setFormat('markdown')}
+              aria-pressed={format === 'markdown'}
+            >
+              <span className="export-format-title">{t('export.markdownTitle')}</span>
+              <span className="export-format-desc">{t('export.markdownDesc')}</span>
+            </button>
+          </div>
+
           <p className="export-prompt-q">
             {t('export.question', { total: total.toLocaleString() })}
           </p>
@@ -104,7 +126,9 @@ export default function ExportPrompt({ total, onExport, onCancel }) {
             {t('common.cancel')}
           </button>
           <button type="button" className="btn export-xlsx" onClick={confirm}>
-            {limited ? t('export.exportN', { count: parsed.toLocaleString() }) : t('export.exportAll')}
+            {limited
+              ? t('export.exportN', { count: parsed.toLocaleString(), format: t(`export.${format}Name`) })
+              : t('export.exportAll', { format: t(`export.${format}Name`) })}
           </button>
         </div>
       </div>
