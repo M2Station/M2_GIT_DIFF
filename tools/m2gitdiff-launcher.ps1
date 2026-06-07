@@ -127,11 +127,12 @@ if (-not (Test-Path -LiteralPath $stateDir)) {
     New-Item -ItemType Directory -Path $stateDir -Force | Out-Null
 }
 
-# Collection window: long enough for Explorer to spin up one PowerShell per
-# selected folder, which is noticeably slower on network drives. Too short and a
-# genuine 2-folder selection degrades to a single-folder (L=R) compare.
-# Configurable via M2GITDIFF_COLLECT_MS (milliseconds, default 1500).
-$collectMs = 1500
+# Collection window: Explorer invokes this script once per selected folder. The
+# first invocation waits briefly for siblings, then launches. Keep the default
+# short so a normal single-folder compare does not feel like a hang; widen via
+# M2GITDIFF_COLLECT_MS if multi-select on a slow/network folder needs more time.
+# Configurable via M2GITDIFF_COLLECT_MS (milliseconds, default 350).
+$collectMs = 350
 if ($env:M2GITDIFF_COLLECT_MS -and ($env:M2GITDIFF_COLLECT_MS -as [int])) {
     $collectMs = [int]$env:M2GITDIFF_COLLECT_MS
 }
