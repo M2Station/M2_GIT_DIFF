@@ -52,10 +52,28 @@
     "clearColorsTitle": "清除所有強制背景顏色",
     "exportExcel": "⬇ Export Excel",
     "exportExcelTitle": "匯出對齊後的差異到 Excel（含 NOTE 提示、強制顏色、手動連結）",
+    "log": "🧾 Log",
+    "logTitle": "開啟錯誤 / 診斷日誌（git 失敗、cache 問題、匯出錯誤）",
     "help": "❓ Help",
     "helpTitle": "快捷鍵說明 (Help)",
     "settings": "⚙ Settings",
     "settingsTitle": "設定 (Settings)"
+  },
+  "log": {
+    "title": "🧾 錯誤 / 日誌",
+    "total": "共 {count} 筆",
+    "filterAria": "依等級過濾日誌",
+    "filterAll": "全部",
+    "filterErrors": "錯誤",
+    "filterWarnings": "警告",
+    "copy": "全部複製",
+    "copied": "已複製",
+    "copyTitle": "把整份日誌複製到剪貼簿",
+    "clear": "清除",
+    "clearTitle": "清除所有日誌項目",
+    "empty": "目前沒有日誌。git 失敗、cache 問題與匯出錯誤都會顯示在這裡。",
+    "openFromError": "開啟錯誤 / 診斷日誌",
+    "openFromErrorHint": "點擊查看完整日誌 →"
   },
   "settings": {
     "title": "⚙ 設定 / Settings",

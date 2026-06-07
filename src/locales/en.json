@@ -52,10 +52,28 @@
     "clearColorsTitle": "Clear all forced background colors",
     "exportExcel": "⬇ Export Excel",
     "exportExcelTitle": "Export the aligned diff to Excel (with note tooltips, forced colors and manual links)",
+    "log": "🧾 Log",
+    "logTitle": "Open the error / diagnostics log (git failures, cache problems, export errors)",
     "help": "❓ Help",
     "helpTitle": "Keyboard shortcuts (Help)",
     "settings": "⚙ Settings",
     "settingsTitle": "Settings"
+  },
+  "log": {
+    "title": "🧾 Error / Log",
+    "total": "{count} total",
+    "filterAria": "Filter log by level",
+    "filterAll": "All",
+    "filterErrors": "Errors",
+    "filterWarnings": "Warnings",
+    "copy": "Copy all",
+    "copied": "Copied",
+    "copyTitle": "Copy the whole log to the clipboard",
+    "clear": "Clear",
+    "clearTitle": "Clear all log entries",
+    "empty": "No log entries yet. Git failures, cache problems and export errors will appear here.",
+    "openFromError": "Open the error / diagnostics log",
+    "openFromErrorHint": "click for the full log →"
   },
   "settings": {
     "title": "⚙ Settings",
