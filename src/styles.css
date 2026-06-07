@@ -861,6 +861,9 @@ mark.cd-hl {
   padding: 0 1px;
 }
 .cd-chat {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   margin-right: 6px;
   padding: 3px 9px;
   font-size: 12px;
@@ -874,6 +877,13 @@ mark.cd-hl {
 .cd-chat:hover {
   background: rgba(54, 214, 255, 0.22);
   border-color: var(--accent);
+}
+.cd-chat-ico {
+  flex: 0 0 auto;
+  color: #0098ff;
+}
+.cd-chat-label {
+  line-height: 1;
 }
 .cd-toast {
   display: flex;

@@ -180,7 +180,7 @@
     "statusUnique": "Unique · one side only",
     "hlPlaceholder": "HL…",
     "hlTitle": "Highlight matching text",
-    "chat": "💬 Chat",
+    "chat": "Chat",
     "chatTitle": "Explain this commit with VS Code Copilot Chat",
     "chatAria": "Open in VS Code Chat",
     "web": "🔗 Web",
