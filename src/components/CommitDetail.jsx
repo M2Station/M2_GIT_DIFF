@@ -336,32 +336,30 @@ export default function CommitDetail({ side, commit, related, repoPath, remoteUr
     unique: t('detail.statusUnique')
   }[commit.status] || commit.status;
 
-  // Hand the commit off to the locally installed VS Code chat. The prompt is
-  // streamed to `code chat` via stdin by the main process, and the repo is used
-  // as the workspace so the agent can run `git show <sha>` for the full diff.
-  // The prompt is kept in English so it survives any stdin encoding quirks.
+  // Hand the commit off to the locally installed VS Code chat. The main process
+  // opens a NEW chat session (`code chat -n`) with the commit details + full
+  // diff attached as context via `--add-file`, and intentionally passes NO
+  // prompt — so the session waits for the user to type their own prompt before
+  // triggering. The context is built entirely in English in the main process.
   const openInChat = async () => {
     if (!window.api?.openInVSCodeChat) {
       setToast(t('detail.toastVSCodeOnly'));
       return;
     }
-    const prompt = [
-      `# Commit ${commit.short} - ${commit.subject}`,
-      '',
-      'Explain the following Git commit: summarize what it changes, its purpose, and any potential risks.',
-      `You can run \`git show ${commit.sha}\` in this repo to inspect the full diff.`,
-      '',
-      `Repo: ${repoPath || '(unknown)'}`,
-      `Commit: ${commit.sha}`,
-      `Author: ${commit.author}${commit.authorEmail ? ` <${commit.authorEmail}>` : ''}`,
-      `Date: ${commit.authorDate}`,
-      `Subject: ${commit.subject}`,
-      '',
-      'Commit message:',
-      commit.body || '(no body)'
-    ].join('\n');
     try {
-      await window.api.openInVSCodeChat({ repoPath, prompt, mode: 'agent' });
+      await window.api.openInVSCodeChat({
+        repoPath,
+        mode: 'agent',
+        commit: {
+          sha: commit.sha,
+          short: commit.short,
+          subject: commit.subject,
+          author: commit.author,
+          authorEmail: commit.authorEmail,
+          authorDate: commit.authorDate,
+          body: commit.body
+        }
+      });
     } catch (e) {
       if (e && (e.code === 'VSCODE_NOT_FOUND' || /VSCODE_NOT_FOUND/.test(e.message || ''))) {
         setToast(t('detail.toastVSCodeNotFound'));
@@ -453,7 +451,20 @@ export default function CommitDetail({ side, commit, related, repoPath, remoteUr
           title={t('detail.chatTitle')}
           aria-label={t('detail.chatAria')}
         >
-          {t('detail.chat')}
+          <svg
+            className="cd-chat-ico"
+            viewBox="0 0 100 100"
+            width="14"
+            height="14"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <path
+              fill="currentColor"
+              d="M70.912 99.317a6.385 6.385 0 0 0 5.088-.18l20.314-9.773A6.4 6.4 0 0 0 100 83.575V16.425a6.4 6.4 0 0 0-3.686-5.789L75.999.863a6.385 6.385 0 0 0-7.286 1.239L29.828 37.587 12.866 24.717a4.264 4.264 0 0 0-5.451.243L1.979 29.93a4.268 4.268 0 0 0-.006 6.303L16.691 50 1.973 63.768a4.268 4.268 0 0 0 .006 6.303l5.436 4.97a4.264 4.264 0 0 0 5.451.243l16.962-12.87 38.885 35.486a6.38 6.38 0 0 0 2.198 1.417zM75.5 27.33 45.99 50 75.5 72.67V27.33z"
+            />
+          </svg>
+          <span className="cd-chat-label">{t('detail.chat')}</span>
         </button>
         <button className="cd-close" onClick={onClose} title={t('common.closeEsc')} aria-label={t('common.close')}>
           ✕
