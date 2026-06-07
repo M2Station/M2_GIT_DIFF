@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld('api', {
   loadRepo: (opts) => ipcRenderer.invoke('repo:load', opts),
   getPatchIds: (opts) => ipcRenderer.invoke('repo:patchIds', opts),
   getDiffTexts: (opts) => ipcRenderer.invoke('repo:diffTexts', opts),
+  getCommitDiff: (opts) => ipcRenderer.invoke('repo:commitDiff', opts),
   gitOp: (opts) => ipcRenderer.invoke('repo:gitOp', opts),
   listBranches: (opts) => ipcRenderer.invoke('repo:listBranches', opts),
   switchBranch: (opts) => ipcRenderer.invoke('repo:switchBranch', opts),

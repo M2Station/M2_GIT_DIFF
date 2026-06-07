@@ -28,6 +28,7 @@ const SHORTCUT_KEYS = [
   ['→'],
   ['Enter'],
   ['Ctrl', 'Click'],
+  ['Shift', 'Click'],
   ['Esc'],
   ['Del'],
   ['Ctrl', 'Enter']

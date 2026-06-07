@@ -16,6 +16,8 @@ import NotePopup from './components/NotePopup.jsx';
 import VtagPopup from './components/VtagPopup.jsx';
 import RowMenu from './components/RowMenu.jsx';
 import CommitDetail from './components/CommitDetail.jsx';
+import DiffComparePopup from './components/DiffComparePopup.jsx';
+import VsIcon from './components/VsIcon.jsx';
 import GitTerminalPopup from './components/GitTerminalPopup.jsx';
 import BranchSwitchPopup from './components/BranchSwitchPopup.jsx';
 import ExportPrompt from './components/ExportPrompt.jsx';
@@ -23,7 +25,7 @@ import HelpPopup from './components/HelpPopup.jsx';
 import SettingsPopup from './components/SettingsPopup.jsx';
 import FolderPicker from './components/FolderPicker.jsx';
 import logoUrl from './assets/logo.svg';
-import { computeDiff, applyFuzzy, matchesQuery, alignLayout } from './lib/diff.js';
+import { computeDiff, applyFuzzy, matchesQuery, alignLayout, patchSimilarity } from './lib/diff.js';
 import { ROW_HEIGHT, GUTTER_WIDTH } from './lib/constants.js';
 import { getCommitLimit } from './lib/settings.js';
 import { useT } from './lib/i18n.js';
@@ -120,6 +122,16 @@ export default function App() {
   // each entry is { side, sha, x, y }. Ctrl+Clicking an already-open commit is
   // ignored (no duplicate window).
   const [details, setDetails] = useState([]);
+
+  // Side-by-side compare window for the currently selected match (a linked
+  // pair). `compare` holds the two commits + an open position; null when closed.
+  const [compare, setCompare] = useState(null);
+
+  // Pick-to-compare basket: up to two commits the user Shift+Clicked to compare
+  // directly, regardless of whether they are linked. Each entry is { side, sha }.
+  // When two are picked a floating Compare button opens the same side-by-side
+  // window for that ad-hoc pair (commits may even be from the same side / repo).
+  const [comparePick, setComparePick] = useState([]);
 
   // Virtualization scroll state
   const scrollRef = useRef(null);
@@ -1026,6 +1038,91 @@ export default function App() {
         : side;
     return { ...layout, L: annotate(layout.L), R: annotate(layout.R) };
   }, [layout, query, scopes]);
+
+  // The two commits behind the currently selected match (a linked pair), plus
+  // the display row to anchor the floating "Compare" pill on. Null when no
+  // match is selected or it doesn't resolve to a visible left+right pair (e.g.
+  // an off-screen / filtered row). Drives the side-by-side compare entry point.
+  const comparePair = useMemo(() => {
+    if (!selectedMatch || single) return null;
+    const l = diff.leftRows.find((r) => r.matchId === selectedMatch);
+    const r = diff.rightRows.find((r) => r.matchId === selectedMatch);
+    if (!l || !r) return null;
+    const link = view.links.find((k) => k.id === selectedMatch);
+    if (!link) return null;
+    const midRow = (link.leftIndex + link.rightIndex) / 2;
+    const y = midRow * ROW_HEIGHT + ROW_HEIGHT / 2;
+    // Pre-computed similarity preview for the pill ("預先比較相似度%"). Use the
+    // fuzzy link's own score when present, else derive it from any cached
+    // changed-line texts; null when nothing is available yet (the popup still
+    // computes the authoritative score on open).
+    let previewSim = null;
+    if (link.type === 'fuzzy' && typeof link.score === 'number') {
+      previewSim = link.score;
+    } else if (link.type === 'common') {
+      previewSim = 1; // identical SHA -> identical content
+    } else {
+      const la = diffTexts[l.sha];
+      const ra = diffTexts[r.sha];
+      if (la && ra) previewSim = patchSimilarity(new Set(la), new Set(ra));
+    }
+    return { left: l, right: r, y, previewSim };
+  }, [selectedMatch, single, diff, view, diffTexts]);
+
+  // Open the side-by-side compare window for the selected pair.
+  const openCompare = useCallback(() => {
+    if (!comparePair) return;
+    setCompare({
+      left: { repoPath: left.path, repoName: left.name, commit: comparePair.left },
+      right: { repoPath: right.path, repoName: right.name, commit: comparePair.right }
+    });
+  }, [comparePair, left.path, left.name, right.path, right.name]);
+
+  // Pick-to-compare basket. Shift+Click toggles a commit in/out; we keep at most
+  // two (drop the oldest when a third is picked). `pickedShas` / `pickOrder` let
+  // each row light up and show its 1/2 badge in O(1).
+  const onPick = useCallback((side, sha) => {
+    setComparePick((prev) => {
+      const i = prev.findIndex((p) => p.side === side && p.sha === sha);
+      if (i !== -1) return prev.filter((_, j) => j !== i); // toggle off
+      return [...prev, { side, sha }].slice(-2); // keep the two most recent
+    });
+  }, []);
+  const clearPick = useCallback(() => setComparePick([]), []);
+  const pickedShas = useMemo(
+    () => new Set(comparePick.map((p) => p.side + ':' + p.sha)),
+    [comparePick]
+  );
+  const pickOrder = useMemo(() => {
+    const m = new Map();
+    comparePick.forEach((p, i) => m.set(p.side + ':' + p.sha, i + 1));
+    return m;
+  }, [comparePick]);
+
+  // Resolve each picked { side, sha } to its commit row + that side's repo, so
+  // the basket can label them and the compare window can fetch their diffs.
+  const pickedCommits = useMemo(
+    () =>
+      comparePick.map((p) => {
+        const rows = p.side === 'L' ? diff.leftRows : diff.rightRows;
+        const commit = rows.find((r) => r.sha === p.sha) || null;
+        const repo = p.side === 'L' ? left : right;
+        return { side: p.side, commit, repoPath: repo.path, repoName: repo.name };
+      }),
+    [comparePick, diff, left, right]
+  );
+
+  // Open the side-by-side window for the two manually picked commits. The first
+  // pick becomes the left column, the second the right.
+  const openManualCompare = useCallback(() => {
+    if (pickedCommits.length !== 2) return;
+    const [a, b] = pickedCommits;
+    if (!a.commit || !b.commit) return;
+    setCompare({
+      left: { repoPath: a.repoPath, repoName: a.repoName, commit: a.commit },
+      right: { repoPath: b.repoPath, repoName: b.repoName, commit: b.commit }
+    });
+  }, [pickedCommits]);
   // Export the aligned diff (notes + forced colors + manual links) to a styled
   // .xlsx. Matched pairs already share a display row, so commits stay aligned;
   // alignment gaps become empty cells. Notes ride along as cell tooltips.
@@ -1413,6 +1510,11 @@ export default function App() {
       // (arrows, Enter, typing-to-filter, Esc) — don't let the global handler
       // also move the commit cursor or reopen search underneath it.
       if (pickerSide) return;
+      // The side-by-side compare window is a self-contained surface with its
+      // own hotkeys (Ctrl+F, F3, Enter, Esc). While it's open — or whenever a
+      // key originates from inside it — the app's global shortcuts stay out of
+      // the way so the two never interfere.
+      if (compare || e.target?.closest?.('.diff-compare')) return;
       // Don't hijack typing in the search box (or any input / editable field).
       const tag = e.target?.tagName;
       const typing =
@@ -1475,6 +1577,7 @@ export default function App() {
         setHelpOpen(false);
         setSelectedMatch(null);
         setPendingNode(null);
+        setComparePick([]);
         setNotePopup(null);
         setRowMenu(null);
         setDetails([]);
@@ -1510,7 +1613,8 @@ export default function App() {
     moveCursorSide,
     openCursorDetail,
     activeHit,
-    pickerSide
+    pickerSide,
+    compare
   ]);
 
   // Esc inside the search box closes the panel, clearing the query and its
@@ -1666,6 +1770,66 @@ export default function App() {
 
       {error && <div className="error-bar" role="alert" aria-live="assertive">⚠ {error}</div>}
 
+      {comparePick.length > 0 && (
+        <div className="compare-basket" role="region" aria-label={t('compare.basketAria')}>
+          <span className="cb-title">{t('compare.basketTitle')}</span>
+          <div className="cb-items">
+            {pickedCommits.map((p, i) => (
+              <span key={i} className={'cb-chip ' + p.side}>
+                <span className="cb-chip-n">{i + 1}</span>
+                <span className="cb-chip-side">{p.side}</span>
+                <span className="cb-chip-sha">{p.commit ? p.commit.short : '—'}</span>
+                {p.commit && (
+                  <span className="cb-chip-subject" title={p.commit.subject}>
+                    {p.commit.subject}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  className="cb-chip-x"
+                  title={t('compare.pickRemove')}
+                  aria-label={t('compare.pickRemove')}
+                  onClick={() => onPick(comparePick[i].side, comparePick[i].sha)}
+                >
+                  ✕
+                </button>
+              </span>
+            ))}
+            {comparePick.length < 2 && <span className="cb-hint">{t('compare.pickHint')}</span>}
+          </div>
+          <button
+            type="button"
+            className="cb-go"
+            disabled={comparePick.length !== 2}
+            onClick={openManualCompare}
+            title={t('compare.goTitle')}
+          >
+            <VsIcon className="cb-go-ico" />
+            <span>{t('compare.go')}</span>
+          </button>
+          <button
+            type="button"
+            className="cb-clear"
+            title={t('compare.clear')}
+            aria-label={t('compare.clear')}
+            onClick={clearPick}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {compare && (
+        <DiffComparePopup
+          left={compare.left}
+          right={compare.right}
+          x={120}
+          y={70}
+          initialFind={query}
+          onClose={() => setCompare(null)}
+        />
+      )}
+
       {gitTerminal && (
         <GitTerminalPopup
           info={gitTerminal}
@@ -1799,6 +1963,9 @@ export default function App() {
             onRowMenu={openRowMenu}
             plain={!!single}
             onDetail={openDetail}
+            onPick={onPick}
+            pickedShas={pickedShas}
+            pickOrder={pickOrder}
           />
           )}
 
@@ -1813,6 +1980,23 @@ export default function App() {
               scrollTop={scrollTop}
               viewportHeight={viewportHeight}
             />
+            {comparePair && (
+              <button
+                type="button"
+                className="compare-pill"
+                style={{ top: comparePair.y }}
+                onClick={(e) => { e.stopPropagation(); openCompare(); }}
+                title={t('compare.pillTitle')}
+                aria-label={t('compare.pillAria')}
+              >
+                <span className="compare-pill-ico"><VsIcon /></span>
+                {comparePair.previewSim != null && (
+                  <span className="compare-pill-sim">
+                    {Math.round(comparePair.previewSim * 100)}%
+                  </span>
+                )}
+              </button>
+            )}
           </div>
           )}
 
@@ -1838,6 +2022,9 @@ export default function App() {
             onRowMenu={openRowMenu}
             plain={!!single}
             onDetail={openDetail}
+            onPick={onPick}
+            pickedShas={pickedShas}
+            pickOrder={pickOrder}
           />
           )}
         </div>
