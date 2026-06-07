@@ -288,9 +288,24 @@ npm run dist         # electron-builder 打包（Windows NSIS）
 npm run rebuild      # 為當前 Electron ABI 重編 better-sqlite3
 npm run demo:gif     # 重新產生操作預覽動畫 public/demo.gif
 npm run release      # 本機驗證建置（不發佈）；正式發佈由 CI 在 push tag 時處理（見下方）
+npm test             # 執行一次單元測試（Vitest）
+npm run test:watch   # 監看模式，檔案變更即重跑測試
+npm run test:coverage # 執行測試並產生 V8 覆蓋率報告
 ```
 
 > 產生應用程式圖示：`node scripts/make-icon.mjs` 會把 `public/icon.svg` 轉成多尺寸（16~256px、透明背景）的 `public/icon.ico`，供右鍵選單與打包圖示使用；改了 `icon.svg` 後重跑即可。
+
+### 測試
+
+核心、無副作用的邏輯以 [Vitest](https://vitest.dev) 單元測試涵蓋，放在 [test/](test/)：
+
+| 測試檔 | 涵蓋範圍 |
+| --- | --- |
+| [test/diff.test.js](test/diff.test.js) | `diff.js`——commit 分類（common / cherry / patch-id / 手動連結）、fuzzy Jaccard 配對、unified diff 解析、LIS 對齊排版、搜尋範圍 |
+| [test/git.test.js](test/git.test.js) | `git.js`——`parseTags`，以及會建立**真實暫時 git repo** 的整合測試，驗證 commit 解析、分頁（`limit` / `skip` / `hasMore`）、tag 與 patch-id |
+| [test/markdown.test.js](test/markdown.test.js) | `markdown.js`——HTML 轉義（XSS 防護）、行內 / 區塊渲染、不可導覽的連結 |
+
+`npm test` 以 Node 環境無頭執行（不需 Electron）。每次 push / PR 會經由 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) 的 **Unit tests (node)** job 在 CI 跑測試，並作為 Windows 安裝檔建置的前置關卡。
 
 ### 發佈版本（CI 於 push tag 時建置）
 

@@ -294,9 +294,24 @@ npm run dist         # electron-builder packaging (Windows NSIS)
 npm run rebuild      # rebuild better-sqlite3 for the current Electron ABI
 npm run demo:gif     # regenerate the preview animation public/demo.gif
 npm run release      # local verification build only (no publish); CI publishes on tag push (see below)
+npm test             # run the unit-test suite once (Vitest)
+npm run test:watch   # re-run tests on change (watch mode)
+npm run test:coverage # run tests with a V8 coverage report
 ```
 
 > Generate the app icon: `node scripts/make-icon.mjs` converts `public/icon.svg` into a multi-size (16–256px, transparent) `public/icon.ico` for the context menu and packaged icon; rerun after editing `icon.svg`.
+
+### Tests
+
+Core, side-effect-free logic is covered by [Vitest](https://vitest.dev) unit tests under [test/](test/):
+
+| Suite | Covers |
+| --- | --- |
+| [test/diff.test.js](test/diff.test.js) | `diff.js` — commit classification (common / cherry / patch-id / manual), fuzzy Jaccard matching, unified-diff parsing, the LIS alignment layout, and search scoping |
+| [test/git.test.js](test/git.test.js) | `git.js` — `parseTags` plus integration tests that spin up a **real throwaway git repo** to exercise commit parsing, paging (`limit` / `skip` / `hasMore`), tags, and patch-ids |
+| [test/markdown.test.js](test/markdown.test.js) | `markdown.js` — HTML escaping (XSS safety), inline / block rendering, and non-navigating links |
+
+`npm test` runs them headlessly in a Node environment (no Electron needed). They run in CI on every push / PR via the **Unit tests (node)** job in [`.github/workflows/ci.yml`](.github/workflows/ci.yml), which gates the Windows installer build.
 
 ### Cutting a release (CI on tag push)
 
