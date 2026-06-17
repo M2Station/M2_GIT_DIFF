@@ -14,6 +14,10 @@ import {
   setCommitLimit,
   COMMIT_LIMIT_MIN,
   COMMIT_LIMIT_MAX,
+  getPreloadCount,
+  setPreloadCount,
+  PRELOAD_MIN,
+  PRELOAD_MAX,
   getAutoFillRange,
   setAutoFillRange,
   AUTOFILL_MIN,
@@ -28,6 +32,7 @@ export default function SettingsPopup({ onClose }) {
   const { t, lang, setLang, locales } = useI18n();
   const { theme, setTheme, themes } = useTheme();
   const [commitLimit, setCommitLimitState] = useState(() => String(getCommitLimit()));
+  const [preload, setPreloadState] = useState(() => String(getPreloadCount()));
   const [autoFill, setAutoFillState] = useState(() => String(getAutoFillRange()));
 
   useEffect(() => {
@@ -111,6 +116,24 @@ export default function SettingsPopup({ onClose }) {
           </div>
 
           <div className="settings-field">
+            <label className="settings-label" htmlFor="settings-preload">
+              {t('settings.preload')}
+            </label>
+            <input
+              id="settings-preload"
+              className="settings-select"
+              type="number"
+              min={PRELOAD_MIN}
+              max={PRELOAD_MAX}
+              step="50"
+              value={preload}
+              onChange={(e) => setPreloadState(e.target.value)}
+              onBlur={() => setPreloadState(String(setPreloadCount(preload)))}
+            />
+            <p className="settings-hint">{t('settings.preloadHint')}</p>
+          </div>
+
+          <div className="settings-field">
             <label className="settings-label" htmlFor="settings-autofill">
               {t('settings.autoFill')}
             </label>
@@ -130,7 +153,7 @@ export default function SettingsPopup({ onClose }) {
         </div>
 
         <div className="settings-foot">
-          <button type="button" className="btn primary" onClick={() => { setCommitLimit(commitLimit); setAutoFillRange(autoFill); onClose(); }}>
+          <button type="button" className="btn primary" onClick={() => { setCommitLimit(commitLimit); setPreloadCount(preload); setAutoFillRange(autoFill); onClose(); }}>
             {t('common.ok')}
           </button>
         </div>

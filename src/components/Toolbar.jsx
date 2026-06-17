@@ -75,6 +75,8 @@ export default function Toolbar({
   single,
   onSetSingle,
   onSwapSides,
+  onLoadAll,
+  canLoadAll,
   fuzzyEnabled,
   fuzzyThreshold,
   onToggleFuzzy,
@@ -123,15 +125,26 @@ export default function Toolbar({
             <span className="fuzzy-unit">%</span>
           </span>
         </div>
-        <button
-          className="btn swap-sides"
-          onClick={onSwapSides}
-          disabled={!left.path && !right.path}
-          title={t('toolbar.swapTitle')}
-          aria-label={t('toolbar.swapAria')}
-        >
-          {t('toolbar.swap')}
-        </button>
+        <div className="swap-stack">
+          <button
+            className="btn swap-sides"
+            onClick={onSwapSides}
+            disabled={!left.path && !right.path}
+            title={t('toolbar.swapTitle')}
+            aria-label={t('toolbar.swapAria')}
+          >
+            {t('toolbar.swap')}
+          </button>
+          <button
+            className="btn load-all"
+            onClick={onLoadAll}
+            disabled={!canLoadAll}
+            title={t('toolbar.loadAllTitle')}
+            aria-label={t('toolbar.loadAllAria')}
+          >
+            {t('toolbar.loadAll')}
+          </button>
+        </div>
         <RepoSlot side="R" repo={right} loading={loading.R} onPick={onPick} onReload={onReload} stats={rightStats} t={t} />
       </div>
 

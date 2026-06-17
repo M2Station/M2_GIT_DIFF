@@ -31,6 +31,9 @@
     "swap": "⇆ Swap",
     "swapTitle": "交換左右兩側 (L ⇄ R)",
     "swapAria": "Swap left and right",
+    "loadAll": "⭳ Load all logs",
+    "loadAllTitle": "載入完整 commit 紀錄，數量依設定的「載入筆數 / Commits to load」。開啟時只先顯示預載入筆數以加快速度。",
+    "loadAllAria": "Load all commit logs",
     "view": "View",
     "compare": "⇄ Compare",
     "compareTitle": "雙邊比對模式",
@@ -83,6 +86,8 @@
     "themeHint": "選擇配色主題，設定會自動儲存。",
     "commitLimit": "載入筆數 / Commits to load",
     "commitLimitHint": "每個 repo 載入的 commit 筆數（0 = 不限制）。預設 2,000 筆，於下次載入或重新整理時生效。",
+    "preload": "預載入筆數 / Pre-load commits",
+    "preloadHint": "開啟 repo 時先載入的 commit 筆數，加快開啟速度。預設 250 筆。按「Load all logs」才會載入完整的「載入筆數 / Commits to load」。",
     "autoFill": "自動補齊範圍 / Auto-fill range",
     "autoFillHint": "當兩側歷史深度不一致時，自動把較淺的一側往下載入，以對齊因截斷而被藏起的配對（0 = 關閉）。此值同時是每次自動載入的上限。預設 100 筆。"
   },
