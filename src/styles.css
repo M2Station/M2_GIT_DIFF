@@ -1011,6 +1011,10 @@ mark.cd-hl {
   background: var(--accent);
   color: #fff;
 }
+.cd-code-link.on {
+  background: var(--accent);
+  color: #fff;
+}
 .cd-author {
   font-size: 13px;
   font-weight: 600;
@@ -3347,6 +3351,12 @@ mark {
   font-size: 13px;
   font-weight: 700;
   color: var(--text);
+}
+.cc-count {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 .dc-sim {
   font-size: 12px;

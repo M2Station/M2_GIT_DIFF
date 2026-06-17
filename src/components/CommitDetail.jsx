@@ -9,6 +9,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { renderMarkdown } from '../lib/markdown.js';
 import { useT } from '../lib/i18n.js';
+import CommitCodePopup from './CommitCodePopup.jsx';
 
 // Floating commit detail viewer (Ctrl+Click a row). Header surfaces the key
 // metadata (SHA / date / author) prominently; the message body is rendered as
@@ -157,7 +158,7 @@ function findSearchRefs(text) {
   return out;
 }
 
-export default function CommitDetail({ side, commit, related, repoPath, remoteUrl, x, y, searchTerm, onClose, onOpenRelated }) {
+export default function CommitDetail({ side, commit, related, repoPath, remoteUrl, x, y, searchTerm, active, onActivate, onClose, onOpenRelated }) {
   const t = useT();
   const [size, setSize] = useState(() => {
     const w = initialWidth(commit);
@@ -170,6 +171,14 @@ export default function CommitDetail({ side, commit, related, repoPath, remoteUr
   }));
   const [hl, setHl] = useState(searchTerm || '');
   const [toast, setToast] = useState(null);
+  // Toggles the floating </> Code window that shows this commit's own diff.
+  const [codeOpen, setCodeOpen] = useState(false);
+  // Mirror of codeOpen for synchronous reads inside the window-level Esc handler.
+  const codeOpenRef = useRef(false);
+  codeOpenRef.current = codeOpen;
+  // Mirror of the `active` (focused) flag for synchronous reads in the Esc handler.
+  const activeRef = useRef(false);
+  activeRef.current = active;
   const scrollRef = useRef(null);
   const dragRef = useRef(null);
 
@@ -180,11 +189,17 @@ export default function CommitDetail({ side, commit, related, repoPath, remoteUr
   }, [searchTerm]);
 
   // Close on Escape. (Outside-click is intentionally NOT handled so multiple
-  // detail windows can stay open and be interacted with independently.)
+  // detail windows can stay open and be interacted with independently.) When the
+  // </> Code window is open it owns Escape: one Esc closes only the Code window
+  // and leaves this detail open; a later Esc (Code now closed) closes this.
+  // With several detail windows open, only the focused (active) one closes, so
+  // Esc always targets the window the user is working in.
   const rootRef = useRef(null);
   useEffect(() => {
     const onKey = (e) => {
       if (e.key === 'Escape') {
+        if (codeOpenRef.current) return; // the Code window handles its own Esc
+        if (!activeRef.current) return; // only the focused detail window closes
         e.stopPropagation();
         onClose();
       }
@@ -424,11 +439,13 @@ export default function CommitDetail({ side, commit, related, repoPath, remoteUr
   };
 
   return (
+    <>
     <div
       ref={rootRef}
       className="commit-detail"
-      style={{ left: pos.x, top: pos.y, width: size.w, height: size.h }}
+      style={{ left: pos.x, top: pos.y, width: size.w, height: size.h, zIndex: active ? 76 : 75 }}
       onClick={(e) => e.stopPropagation()}
+      onPointerDownCapture={onActivate}
     >
       <div className="cd-header" onPointerDown={onDragStart}>
         <span className={'cd-side ' + side}>{sideName}</span>
@@ -483,6 +500,17 @@ export default function CommitDetail({ side, commit, related, repoPath, remoteUr
           <span className="cd-key">SHA</span>
           <span className="cd-sha" title={commit.sha}>{commit.short}</span>
           <span className="cd-sha-full">{commit.sha}</span>
+          <button
+            type="button"
+            className={'cd-sha-link cd-code-link' + (codeOpen ? ' on' : '')}
+            onClick={() => setCodeOpen((v) => !v)}
+            onPointerDown={(e) => e.stopPropagation()}
+            title={t('detail.codeTitle')}
+            aria-label={t('detail.codeAria')}
+            aria-pressed={codeOpen}
+          >
+            {t('detail.code')}
+          </button>
           {webUrl && (
             <button
               type="button"
@@ -576,5 +604,16 @@ export default function CommitDetail({ side, commit, related, repoPath, remoteUr
       <div className="cd-rz cd-rz-se" onPointerDown={onResizeStart('se')} />
       <div className="cd-rz cd-rz-sw" onPointerDown={onResizeStart('sw')} />
     </div>
+    {codeOpen && (
+      <CommitCodePopup
+        side={side}
+        commit={commit}
+        repoPath={repoPath}
+        x={pos.x + 28}
+        y={pos.y + 28}
+        onClose={() => setCodeOpen(false)}
+      />
+    )}
+    </>
   );
 }

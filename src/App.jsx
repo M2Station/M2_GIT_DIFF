@@ -154,6 +154,9 @@ export default function App() {
   // each entry is { side, sha, x, y }. Ctrl+Clicking an already-open commit is
   // ignored (no duplicate window).
   const [details, setDetails] = useState([]);
+  // Key (`side:sha`) of the "focused" detail window — the one the user last
+  // opened or clicked. Only it responds to Esc, and it renders above the others.
+  const [activeDetail, setActiveDetail] = useState(null);
 
   // Side-by-side compare window for the currently selected match (a linked
   // pair). `compare` holds the two commits + an open position; null when closed.
@@ -745,6 +748,11 @@ export default function App() {
     setLoading((s) => ({ L: s.R, R: s.L }));
     setSingle((s) => (s === 'L' ? 'R' : s === 'R' ? 'L' : null));
     setDetails((ds) => ds.map((d) => ({ ...d, side: d.side === 'L' ? 'R' : 'L' })));
+    setActiveDetail((k) => {
+      if (!k) return k;
+      const i = k.indexOf(':');
+      return (k.slice(0, i) === 'L' ? 'R' : 'L') + k.slice(i);
+    });
     setPendingNode((p) => (p ? { ...p, side: p.side === 'L' ? 'R' : 'L' } : null));
     setNotePopup(null);
     setRowMenu(null);
@@ -1216,11 +1224,27 @@ export default function App() {
       const offset = prev.length * 26;
       return [...prev, { side, sha, x: (x || 80) + offset, y: (y || 80) + offset }];
     });
+    // Opening (or re-opening) a commit focuses its window.
+    setActiveDetail(side + ':' + sha);
   }, []);
 
   const closeDetail = useCallback((side, sha) => {
     setDetails((prev) => prev.filter((d) => !(d.side === side && d.sha === sha)));
   }, []);
+
+  // Keep the "focused" detail pointer valid: when the active window closes (or a
+  // swap flips its key) fall back to the topmost (last-rendered) remaining
+  // window, so Esc always has a single unambiguous target.
+  useEffect(() => {
+    if (details.length === 0) {
+      if (activeDetail !== null) setActiveDetail(null);
+      return;
+    }
+    const keys = details.map((d) => d.side + ':' + d.sha);
+    if (!activeDetail || !keys.includes(activeDetail)) {
+      setActiveDetail(keys[keys.length - 1]);
+    }
+  }, [details, activeDetail]);
 
   // Resolve a commit and its matched ("related") counterpart on the other side,
   // using the classified rows from computeDiff (which carry the shared matchId).
@@ -2209,6 +2233,8 @@ export default function App() {
             x={d.x}
             y={d.y}
             searchTerm={query}
+            active={(d.side + ':' + d.sha) === activeDetail}
+            onActivate={() => setActiveDetail(d.side + ':' + d.sha)}
             onClose={() => closeDetail(d.side, d.sha)}
             onOpenRelated={(side, sha) => openDetail(side, sha, d.x + 40, d.y + 40)}
           />

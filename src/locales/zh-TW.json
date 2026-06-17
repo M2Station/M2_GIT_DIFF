@@ -226,6 +226,9 @@
     "chat": "Chat",
     "chatTitle": "用 VS Code Copilot Chat 解說此 Commit",
     "chatAria": "Open in VS Code Chat",
+    "code": "</> Code",
+    "codeTitle": "顯示此 Commit 修改的程式碼（新增 / 刪除的行），類似比對畫面",
+    "codeAria": "Show changed code for this commit",
     "web": "🔗 Web",
     "webTitle": "在瀏覽器開啟此 Commit 網頁\n{url}",
     "webAria": "Open commit on web",
@@ -248,6 +251,13 @@
     "toastVSCodeNotFound": "找不到 VS Code，請先安裝並確認 `code` 指令已加入 PATH。",
     "toastVSCodeFail": "開啟 VS Code Chat 失敗：{msg}",
     "toastWebFail": "開啟網頁失敗：{msg}"
+  },
+  "code": {
+    "title": "</> 程式碼變更 / Code changes",
+    "files": "{count} 個檔案有變更",
+    "filesTitle": "此 Commit 變更的檔案數",
+    "loading": "正在讀取此 Commit 的變更…",
+    "empty": "此 Commit 沒有變更任何檔案（空白或合併 commit）。"
   },
   "compare": {
     "title": "並排比對",
