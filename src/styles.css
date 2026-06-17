@@ -364,12 +364,30 @@ body {
 }
 
 .btn.swap-sides {
-  align-self: center;
   font-weight: 600;
   border-color: var(--accent);
   color: var(--accent);
 }
 .btn.swap-sides:hover:not(:disabled) {
+  box-shadow: 0 0 6px rgba(54, 214, 255, 0.4);
+}
+
+/* Swap + Load-all logs stacked as a centered pair between the two repo slots.
+   Both buttons stretch to the same (widest) width so they read as one control. */
+.swap-stack {
+  align-self: center;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+.btn.load-all {
+  font-weight: 600;
+  border-color: var(--accent);
+  color: var(--accent);
+  white-space: nowrap;
+}
+.btn.load-all:hover:not(:disabled) {
   box-shadow: 0 0 6px rgba(54, 214, 255, 0.4);
 }
 

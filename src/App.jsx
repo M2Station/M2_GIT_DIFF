@@ -28,7 +28,7 @@ import LogPanel from './components/LogPanel.jsx';
 import logoUrl from './assets/logo.svg';
 import { computeDiff, applyFuzzy, matchesQuery, alignLayout, patchSimilarity } from './lib/diff.js';
 import { ROW_HEIGHT, GUTTER_WIDTH, PAGE_BATCH, HISTORY_LIMIT } from './lib/constants.js';
-import { getCommitLimit, getAutoFillRange } from './lib/settings.js';
+import { getCommitLimit, getPreloadCount, getAutoFillRange } from './lib/settings.js';
 import { useT } from './lib/i18n.js';
 import { useLog, logError, logWarn, logInfo, clearLog } from './lib/logStore.js';
 
@@ -61,6 +61,18 @@ export default function App() {
   // on-open balancer steps aside so the manual two-phase control is the single
   // source of truth for how deep each side is paged.
   const pagedRef = useRef(false);
+  // Pre-load vs. full-load mode. A repo opens with only the pre-load count of
+  // commits (getPreloadCount) for a fast start; clicking "Load all logs" reloads
+  // the loaded sides up to the full commit limit (getCommitLimit). `loadedAll`
+  // drives the toolbar button's enabled state; `loadAllRef` mirrors it for
+  // synchronous reads inside callbacks and the loading overlay (no stale
+  // closures). `activeLimit()` returns whichever depth the current mode wants.
+  const [loadedAll, setLoadedAll] = useState(false);
+  const loadAllRef = useRef(false);
+  const activeLimit = useCallback(
+    () => (loadAllRef.current ? getCommitLimit() : getPreloadCount()),
+    []
+  );
   // Drives the full-stage progress overlay during a manual "Load more". Null when
   // idle, 'align' while pulling the shallower side down to realign, or 'more'
   // while deepening both sides. The align pull can be large (it loads down to the
@@ -261,8 +273,11 @@ export default function App() {
       setPickerSide(null);
       if (!folder || !side) return;
       setLoading((s) => ({ ...s, [side]: true }));
+      // Fresh open -> pre-load mode (fast start). "Load all logs" re-enables.
+      loadAllRef.current = false;
+      setLoadedAll(false);
       try {
-        const repo = await window.api.loadRepo({ repoPath: folder, limit: getCommitLimit() });
+        const repo = await window.api.loadRepo({ repoPath: folder, limit: getPreloadCount() });
         if (side === 'L') setLeft(repo);
         else setRight(repo);
         pagedRef.current = false; // fresh pair -> let the on-open balancer act
@@ -281,8 +296,11 @@ export default function App() {
   const loadPath = useCallback(async (side, repoPath) => {
     if (!repoPath) return;
     setLoading((s) => ({ ...s, [side]: true }));
+    // Fresh open -> pre-load mode (fast start). "Load all logs" re-enables.
+    loadAllRef.current = false;
+    setLoadedAll(false);
     try {
-      const repo = await window.api.loadRepo({ repoPath, limit: getCommitLimit() });
+      const repo = await window.api.loadRepo({ repoPath, limit: getPreloadCount() });
       if (side === 'L') setLeft(repo);
       else setRight(repo);
       pagedRef.current = false; // fresh pair -> let the on-open balancer act
@@ -318,7 +336,7 @@ export default function App() {
     if (!repo.path) return;
     setLoading((s) => ({ ...s, [side]: true }));
     try {
-      const fresh = await window.api.loadRepo({ repoPath: repo.path, limit: getCommitLimit() });
+      const fresh = await window.api.loadRepo({ repoPath: repo.path, limit: activeLimit() });
       if (side === 'L') setLeft(fresh);
       else setRight(fresh);
     } catch (e) {
@@ -328,7 +346,7 @@ export default function App() {
     } finally {
       setLoading((s) => ({ ...s, [side]: false }));
     }
-  }, [left, right]);
+  }, [left, right, activeLimit]);
 
   // Page in the next batch of older commits for one side and APPEND them to the
   // already-loaded window. Deduped by sha so an overlapping skip can never
@@ -414,6 +432,48 @@ export default function App() {
       setPaging(null);
     }
   }, [left, right, loadMore]);
+
+  // "Load all logs" button. A repo opens with only the pre-load count of commits
+  // for a fast start; this reloads every loaded side up to the full commit limit
+  // (Settings -> "Commits to load") in one shot. Switching to full mode also
+  // makes per-side reloads / git-op refreshes keep the full depth from here on.
+  const loadAllLogs = useCallback(async () => {
+    const sides = [];
+    if (left.path) sides.push('L');
+    if (right.path) sides.push('R');
+    if (!sides.length) return;
+    // Enter full-load mode BEFORE awaiting so the loading overlay shows the full
+    // limit and any concurrent reload uses the full depth too.
+    loadAllRef.current = true;
+    pagedRef.current = false; // freshly balanced full pair -> let the balancer realign
+    setLoading({ L: !!left.path, R: !!right.path });
+    try {
+      const results = await Promise.all(
+        sides.map((side) => {
+          const repo = side === 'L' ? left : right;
+          return window.api
+            .loadRepo({ repoPath: repo.path, limit: getCommitLimit() })
+            .then((fresh) => ({ side, fresh }))
+            .catch((err) => ({ side, err }));
+        })
+      );
+      for (const r of results) {
+        if (r.err) {
+          const repo = r.side === 'L' ? left : right;
+          const msg = String(r.err?.message || r.err);
+          logError('repo', `Load all logs failed: ${repo.name || repo.path}`, msg);
+          setError(msg);
+          continue;
+        }
+        if (r.side === 'L') setLeft(r.fresh);
+        else setRight(r.fresh);
+      }
+      setLoadedAll(true);
+    } finally {
+      setLoading({ L: false, R: false });
+    }
+  }, [left, right]);
+
   // Run a whitelisted git operation (fetch/pull/push) on one side, then reload
   // that repo so the commit graph reflects the result.
   const runGitOp = useCallback(async (side, op) => {
@@ -443,7 +503,7 @@ export default function App() {
         logInfo('git', `${repo.name || repo.path}: ${cmd}`, res?.output || '');
       }
       if (res?.ok !== false) {
-        const fresh = await window.api.loadRepo({ repoPath: repo.path, limit: getCommitLimit() });
+        const fresh = await window.api.loadRepo({ repoPath: repo.path, limit: activeLimit() });
         if (side === 'L') setLeft(fresh);
         else setRight(fresh);
       }
@@ -463,7 +523,7 @@ export default function App() {
     } finally {
       setLoading((s) => ({ ...s, [side]: false }));
     }
-  }, [left, right, t]);
+  }, [left, right, t, activeLimit]);
 
   // Open the switch-branch modal for one side: load the branch list first so
   // the popup renders the tree immediately.
@@ -512,7 +572,7 @@ export default function App() {
         logInfo('git', `${repoName}: ${swCmd}`, res?.output || '');
       }
       if (res?.ok !== false) {
-        const fresh = await window.api.loadRepo({ repoPath: repo.path, limit: getCommitLimit() });
+        const fresh = await window.api.loadRepo({ repoPath: repo.path, limit: activeLimit() });
         if (side === 'L') setLeft(fresh);
         else setRight(fresh);
       }
@@ -532,7 +592,7 @@ export default function App() {
     } finally {
       setBranchBusy(false);
     }
-  }, [branchPopup, left, right, t]);
+  }, [branchPopup, left, right, t, activeLimit]);
 
   // Exact-match pass (common / cherry / patch-id / manual). Memoized on its own
   // so it is NOT recomputed every time a single fuzzy diff-text arrives.
@@ -2003,6 +2063,15 @@ export default function App() {
     [closeSearch, cycleHit]
   );
 
+  // "Load all logs" is offered only while in pre-load mode and there is actually
+  // more history to pull on a loaded side (a repo smaller than the pre-load
+  // count has nothing more to show). Disabled mid-load to avoid overlap.
+  const canLoadAll =
+    !loadedAll &&
+    !loading.L &&
+    !loading.R &&
+    ((!!left.path && left.hasMore) || (!!right.path && right.hasMore));
+
   return (
     <div className="app">
       <Toolbar
@@ -2027,6 +2096,8 @@ export default function App() {
         single={single}
         onSetSingle={setSingle}
         onSwapSides={swapSides}
+        onLoadAll={loadAllLogs}
+        canLoadAll={canLoadAll}
         fuzzyEnabled={fuzzyEnabled}
         fuzzyThreshold={fuzzyThreshold}
         onToggleFuzzy={() => setFuzzyEnabled((v) => !v)}
@@ -2305,7 +2376,7 @@ export default function App() {
                 <div className="stage-empty-sub">
                   {t('app.loadingSub', {
                     sides: loading.L && loading.R ? t('app.loadingSubBoth') : loading.L ? t('app.loadingSubLeft') : t('app.loadingSubRight'),
-                    limit: getCommitLimit().toLocaleString()
+                    limit: activeLimit().toLocaleString()
                   })}
                 </div>
               </>

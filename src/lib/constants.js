@@ -9,6 +9,10 @@
 export const ROW_HEIGHT = 36; // px, fixed so SVG link math stays simple
 export const GUTTER_WIDTH = 90; // px, the channel where connection lines are drawn
 export const DEFAULT_LIMIT = 2000;
+// How many commits to load the FIRST time a repo opens, for a fast start. The
+// full DEFAULT_LIMIT amount is only fetched when the user clicks "Load all
+// logs". User-overridable in Settings.
+export const DEFAULT_PRELOAD = 250;
 export const OVERSCAN = 8; // extra rows rendered above/below the viewport
 
 // How many older commits a single "load more" / backfill request pulls in. Kept

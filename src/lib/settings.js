@@ -6,7 +6,7 @@
  * This source code is licensed under the MIT License found in the
  * LICENSE file in the root directory of this source tree.
  */
-import { DEFAULT_LIMIT, DEFAULT_AUTOFILL } from './constants.js';
+import { DEFAULT_LIMIT, DEFAULT_PRELOAD, DEFAULT_AUTOFILL } from './constants.js';
 
 // ---------------------------------------------------------------------------
 // User-configurable commit load limit
@@ -45,6 +45,48 @@ export function setCommitLimit(value) {
   const next = sanitize(value);
   try {
     localStorage.setItem(STORAGE_KEY, String(next));
+  } catch {
+    /* ignore persistence failure */
+  }
+  return next;
+}
+
+// ---------------------------------------------------------------------------
+// Pre-load commit count (fast initial open)
+// ---------------------------------------------------------------------------
+// How many commits to load the FIRST time a repo opens, so the view appears
+// quickly. The full commit limit (getCommitLimit) is only fetched when the user
+// clicks "Load all logs". Defaults to DEFAULT_PRELOAD (250) and persists in
+// localStorage. Always at least 1 — a zero pre-load would show nothing on open.
+const PRELOAD_KEY = 'preloadCount';
+export const PRELOAD_MIN = 1;
+export const PRELOAD_MAX = 100000;
+
+function sanitizePreload(value) {
+  const n = Math.floor(Number(value));
+  if (!Number.isFinite(n)) return DEFAULT_PRELOAD;
+  if (n < PRELOAD_MIN) return PRELOAD_MIN;
+  if (n > PRELOAD_MAX) return PRELOAD_MAX;
+  return n;
+}
+
+// Read the current pre-load count. Reads localStorage every call so the latest
+// saved value is always picked up at the moment a repo is opened.
+export function getPreloadCount() {
+  try {
+    const saved = localStorage.getItem(PRELOAD_KEY);
+    if (saved != null && saved !== '') return sanitizePreload(saved);
+  } catch {
+    /* localStorage unavailable */
+  }
+  return DEFAULT_PRELOAD;
+}
+
+// Persist a new pre-load count and return the sanitized value that was stored.
+export function setPreloadCount(value) {
+  const next = sanitizePreload(value);
+  try {
+    localStorage.setItem(PRELOAD_KEY, String(next));
   } catch {
     /* ignore persistence failure */
   }

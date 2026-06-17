@@ -31,6 +31,9 @@
     "swap": "⇆ Swap",
     "swapTitle": "Swap the left and right sides (L ⇄ R)",
     "swapAria": "Swap left and right",
+    "loadAll": "⭳ Load all logs",
+    "loadAllTitle": "Load the full commit history up to the Settings \"Commits to load\" limit. On open, only the pre-load count is shown for a fast start.",
+    "loadAllAria": "Load all commit logs",
     "view": "View",
     "compare": "⇄ Compare",
     "compareTitle": "Side-by-side compare mode",
@@ -83,6 +86,8 @@
     "themeHint": "Choose the colour theme. Your choice is saved automatically.",
     "commitLimit": "Commits to load",
     "commitLimitHint": "How many commits to load per repo (0 = no limit). Default is 2,000. Applies on the next repo load or refresh.",
+    "preload": "Pre-load commits",
+    "preloadHint": "How many commits to load when a repo first opens, for a fast start. Default is 250. Click \"Load all logs\" to load the full \"Commits to load\" amount.",
     "autoFill": "Auto-fill commit range",
     "autoFillHint": "When the two sides stop at different points in history, automatically load the shallower side deeper to realign matched commits hidden by truncation (0 = off). Also caps how many commits each side may auto-load per pass. Default is 100."
   },
