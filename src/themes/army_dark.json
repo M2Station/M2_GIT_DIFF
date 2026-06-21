@@ -1,0 +1,31 @@
+{
+  "_meta": {
+    "name": "Army (Dark)"
+  },
+  "vars": {
+    "--bg": "#1b1e21",
+    "--bg-soft": "#16191c",
+    "--panel": "#26292d",
+    "--line": "#3a4047",
+    "--text": "#dfe2e5",
+    "--muted": "#9aa3ab",
+    "--accent": "#8a9a3d",
+    "--accent-dim": "#5d6828",
+    "--selection-bg": "rgba(138, 154, 61, 0.20)",
+    "--selection-bd": "#8a9a3d",
+    "--selection-shadow": "rgba(138, 154, 61, 0.35)",
+
+    "--common-bg": "rgba(154, 163, 171, 0.16)",
+    "--common-bd": "#79828b",
+    "--cherry-bg": "rgba(194, 161, 58, 0.16)",
+    "--cherry-bd": "#c2a13a",
+    "--unique-bg": "rgba(207, 75, 63, 0.18)",
+    "--unique-bd": "#cf4b3f",
+
+    "--manual-bg": "rgba(154, 111, 192, 0.18)",
+    "--manual-bd": "#9a6fc0",
+
+    "--fuzzy-bg": "rgba(90, 127, 160, 0.18)",
+    "--fuzzy-bd": "#5a7fa0"
+  }
+}

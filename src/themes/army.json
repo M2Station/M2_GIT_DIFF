@@ -3,29 +3,29 @@
     "name": "Army"
   },
   "vars": {
-    "--bg": "#1c1f17",
-    "--bg-soft": "#262a1f",
-    "--panel": "#2f3326",
-    "--line": "#454b38",
-    "--text": "#e4e0d2",
-    "--muted": "#9a9a82",
-    "--accent": "#a3b86c",
-    "--accent-dim": "#6e7a52",
-    "--selection-bg": "rgba(163, 184, 108, 0.20)",
-    "--selection-bd": "#c1d98a",
-    "--selection-shadow": "rgba(163, 184, 108, 0.32)",
+    "--bg": "#0f1108",
+    "--bg-soft": "#131609",
+    "--panel": "#2a2f1f",
+    "--line": "#404530",
+    "--text": "#f5f4ed",
+    "--muted": "#a8a892",
+    "--accent": "#e8832a",
+    "--accent-dim": "#a85e1a",
+    "--selection-bg": "rgba(232, 131, 42, 0.20)",
+    "--selection-bd": "#e8832a",
+    "--selection-shadow": "rgba(232, 131, 42, 0.35)",
 
-    "--common-bg": "rgba(155, 154, 130, 0.16)",
+    "--common-bg": "rgba(168, 168, 146, 0.16)",
     "--common-bd": "#8a8c6f",
-    "--cherry-bg": "rgba(200, 150, 56, 0.16)",
-    "--cherry-bd": "#c89638",
-    "--unique-bg": "rgba(200, 82, 52, 0.16)",
-    "--unique-bd": "#c85234",
+    "--cherry-bg": "rgba(200, 162, 60, 0.16)",
+    "--cherry-bd": "#c8a23c",
+    "--unique-bg": "rgba(200, 104, 73, 0.18)",
+    "--unique-bd": "#c86849",
 
-    "--manual-bg": "rgba(150, 122, 90, 0.18)",
-    "--manual-bd": "#a98c5a",
+    "--manual-bg": "rgba(154, 95, 192, 0.18)",
+    "--manual-bd": "#9a5fc0",
 
-    "--fuzzy-bg": "rgba(178, 140, 96, 0.18)",
-    "--fuzzy-bd": "#b28c60"
+    "--fuzzy-bg": "rgba(74, 141, 166, 0.18)",
+    "--fuzzy-bd": "#4a8da6"
   }
 }
