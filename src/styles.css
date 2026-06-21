@@ -1487,7 +1487,10 @@ mark.cd-hl {
 .stage-empty-shortcut .sek-label {
   margin-left: 6px;
 }
-/* Homepage author credit — styled as a label / sticker pill. */
+/* Homepage author credit — ported from M2_SCOUT's author signature: a GitHub
+   mark in fixed brand green, a soft "Powered by", and an accent-gradient name.
+   Hover: the mark spins, an accent glow blooms, and a shimmer sweeps the name.
+   The gradient animation only runs on hover, so it costs nothing at idle. */
 .stage-empty-badge {
   position: absolute;
   bottom: 18px;
@@ -1495,50 +1498,76 @@ mark.cd-hl {
   transform: translateX(-50%);
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 5px 13px 5px 11px;
+  gap: 6px;
+  padding: 4px 12px;
   border-radius: 999px;
   font-size: 11.5px;
-  letter-spacing: 0.3px;
-  color: var(--text, #c9d4e0);
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  color: var(--text-soft, #c9d4e0);
   text-decoration: none;
+  white-space: nowrap;
   pointer-events: auto;
   cursor: pointer;
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--accent, #36d6ff) 16%, transparent),
-    color-mix(in srgb, var(--accent, #36d6ff) 7%, transparent)
-  );
-  border: 1px solid color-mix(in srgb, var(--accent, #36d6ff) 40%, transparent);
-  box-shadow:
-    0 2px 10px color-mix(in srgb, var(--accent, #36d6ff) 22%, transparent),
-    inset 0 1px 0 color-mix(in srgb, #ffffff 12%, transparent);
-  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  background: color-mix(in srgb, var(--accent, #36d6ff) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent, #36d6ff) 22%, transparent);
+  transition: transform 0.15s ease, background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
   animation: stage-badge-in 0.5s ease 0.1s both;
 }
 .stage-empty-badge:hover {
   transform: translateX(-50%) translateY(-1px);
-  border-color: color-mix(in srgb, var(--accent, #36d6ff) 70%, transparent);
-  box-shadow:
-    0 4px 16px color-mix(in srgb, var(--accent, #36d6ff) 35%, transparent),
-    inset 0 1px 0 color-mix(in srgb, #ffffff 18%, transparent);
+  border-color: color-mix(in srgb, var(--accent, #36d6ff) 45%, transparent);
+  background: color-mix(in srgb, var(--accent, #36d6ff) 12%, transparent);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--accent, #36d6ff) 35%, transparent);
 }
-.stage-empty-badge b {
+.stage-empty-badge .seb-logo {
+  width: 15px;
+  height: 15px;
+  /* Theme-adaptive: the M2 mark picks up the active theme accent so it
+     recolors with the chosen style. */
+  fill: var(--accent, #36d6ff);
+  transition: transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.2s ease;
+}
+.stage-empty-badge:hover .seb-logo {
+  transform: rotate(360deg) scale(1.12);
+  filter: brightness(1.15);
+}
+.stage-empty-badge .seb-by {
+  color: var(--text-soft, #9fb3c8);
+  font-weight: 500;
+}
+/* Name painted with a moving gradient (clipped to the glyphs). Static at idle,
+   animated on hover. */
+.stage-empty-badge .seb-name {
   font-weight: 700;
-  color: var(--accent, #36d6ff);
+  background: linear-gradient(
+    100deg,
+    var(--accent, #36d6ff) 0%,
+    #7c5cff 30%,
+    #ff5ca8 55%,
+    #7c5cff 75%,
+    var(--accent, #36d6ff) 100%
+  );
+  background-size: 220% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
 }
-.stage-empty-badge .seb-spark {
-  color: var(--accent, #36d6ff);
-  font-size: 12px;
-  line-height: 1;
+.stage-empty-badge:hover .seb-name {
+  animation: stage-credit-shimmer 1.1s linear infinite;
 }
-.stage-empty-badge .seb-gh {
-  font-size: 11px;
-  opacity: 0.6;
+@keyframes stage-credit-shimmer {
+  to { background-position: 220% center; }
 }
 @keyframes stage-badge-in {
   from { opacity: 0; transform: translateX(-50%) translateY(6px); }
   to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .stage-empty-badge .seb-logo { transition: filter 0.2s ease; }
+  .stage-empty-badge:hover .seb-logo { transform: none; }
+  .stage-empty-badge:hover .seb-name { animation: none; }
 }
 .stage-spinner {
   width: 30px;
