@@ -1520,17 +1520,17 @@ mark.cd-hl {
   background: color-mix(in srgb, var(--accent, #36d6ff) 12%, transparent);
   box-shadow: 0 0 14px color-mix(in srgb, var(--accent, #36d6ff) 35%, transparent);
 }
-.stage-empty-badge .seb-gh-icon {
-  width: 14px;
-  height: 14px;
-  /* M2 brand green — kept fixed (theme-independent) so the in-app mark always
-     matches the green app icon. */
-  fill: #16a34a;
-  transition: transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1), fill 0.2s ease;
+.stage-empty-badge .seb-logo {
+  width: 15px;
+  height: 15px;
+  /* Theme-adaptive: the M2 mark picks up the active theme accent so it
+     recolors with the chosen style. */
+  fill: var(--accent, #36d6ff);
+  transition: transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.2s ease;
 }
-.stage-empty-badge:hover .seb-gh-icon {
+.stage-empty-badge:hover .seb-logo {
   transform: rotate(360deg) scale(1.12);
-  fill: #22c55e;
+  filter: brightness(1.15);
 }
 .stage-empty-badge .seb-by {
   color: var(--text-soft, #9fb3c8);
@@ -1565,8 +1565,8 @@ mark.cd-hl {
   to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .stage-empty-badge .seb-gh-icon { transition: fill 0.2s ease; }
-  .stage-empty-badge:hover .seb-gh-icon { transform: none; }
+  .stage-empty-badge .seb-logo { transition: filter 0.2s ease; }
+  .stage-empty-badge:hover .seb-logo { transform: none; }
   .stage-empty-badge:hover .seb-name { animation: none; }
 }
 .stage-spinner {
