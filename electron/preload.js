@@ -29,5 +29,6 @@ contextBridge.exposeInMainWorld('api', {
   exportMarkdown: (opts) => ipcRenderer.invoke('markdown:export', opts),
   openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
   getInitialRepos: () => ipcRenderer.invoke('app:getInitialRepos'),
+  setStartupBg: (color) => ipcRenderer.invoke('app:setStartupBg', color),
   openInVSCodeChat: (opts) => ipcRenderer.invoke('vscode:chat', opts)
 });

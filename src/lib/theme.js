@@ -61,6 +61,19 @@ function applyTheme(id) {
     root.style.setProperty(name, value);
   }
   root.setAttribute('data-theme', id);
+
+  // Cache the active theme's background so the Electron main process can paint
+  // the correct color on the next cold start's first frame (no white flash for
+  // dark-theme users). Best-effort: silently ignore when the preload bridge is
+  // absent (browser/tests) or the call throws.
+  try {
+    const bg = theme.vars['--bg'];
+    if (bg && window.api && typeof window.api.setStartupBg === 'function') {
+      window.api.setStartupBg(bg);
+    }
+  } catch (_e) {
+    /* ignore */
+  }
 }
 
 // Apply the saved/default theme synchronously at module load — before React
