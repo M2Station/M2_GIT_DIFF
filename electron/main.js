@@ -58,30 +58,53 @@ function parseRepoArgs(argv) {
 
 const initialRepos = parseRepoArgs(process.argv);
 
+// Valid CSS hex color (#rgb, #rrggbb, #rrggbbaa, ...). Shared by the startup
+// background reader below and the app:setStartupBg writer further down.
+const HEX_COLOR = /^#[0-9a-fA-F]{3,8}$/;
+
+// First-paint background used when no cached theme color is available. Matches
+// the default theme (low_key) so the very first frame already looks right.
+const DEFAULT_STARTUP_BG = '#0a0e14';
+
+// Read the background color the renderer cached on its last run from
+// userData/startup.json so a cold start can paint the correct theme color on
+// the first frame (dark-theme users never see a white flash). Falls back to the
+// default on first launch or any read/parse error -- never throws.
+function startupBackground() {
+  try {
+    const file = path.join(app.getPath('userData'), 'startup.json');
+    const bg = JSON.parse(fs.readFileSync(file, 'utf8')).bg;
+    if (typeof bg === 'string' && HEX_COLOR.test(bg)) return bg;
+  } catch {
+    /* no cache yet (first launch) or unreadable/invalid -- use the default */
+  }
+  return DEFAULT_STARTUP_BG;
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1480,
     height: 920,
     minWidth: 900,
     minHeight: 600,
-    backgroundColor: '#0a0e14',
+    // Paint the last-known theme color on the first frame (from the renderer's
+    // cache) instead of a fixed dark value, so the window shows the right
+    // backdrop the instant it appears.
+    backgroundColor: startupBackground(),
     title: APP_TITLE,
     icon: path.join(__dirname, '..', 'public', 'icon.ico'),
-    // Keep the window hidden until the renderer has painted its first frame.
-    // Showing it immediately makes Electron flash an empty frame (the dark
-    // backgroundColor) while the React bundle loads, which reads as the app
-    // "freezing" for a moment on open. `ready-to-show` removes that stall.
-    show: false,
+    // Show the window the moment it's created instead of waiting for the
+    // renderer's first paint (`ready-to-show`). The window appears immediately
+    // with the correct theme backgroundColor; the React content fills in a beat
+    // later. This trades a brief empty (but correctly colored) frame for a much
+    // faster time-to-window.
+    show: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false
     }
-  });
-
-  mainWindow.once('ready-to-show', () => {
-    if (mainWindow) mainWindow.show();
   });
 
   // The bundled page ships its own <title>; keep the versioned window title by
@@ -126,6 +149,22 @@ app.on('window-all-closed', () => {
 // ---- IPC handlers ----
 
 ipcMain.handle('app:getInitialRepos', () => initialRepos);
+
+// Persist the renderer's current theme background to userData/startup.json so
+// the next cold start can paint the correct color on its first frame (read by
+// startupBackground above). Validates the value is a hex color before writing
+// and never throws -- a rejected or failed write just means the next launch
+// falls back to the default background.
+ipcMain.handle('app:setStartupBg', (_evt, color) => {
+  try {
+    if (typeof color !== 'string' || !HEX_COLOR.test(color)) return false;
+    const file = path.join(app.getPath('userData'), 'startup.json');
+    fs.writeFileSync(file, JSON.stringify({ bg: color }));
+    return true;
+  } catch {
+    return false;
+  }
+});
 
 ipcMain.handle('dialog:pickFolder', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
