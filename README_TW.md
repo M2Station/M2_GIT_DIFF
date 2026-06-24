@@ -288,7 +288,7 @@ git --version
 npm install          # 安裝相依套件
 npm run dev          # 同時啟動 Vite (5173) 與 Electron（開發模式）
 npm run build        # 建置 renderer 到 dist/
-npm run dist         # electron-builder 打包（Windows NSIS）
+npm run dist         # electron-builder 打包（Windows NSIS，x64 + arm64）
 npm run rebuild      # 為當前 Electron ABI 重編 better-sqlite3
 npm run demo:gif     # 重新產生操作預覽動畫 public/demo.gif
 npm run release      # 本機驗證建置（不發佈）；正式發佈由 CI 在 push tag 時處理（見下方）
@@ -315,7 +315,7 @@ npm run test:coverage # 執行測試並產生 V8 覆蓋率報告
 
 **正式發佈路徑是 CI**：推上 `vX.Y.Z` tag，
 [`.github/workflows/release.yml`](.github/workflows/release.yml) 就會建置
-Windows NSIS 安裝檔並建立 GitHub Release（附上安裝檔）。如此每個發佈版本都可
+Windows NSIS 安裝檔（**x64** 與 **ARM64**）並建立 GitHub Release（附上安裝檔）。如此每個發佈版本都可
 重現、且不綁定任何單一開發者的機器（Electron 建置在不同機器上永遠不會位元級
 相同，因此「單一真實來源」很重要）。
 

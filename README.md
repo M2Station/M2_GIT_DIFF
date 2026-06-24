@@ -294,7 +294,7 @@ git --version
 npm install          # install dependencies
 npm run dev          # start Vite (5173) and Electron together (dev mode)
 npm run build        # build the renderer into dist/
-npm run dist         # electron-builder packaging (Windows NSIS)
+npm run dist         # electron-builder packaging (Windows NSIS, x64 + arm64)
 npm run rebuild      # rebuild better-sqlite3 for the current Electron ABI
 npm run demo:gif     # regenerate the preview animation public/demo.gif
 npm run release      # local verification build only (no publish); CI publishes on tag push (see below)
@@ -321,8 +321,9 @@ Core, side-effect-free logic is covered by [Vitest](https://vitest.dev) unit tes
 
 The **canonical release path is CI**: push a `vX.Y.Z` tag and
 [`.github/workflows/release.yml`](.github/workflows/release.yml) builds the
-Windows NSIS installer and publishes the GitHub Release with the installer
-attached. This keeps every published build reproducible and independent of any
+Windows NSIS installers (**x64** and **ARM64**) and publishes the GitHub
+Release with the installers attached. This keeps every published build
+reproducible and independent of any
 one developer's machine (Electron builds are never byte-for-byte identical
 across machines, so a single source of truth matters).
 
