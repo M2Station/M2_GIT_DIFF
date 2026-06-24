@@ -43,10 +43,12 @@ jobs:
         run: npm run rebuild
 
       - name: Build installer (electron-builder)
-        # --publish never: only package the artifacts here. Publishing is
-        # handled by the dedicated "Publish GitHub Release" step below.
-        # Without this, electron-builder auto-publishes on a tag and fails
-        # with "GitHub Personal Access Token is not set".
+        # --publish never: build the multi-arch NSIS installers (x64 + arm64)
+        # locally only; the "Publish GitHub Release" step below uploads them.
+        # Without this, electron-builder auto-detects the tag and tries to
+        # publish itself, failing because GH_TOKEN isn't set in this step.
+        # NOTE: dist is a single electron-builder invocation, so --publish never
+        # is applied exactly once (no duplicate-flag array problem).
         run: npm run dist -- --publish never
 
       - name: Publish GitHub Release
