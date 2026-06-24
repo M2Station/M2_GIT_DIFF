@@ -43,11 +43,17 @@ jobs:
         run: npm run rebuild
 
       - name: Build installer (electron-builder)
-        # --publish never: only package the artifacts here. Publishing is
-        # handled by the dedicated "Publish GitHub Release" step below.
-        # Without this, electron-builder auto-publishes on a tag and fails
-        # with "GitHub Personal Access Token is not set".
-        run: npm run dist -- --publish never
+        # The dist script already passes `--publish never` to each per-arch
+        # electron-builder invocation, so this step only packages the
+        # artifacts. Publishing is handled by the dedicated "Publish GitHub
+        # Release" step below.
+        #
+        # Do NOT append another `-- --publish never` here: npm would add it to
+        # the last invocation in the chain, giving it `--publish` twice. A
+        # duplicated flag is parsed as an array (["never","never"]) which
+        # electron-builder no longer treats as "never", so it auto-publishes on
+        # the tag and fails with "GitHub Personal Access Token is not set".
+        run: npm run dist
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
