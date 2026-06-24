@@ -13,7 +13,7 @@
     "start": "cross-env NODE_ENV=development electron .",
     "start:prod": "cross-env NODE_ENV=production electron .",
     "rebuild": "electron-rebuild -f -w better-sqlite3",
-    "dist": "vite build && electron-builder --win --x64 --publish never && electron-builder --win --arm64 --publish never",
+    "dist": "vite build && electron-builder --win --x64 --arm64",
     "release": "powershell -ExecutionPolicy Bypass -File scripts/release.ps1",
     "demo:gif": "node scripts/make-demo-gif.mjs",
     "check:license": "node scripts/check-license-headers.mjs",
@@ -62,16 +62,20 @@
     "win": {
       "target": [
         {
-          "target": "nsis"
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ],
-      "icon": "public/icon.ico"
+      "icon": "public/icon.ico",
+      "artifactName": "${productName} Setup ${version} ${arch}.${ext}"
     },
     "nsis": {
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": false,
-      "artifactName": "${productName} Setup ${version} ${arch}.${ext}",
       "include": "installer/installer.nsh",
       "installerIcon": "public/icon.ico",
       "uninstallerIcon": "public/icon.ico",
