@@ -187,14 +187,20 @@ Write-Step 'Building installer (npm run dist)'
 npm run dist
 if ($LASTEXITCODE -ne 0) { Fail 'npm run dist failed.' }
 
-$installer = Join-Path $repoRoot "release\M2_GIT_DIFF Setup $Version.exe"
-if (-not (Test-Path $installer)) { Fail "Installer not found at: $installer" }
-$sizeMB = [math]::Round((Get-Item $installer).Length / 1MB, 1)
-Write-Host "Built: $installer ($sizeMB MB)" -ForegroundColor Green
+# electron-builder emits NSIS installers for each target arch (x64 + arm64).
+# Collect whatever was produced for this version so verify + publish handle
+# both a single combined installer and per-arch installers.
+$releaseDir = Join-Path $repoRoot 'release'
+$installers = @(Get-ChildItem -Path $releaseDir -Filter "M2_GIT_DIFF Setup $Version*.exe" -ErrorAction SilentlyContinue)
+if ($installers.Count -eq 0) { Fail "No installer found in '$releaseDir' (expected 'M2_GIT_DIFF Setup $Version*.exe')." }
+foreach ($i in $installers) {
+    $sizeMB = [math]::Round($i.Length / 1MB, 1)
+    Write-Host "Built: $($i.FullName) ($sizeMB MB)" -ForegroundColor Green
+}
 
 if (-not $doPublish) {
     Write-Step 'Verification build complete - not publishing'
-    Write-Host "Local build ready. Installer: $installer" -ForegroundColor Green
+    Write-Host "Local build ready. Installer(s): $($installers.Name -join ', ')" -ForegroundColor Green
     Write-Host 'This was a LOCAL VERIFICATION BUILD. Nothing was pushed or published.' -ForegroundColor Cyan
     Write-Host 'To publish the canonical release, push a tag and let CI build it:' -ForegroundColor Cyan
     Write-Host "    git tag $tag; git push origin $tag" -ForegroundColor Cyan
@@ -212,17 +218,20 @@ if ($LASTEXITCODE -ne 0) { Fail 'Pushing tag failed.' }
 # --- 6. GitHub release ----------------------------------------------------
 Write-Step "Creating GitHub release $tag"
 if (-not $Notes) {
+    $fileList = ($installers | ForEach-Object { "- **$($_.Name)**" }) -join "`n"
     $Notes = @"
 Release $tag of M2_GIT_DIFF - side-by-side commit history comparison for two local Git repositories.
 
 ## Install
-Download and run **M2_GIT_DIFF Setup $Version.exe** (Windows x64).
+Download and run the Windows installer for your CPU (supports **x64** and **ARM64**):
+
+$fileList
 
 > The installer is not code-signed, so Windows SmartScreen may warn on first run - choose *More info -> Run anyway*.
 "@
 }
 
-gh release create $tag $installer --title "M2_GIT_DIFF $tag" --notes $Notes
+gh release create $tag $installers.FullName --title "M2_GIT_DIFF $tag" --notes $Notes
 if ($LASTEXITCODE -ne 0) { Fail 'gh release create failed.' }
 
 Write-Step 'Done'
