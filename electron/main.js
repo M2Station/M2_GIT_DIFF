@@ -183,6 +183,7 @@ const LAST_DIR_KEY = 'lastPickerDir';
 // where the user opens repos most (and most recently), then one level up from
 // the last-used location, finally the home directory.
 function smartStartDir() {
+  // Default to D:\_SOURCE\D1 if it exists
   const tops = db.getTopRepoParents(5);
   const best = tops.find((t) => t.path && existsSafe(t.path));
   if (best) return best.path;
