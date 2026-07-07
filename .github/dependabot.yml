@@ -43,6 +43,15 @@ updates:
           - "minor"
           - "patch"
           - "major"
+      # React 與 React DOM 版本必須一致，一起升級（避免 react-dom 的 peer 衝突）。
+      react:
+        patterns:
+          - "react"
+          - "react-dom"
+        update-types:
+          - "minor"
+          - "patch"
+          - "major"
       # 其餘套件只把 minor / patch 併成一個 PR（major 仍各自獨立）。
       npm-minor-and-patch:
         patterns:
