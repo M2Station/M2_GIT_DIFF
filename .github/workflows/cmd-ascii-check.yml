@@ -38,10 +38,19 @@ jobs:
             BASE="${{ github.event.before }}"
             HEAD="${{ github.sha }}"
           fi
-          # If BASE is empty or all-zeros (first push / new branch), check everything.
+          # Fall back to checking every tracked file (emit no file list) whenever
+          # we can't compute a reliable diff:
+          #   * empty / all-zero BASE -> first push of a brand-new branch
+          #   * BASE commit missing   -> a force-push / rebase (e.g. Dependabot)
+          #                              left github.event.before pointing at a
+          #                              dangling commit, so `git diff` would
+          #                              abort with "fatal: bad object".
           if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
             echo "files=" >> "$GITHUB_OUTPUT"
             echo "Base is empty/new branch -> will check ALL tracked files."
+          elif ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "files=" >> "$GITHUB_OUTPUT"
+            echo "Base commit $BASE not found (force-push/rebase?) -> will check ALL tracked files."
           else
             FILES=$(git diff --name-only --diff-filter=ACMR "$BASE" "$HEAD" | tr '\n' ' ')
             echo "files=$FILES" >> "$GITHUB_OUTPUT"
