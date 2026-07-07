@@ -36,7 +36,7 @@
     "gifenc": "^1.0.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "vite": "^6.0.7",
+    "vite": "^8.1.3",
     "vitest": "^2.1.9",
     "@vitest/coverage-v8": "^2.1.9",
     "wait-on": "^9.0.10"
