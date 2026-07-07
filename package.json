@@ -14,6 +14,7 @@
     "start:prod": "cross-env NODE_ENV=production electron .",
     "rebuild": "electron-rebuild -f -w better-sqlite3",
     "dist": "vite build && electron-builder --win --x64 --arm64",
+    "dist:x64": "vite build && electron-builder --win --x64",
     "release": "powershell -ExecutionPolicy Bypass -File scripts/release.ps1",
     "demo:gif": "node scripts/make-demo-gif.mjs",
     "check:license": "node scripts/check-license-headers.mjs",

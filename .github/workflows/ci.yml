@@ -14,6 +14,13 @@ on:
 permissions:
   contents: read
 
+# Cancel superseded runs on the same branch/PR (e.g. when Dependabot force-
+# pushes a rebase, or a new commit lands) so we don't spend minutes finishing
+# an already-outdated Windows build.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     name: Unit tests (node)
@@ -52,6 +59,19 @@ jobs:
           node-version: 20
           cache: npm
 
+      # electron-builder downloads ~150 MB of tooling (electron binaries,
+      # winCodeSign, NSIS) on every run. Cache it keyed on the lockfile so the
+      # downloads only repeat when the pinned electron/electron-builder change.
+      - name: Cache electron-builder downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~\AppData\Local\electron\Cache
+            ~\AppData\Local\electron-builder\Cache
+          key: ${{ runner.os }}-electron-builder-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-electron-builder-
+
       - name: Install dependencies
         run: npm ci
 
@@ -62,7 +82,9 @@ jobs:
         run: npm run rebuild
 
       - name: Build installer (electron-builder)
-        run: npm run dist
+        # On PRs, package x64 only for a fast packaging smoke test; build the
+        # full x64 + arm64 set on pushes to main and manual runs.
+        run: ${{ (github.event_name == 'pull_request') && 'npm run dist:x64' || 'npm run dist' }}
         env:
           # GitHub-hosted Windows runners have symlink privilege, so the
           # winCodeSign darwin-symlink extraction issue handled in

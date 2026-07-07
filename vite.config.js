@@ -19,6 +19,10 @@ export default defineConfig({
     strictPort: true
   },
   build: {
+    // The renderer only ever runs inside Electron's bundled Chromium, so emit
+    // modern JS directly instead of down-levelling for legacy browsers. This
+    // yields a smaller, faster bundle and a quicker build.
+    target: 'esnext',
     outDir: 'dist',
     emptyOutDir: true
   }
