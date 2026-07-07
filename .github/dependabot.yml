@@ -17,10 +17,36 @@ updates:
     commit-message:
       prefix: "chore(deps)"
       prefix-development: "chore(dev-deps)"
-    # 把 minor / patch 更新合併成單一 PR，減少雜訊；
-    # major（可能有破壞性變更）會各自獨立開 PR 方便逐一審查。
+    # 分組策略：
+    #  1) 互相有 peer 相依、必須一起升級的工具鏈（Vite / Vitest、Electron）
+    #     連同 major 一起分組，避免拆開單獨升級造成 ERESOLVE peer 衝突。
+    #  2) 其餘套件的 minor / patch 合併成單一 PR，減少雜訊。
+    #  3) 其餘套件的 major（可能有破壞性變更）維持各自獨立開 PR 方便審查。
     groups:
+      # Vite 與 Vitest 生態的 peer 版本互相綁定，必須同時升級。
+      vite-vitest-toolchain:
+        patterns:
+          - "vite"
+          - "@vitejs/*"
+          - "vitest"
+          - "@vitest/*"
+        update-types:
+          - "minor"
+          - "patch"
+          - "major"
+      # Electron 本體與原生模組重建工具一起升級。
+      electron:
+        patterns:
+          - "electron"
+          - "@electron/*"
+        update-types:
+          - "minor"
+          - "patch"
+          - "major"
+      # 其餘套件只把 minor / patch 併成一個 PR（major 仍各自獨立）。
       npm-minor-and-patch:
+        patterns:
+          - "*"
         update-types:
           - "minor"
           - "patch"
