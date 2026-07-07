@@ -52,7 +52,7 @@ jobs:
         run: npm run dist -- --publish never
 
       - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: M2_GIT_DIFF ${{ github.ref_name }}
           tag_name: ${{ github.event.inputs.tag || github.ref_name }}
