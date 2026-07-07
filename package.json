@@ -39,7 +39,7 @@
     "vite": "^6.0.7",
     "vitest": "^2.1.9",
     "@vitest/coverage-v8": "^2.1.9",
-    "wait-on": "^8.0.2"
+    "wait-on": "^9.0.10"
   },
   "build": {
     "appId": "com.tool.gitreprodiff",
