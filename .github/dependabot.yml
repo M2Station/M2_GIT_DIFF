@@ -1,0 +1,46 @@
+# Dependabot 設定：偵測到新版本時自動開 PR 更新
+# 文件：https://docs.github.com/code-security/dependabot/dependabot-version-updates
+version: 2
+updates:
+  # ── npm 套件（package.json / package-lock.json）─────────────────
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Taipei"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "npm"
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(dev-deps)"
+    # 把 minor / patch 更新合併成單一 PR，減少雜訊；
+    # major（可能有破壞性變更）會各自獨立開 PR 方便逐一審查。
+    groups:
+      npm-minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # ── GitHub Actions（.github/workflows/*.yml）──────────────────
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Taipei"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "chore(ci)"
+    groups:
+      github-actions:
+        update-types:
+          - "minor"
+          - "patch"
