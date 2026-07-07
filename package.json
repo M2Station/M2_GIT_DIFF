@@ -23,7 +23,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "optionalDependencies": {
-    "better-sqlite3": "^11.8.1"
+    "better-sqlite3": "^12.11.1"
   },
   "devDependencies": {
     "@electron/rebuild": "^3.7.1",
