@@ -28,7 +28,7 @@
   "devDependencies": {
     "@electron/rebuild": "^3.7.1",
     "@napi-rs/canvas": "^1.0.2",
-    "@vitejs/plugin-react": "^4.3.4",
+    "@vitejs/plugin-react": "^6.0.3",
     "concurrently": "^9.1.2",
     "cross-env": "^7.0.3",
     "electron": "^33.3.1",
@@ -36,9 +36,9 @@
     "gifenc": "^1.0.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "vite": "^6.0.7",
-    "vitest": "^2.1.9",
-    "@vitest/coverage-v8": "^2.1.9",
+    "vite": "^8.1.3",
+    "vitest": "^4.1.10",
+    "@vitest/coverage-v8": "^4.1.10",
     "wait-on": "^9.0.10"
   },
   "build": {
