@@ -63,7 +63,7 @@ jobs:
       # winCodeSign, NSIS) on every run. Cache it keyed on the lockfile so the
       # downloads only repeat when the pinned electron/electron-builder change.
       - name: Cache electron-builder downloads
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~\AppData\Local\electron\Cache
