@@ -11,7 +11,7 @@ import { useT } from '../lib/i18n.js';
 
 // Per-repo Git toolbar shown above each commit column. Exposes the common
 // remote operations (Fetch / Pull / Push) plus a reload, scoped to one side.
-export default function RepoGitBar({ side, repo, loading, backfilling, onGitOp, onReload, onLoadMore, onSwitchBranch }) {
+export default function RepoGitBar({ side, repo, loading, backfilling, onGitOp, onReload, onLoadMore, onSwitchBranch, onBranchMap }) {
   const t = useT();
   const disabled = !repo.path || loading;
   const count = repo.commits ? repo.commits.length : 0;
@@ -50,6 +50,9 @@ export default function RepoGitBar({ side, repo, loading, backfilling, onGitOp, 
         )}
         <button className="btn git-op" onClick={() => onSwitchBranch(side)} disabled={disabled} title={t('gitBar.switchBranchTitle')}>
           {t('gitBar.switchBranch')}
+        </button>
+        <button className="btn git-op" onClick={() => onBranchMap(side)} disabled={disabled} title={t('gitBar.branchMapTitle')}>
+          {t('gitBar.branchMap')}
         </button>
         <button className="btn git-op" onClick={() => onGitOp(side, 'fetch')} disabled={disabled} title={t('gitBar.fetchTitle')}>
           {t('gitBar.fetch')}

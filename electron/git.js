@@ -420,6 +420,296 @@ async function switchBranch(cwd, branch, isRemote = false) {
   return runCombined(['switch', target], cwd);
 }
 
+/**
+ * Update every local branch from its `origin` upstream in one pass. First runs
+ * `git fetch --all --prune` to refresh all remote-tracking refs, then fast-
+ * forwards each local branch that has an upstream to match it:
+ *   - the checked-out branch is advanced with `git merge --ff-only <upstream>`
+ *     (HEAD's branch can only move via a merge/checkout, not a ref write);
+ *   - every other branch is advanced with `git fetch . <upstream>:<branch>`,
+ *     which refuses any non-fast-forward update so diverged branches stay intact.
+ * Branches with no upstream (purely local / never pushed) are left untouched.
+ * Returns a single combined transcript in the same shape the git-terminal popup
+ * consumes, with a trailing summary of how many branches moved vs. were skipped.
+ * @param {string} cwd repo path
+ * @returns {Promise<{ok:boolean, command:string, output:string, exitCode:number, updated:number, skipped:number, total:number}>}
+ */
+async function updateAllBranches(cwd) {
+  if (!isGitRepo(cwd)) throw new Error(`Not a git repository: ${cwd}`);
+  const lines = [];
+
+  // 1. Refresh every remote-tracking ref (origin/*) and prune deleted ones.
+  const fetchRes = await runCombined(['fetch', '--all', '--prune'], cwd);
+  lines.push('$ ' + fetchRes.command);
+  if (fetchRes.output) lines.push(fetchRes.output);
+  const fetchOk = fetchRes.ok;
+
+  // 2. The checked-out branch can only be advanced with a merge, so single it out.
+  const current = await getCurrentBranch(cwd);
+
+  // 3. Enumerate local branches and their upstream tracking refs. Each line is
+  //    "<branch>\t<upstream>" with the upstream empty when none is configured.
+  let refOut = '';
+  try {
+    refOut = await run(
+      ['for-each-ref', '--format=%(refname:short)%09%(upstream:short)', 'refs/heads'],
+      cwd
+    );
+  } catch (e) {
+    lines.push(String(e?.message || e));
+    return {
+      ok: false,
+      command: 'git fetch --all --prune',
+      output: lines.join('\n').trim(),
+      exitCode: 1,
+      updated: 0,
+      skipped: 0,
+      total: 0
+    };
+  }
+
+  const branches = refOut
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((l) => {
+      const [name, upstream] = l.split('\t');
+      return { name: (name || '').trim(), upstream: (upstream || '').trim() };
+    })
+    .filter((b) => b.name);
+
+  let updated = 0;
+  let skipped = 0;
+  lines.push('');
+  for (const b of branches) {
+    if (!b.upstream) {
+      skipped++;
+      lines.push(`- ${b.name}: no upstream, skipped`);
+      continue;
+    }
+    let res;
+    if (b.name === current) {
+      // Advancing HEAD's branch needs a real (fast-forward-only) merge.
+      res = await runCombined(['merge', '--ff-only', b.upstream], cwd);
+    } else {
+      // `fetch . src:dst` fast-forwards a non-checked-out branch and refuses any
+      // non-fast-forward, so a diverged local branch is never rewritten.
+      res = await runCombined(['fetch', '.', `${b.upstream}:${b.name}`], cwd);
+    }
+    if (res.ok) {
+      updated++;
+      lines.push(`\u2713 ${b.name} \u2190 ${b.upstream}`);
+    } else {
+      skipped++;
+      lines.push(`- ${b.name} \u2190 ${b.upstream}: skipped (diverged / non-fast-forward)`);
+    }
+    if (res.output) lines.push('  ' + res.output.replace(/\n/g, '\n  '));
+  }
+
+  lines.push('');
+  lines.push(`Done - ${updated} updated, ${skipped} skipped, ${branches.length} total.`);
+
+  return {
+    ok: fetchOk,
+    command: 'git fetch --all --prune  +  fast-forward all tracking branches',
+    output: lines.join('\n').trim(),
+    exitCode: fetchOk ? 0 : 1,
+    updated,
+    skipped,
+    total: branches.length
+  };
+}
+
+/**
+ * Create a new git worktree checked out from a branch or commit. The target
+ * folder is `<parentDir>/<name>` (git creates it; it must not already exist).
+ * When `newBranch` is given a fresh branch is created there (`-b`); otherwise
+ * `ref` is checked out as-is — a local branch is checked out, while a commit or
+ * remote-tracking ref lands on a detached HEAD. Every user-supplied value is
+ * validated so the renderer can never inject extra git arguments.
+ * @param {string} cwd repo path
+ * @param {{parentDir:string, name:string, ref:string, newBranch?:string}} opts
+ * @returns {Promise<{ok:boolean, command:string, output:string, exitCode:number, target:string}>}
+ */
+async function addWorktree(cwd, opts = {}) {
+  if (!isGitRepo(cwd)) throw new Error(`Not a git repository: ${cwd}`);
+  const parentDir = String(opts.parentDir || '').trim();
+  const name = String(opts.name || '').trim();
+  const ref = String(opts.ref || '').trim();
+  const newBranch = String(opts.newBranch || '').trim();
+
+  if (!parentDir) throw new Error('A target directory is required');
+  // The folder name becomes a single path segment, so reject separators,
+  // traversal and Windows-reserved characters.
+  if (!name || name === '.' || name === '..' || /[\\/:*?"<>|]/.test(name)) {
+    throw new Error(`Invalid worktree folder name: ${name || '(empty)'}`);
+  }
+  // A ref may be a branch (slashes allowed) or a commit sha; block option-like
+  // and shell/glob-meaningful characters, matching switchBranch's validation.
+  if (!ref || ref.startsWith('-') || /[\s~^:?*\[\\]/.test(ref)) {
+    throw new Error(`Invalid ref: ${ref || '(empty)'}`);
+  }
+  if (newBranch && (newBranch.startsWith('-') || /[\s~^:?*\[\\]/.test(newBranch))) {
+    throw new Error(`Invalid new branch name: ${newBranch}`);
+  }
+
+  const target = path.join(parentDir, name);
+  if (fs.existsSync(target)) throw new Error(`Target already exists: ${target}`);
+
+  const args = ['worktree', 'add'];
+  if (newBranch) args.push('-b', newBranch);
+  args.push(target, ref);
+  const res = await runCombined(args, cwd);
+  return { ...res, target };
+}
+
+/**
+ * List every worktree attached to the repo via `git worktree list --porcelain`.
+ * The main worktree is always listed first. Each entry carries its path, HEAD
+ * sha, the checked-out branch (short) or a detached flag, plus isMain /
+ * isCurrent markers so the renderer can protect the primary and in-use
+ * worktrees from deletion.
+ * @param {string} cwd repo path
+ * @returns {Promise<Array<{path:string, head:string, branch:string, detached:boolean, bare:boolean, locked:boolean, prunable:boolean, isMain:boolean, isCurrent:boolean}>>}
+ */
+async function listWorktrees(cwd) {
+  if (!isGitRepo(cwd)) throw new Error(`Not a git repository: ${cwd}`);
+  const out = await run(['worktree', 'list', '--porcelain'], cwd);
+  const norm = (p) => {
+    try {
+      return path.resolve(p).replace(/\\/g, '/').toLowerCase();
+    } catch {
+      return String(p || '').replace(/\\/g, '/').toLowerCase();
+    }
+  };
+  const here = norm(cwd);
+  const entries = [];
+  let cur = null;
+  for (const raw of out.split(/\r?\n/)) {
+    const line = raw.replace(/\r$/, '');
+    if (line.startsWith('worktree ')) {
+      if (cur) entries.push(cur);
+      cur = {
+        path: line.slice(9).trim(),
+        head: '',
+        branch: '',
+        detached: false,
+        bare: false,
+        locked: false,
+        prunable: false,
+        isMain: false,
+        isCurrent: false
+      };
+    } else if (!cur) {
+      continue;
+    } else if (line.startsWith('HEAD ')) {
+      cur.head = line.slice(5).trim();
+    } else if (line.startsWith('branch ')) {
+      cur.branch = line.slice(7).trim().replace(/^refs\/heads\//, '');
+    } else if (line === 'bare') {
+      cur.bare = true;
+    } else if (line === 'detached') {
+      cur.detached = true;
+    } else if (line.startsWith('locked')) {
+      cur.locked = true;
+    } else if (line.startsWith('prunable')) {
+      cur.prunable = true;
+    }
+  }
+  if (cur) entries.push(cur);
+  entries.forEach((e, i) => {
+    e.isMain = i === 0;
+    e.isCurrent = norm(e.path) === here;
+  });
+  return entries;
+}
+
+/**
+ * Remove a linked worktree, force by default (`git worktree remove --force`),
+ * then make sure the directory is truly gone and prune stale admin entries.
+ * Safety: the path must be a real linked worktree of THIS repo and never the
+ * main / current one — verified against `git worktree list` before anything on
+ * disk is touched. Steps:
+ *   1. `git worktree remove --force <path>` (drops the working tree even dirty);
+ *   2. if the folder somehow remains, delete it recursively (best-effort);
+ *   3. `git worktree prune` to clear the admin entry (also covers a folder the
+ *      user deleted by hand).
+ * `ok` reflects whether the directory is gone at the end.
+ * @param {string} cwd repo path
+ * @param {string} worktreePath path of the worktree to remove
+ * @param {boolean} [force=true]
+ * @returns {Promise<{ok:boolean, command:string, output:string, exitCode:number}>}
+ */
+async function removeWorktree(cwd, worktreePath, force = true) {
+  if (!isGitRepo(cwd)) throw new Error(`Not a git repository: ${cwd}`);
+  const p = String(worktreePath || '').trim();
+  if (!p || p.startsWith('-')) throw new Error(`Invalid worktree path: ${p || '(empty)'}`);
+
+  const norm = (x) => {
+    try {
+      return path.resolve(x).replace(/\\/g, '/').toLowerCase();
+    } catch {
+      return String(x || '').replace(/\\/g, '/').toLowerCase();
+    }
+  };
+  const targetNorm = norm(p);
+  if (targetNorm === norm(cwd)) throw new Error('Refusing to remove the current worktree');
+
+  // Hard guard before any filesystem delete: the path must be a real linked
+  // worktree of this repo, and not the main one.
+  const wts = await listWorktrees(cwd);
+  const entry = wts.find((w) => norm(w.path) === targetNorm);
+  if (!entry) throw new Error(`Not a worktree of this repository: ${p}`);
+  if (entry.isMain) throw new Error('Refusing to remove the main worktree');
+
+  const lines = [];
+
+  // 1. Force-remove via git (removes the working tree even if dirty / locked).
+  const rmArgs = ['worktree', 'remove'];
+  if (force) rmArgs.push('--force');
+  rmArgs.push(p);
+  const rmRes = await runCombined(rmArgs, cwd);
+  lines.push('$ ' + rmRes.command);
+  if (rmRes.output) lines.push(rmRes.output);
+
+  // 2. Ensure the directory is really gone (git can leave it behind on an edge
+  //    case, or the user may have force-removed only the ref). Best-effort.
+  const targetResolved = path.resolve(p);
+  try {
+    if (fs.existsSync(targetResolved)) {
+      fs.rmSync(targetResolved, { recursive: true, force: true });
+      lines.push(`# removed leftover directory: ${targetResolved}`);
+    }
+  } catch (e) {
+    lines.push(`# could not remove directory: ${String(e?.message || e)}`);
+  }
+
+  // 3. Prune stale admin entries (also covers a folder deleted by hand).
+  const pruneRes = await runCombined(['worktree', 'prune'], cwd);
+  lines.push('$ ' + pruneRes.command);
+  if (pruneRes.output) lines.push(pruneRes.output);
+
+  const gone = !fs.existsSync(targetResolved);
+  return {
+    ok: gone,
+    command: rmRes.command,
+    output: lines.join('\n').trim(),
+    exitCode: gone ? 0 : rmRes.exitCode || 1
+  };
+}
+
+/**
+ * Prune worktree admin entries whose working directory no longer exists — the
+ * fix-up for worktrees the user deleted from disk by hand. `-v` echoes what was
+ * pruned. Returns the transcript in the git-terminal shape.
+ * @param {string} cwd repo path
+ * @returns {Promise<{ok:boolean, command:string, output:string, exitCode:number}>}
+ */
+async function pruneWorktrees(cwd) {
+  if (!isGitRepo(cwd)) throw new Error(`Not a git repository: ${cwd}`);
+  return runCombined(['worktree', 'prune', '-v'], cwd);
+}
+
 // Whitelisted git operations the per-repo toolbar can trigger. Each maps to a
 // fixed argument list so the renderer can never inject arbitrary git commands.
 const GIT_OPS = {
@@ -473,5 +763,10 @@ module.exports = {
   gitOp,
   listBranches,
   switchBranch,
+  updateAllBranches,
+  addWorktree,
+  listWorktrees,
+  removeWorktree,
+  pruneWorktrees,
   parseTags
 };
