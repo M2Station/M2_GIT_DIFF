@@ -35,7 +35,7 @@ jobs:
 
       # Cache electron-builder's downloaded tooling to speed up the release build.
       - name: Cache electron-builder downloads
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~\AppData\Local\electron\Cache
