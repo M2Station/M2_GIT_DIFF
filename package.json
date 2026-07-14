@@ -1,6 +1,6 @@
 {
   "name": "git-repro-diff",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Side-by-side git history comparison for two local repros (GenLen-style HUD)",
   "main": "electron/main.js",
   "author": "OA Hsiao",
