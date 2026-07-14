@@ -8,9 +8,10 @@
  */
 'use strict';
 
-const { execFile } = require('node:child_process');
+const { execFile, spawn } = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
+const { findLockingProcesses } = require('./lockinfo');
 
 // Unit/record separators chosen to be extremely unlikely in commit messages.
 const FIELD = '\x1f';
@@ -398,6 +399,56 @@ function runCombined(args, cwd) {
 }
 
 /**
+ * Like runCombined, but streams git's output live via `onData` as it arrives —
+ * used for long operations (e.g. `clone --mirror`) so the UI can show progress.
+ * stdout and stderr are merged in arrival order; git writes its progress meter
+ * to stderr (needs `--progress` when not attached to a TTY). The full transcript
+ * is still returned at the end, capped so a runaway process cannot exhaust memory.
+ * @param {string[]} args git arguments
+ * @param {string} cwd working directory
+ * @param {(chunk:string)=>void} [onData] called with each output chunk
+ * @returns {Promise<{ok:boolean, command:string, output:string, exitCode:number}>}
+ */
+function runStreaming(args, cwd, onData) {
+  const command = 'git ' + args.join(' ');
+  const MAX = 1024 * 1024; // keep at most ~1 MiB of transcript in memory
+  return new Promise((resolve) => {
+    let child;
+    try {
+      child = spawn('git', args, { cwd, windowsHide: true });
+    } catch (err) {
+      const msg = (err && err.message) || String(err);
+      try { onData && onData(msg); } catch { /* ignore */ }
+      resolve({ ok: false, command, output: msg, exitCode: 1 });
+      return;
+    }
+    let output = '';
+    const onChunk = (chunk) => {
+      const s = chunk.toString();
+      output += s;
+      if (output.length > MAX) output = output.slice(-MAX);
+      try { onData && onData(s); } catch { /* ignore */ }
+    };
+    child.stdout.on('data', onChunk);
+    child.stderr.on('data', onChunk);
+    child.on('error', (err) => {
+      const msg = (err && err.message) || String(err);
+      output += (output ? '\n' : '') + msg;
+      try { onData && onData(msg); } catch { /* ignore */ }
+      resolve({ ok: false, command, output: output.trim(), exitCode: 1 });
+    });
+    child.on('close', (code) => {
+      resolve({
+        ok: code === 0,
+        command,
+        output: output.trim(),
+        exitCode: typeof code === 'number' ? code : code ? 1 : 0
+      });
+    });
+  });
+}
+
+/**
  * Switch the working tree to another branch. For a remote-tracking ref like
  * `origin/feature`, the remote prefix is stripped and `git switch <name>` lets
  * git's DWIM create/checkout the matching local tracking branch. The branch
@@ -564,6 +615,282 @@ async function addWorktree(cwd, opts = {}) {
 }
 
 /**
+ * Create a local bare *mirror* clone of this repository at
+ * `<parentDir>/<repo-name>.git` (`git clone --mirror`). A mirror is a full bare
+ * copy that can act as a fast local reference/cache for future clones or
+ * worktrees. The mirror name is derived from the repo folder, so the caller
+ * only supplies the parent directory. The target must not already exist, and
+ * `parentDir` is validated the same way as addWorktree so the renderer can
+ * never inject extra git arguments.
+ * @param {string} cwd repo path
+ * @param {string} parentDir directory that will hold the mirror
+ * @param {(chunk:string)=>void} [onData] optional live-progress callback
+ * @returns {Promise<{ok:boolean, command:string, output:string, exitCode:number, target:string}>}
+ */
+async function createMirror(cwd, parentDir, onData) {
+  if (!isGitRepo(cwd)) throw new Error(`Not a git repository: ${cwd}`);
+  const dir = String(parentDir || '').trim();
+  if (!dir) throw new Error('A target directory is required');
+
+  const src = path.resolve(cwd);
+  const base = path.basename(src.replace(/[\\/]+$/, '')) || 'repo';
+  const mirrorName = /\.git$/i.test(base) ? base : `${base}.git`;
+  const target = path.join(dir, mirrorName);
+  if (fs.existsSync(target)) throw new Error(`Target already exists: ${target}`);
+
+  const res = await runStreaming(['clone', '--mirror', '--progress', src, target], cwd, onData);
+  return { ...res, target };
+}
+
+/**
+ * Update a worktree's submodules using the parent (main) repo as a local cache.
+ * Walks submodules recursively. For each one, if the main repo already holds
+ * that submodule's object store, the clone borrows objects from it via
+ * `--reference` (source 'local-cache') and only missing objects come from the
+ * network; otherwise it clones from the configured URL (source 'network'). Every
+ * submodule's source + URL is streamed to `onData` as a marker line so the UI
+ * can show exactly where each submodule came from.
+ * @param {string} worktreePath worktree to populate
+ * @param {string} mainRepoPath parent repo used as the object cache
+ * @param {(chunk:string)=>void} [onData] live progress callback
+ * @returns {Promise<{ok:boolean, command:string, output:string, exitCode:number, items:Array}>}
+ */
+async function updateWorktreeSubmodules(worktreePath, mainRepoPath, onData) {
+  if (!isGitRepo(worktreePath)) throw new Error(`Not a git repository: ${worktreePath}`);
+  const main = path.resolve(String(mainRepoPath || '').trim());
+  if (!main) throw new Error('A parent repo path is required');
+
+  // Optional golden cache of per-submodule mirrors (see buildSubmoduleMirrorCache).
+  let cacheRoot = null;
+  try {
+    const c = await runCombined(['config', '--get', 'm2gitdiff.mirrorCache'], main);
+    if (c.ok && c.output.trim()) cacheRoot = c.output.trim();
+  } catch { /* ignore */ }
+
+  const items = [];
+  let allText = '';
+  const emit = (s) => { allText += s; try { if (onData) onData(s); } catch { /* ignore */ } };
+
+  emit(`Updating submodules in ${worktreePath}\n`);
+  emit(`Parent repo cache: ${main}\n`);
+  if (cacheRoot) emit(`Mirror cache: ${cacheRoot}\n`);
+  await gcUpdateSubsRec(worktreePath, main, cacheRoot, '', emit, items, 0);
+
+  const failed = items.filter((i) => i.ok === false).length;
+  const fromMirror = items.filter((i) => i.source === 'mirror').length;
+  const fromCache = items.filter((i) => i.source === 'local-cache').length;
+  const fromNet = items.filter((i) => i.source === 'network').length;
+  emit(`\n${'-'.repeat(52)}\n`);
+  emit(`Done - ${items.length} submodule(s): ${fromMirror} from mirror, ${fromCache} from repo cache, ${fromNet} from network, ${failed} failed.\n`);
+  return {
+    ok: failed === 0,
+    command: 'git submodule update --init --recursive (cache-aware)',
+    output: allText.trim(),
+    exitCode: failed === 0 ? 0 : 1,
+    items
+  };
+}
+
+// Resolve the main repo's object store (git dir) for the submodule at the
+// superproject-relative path `rel`, or null when the main repo has no local copy.
+function gcResolveModuleGitDir(mainRoot, rel) {
+  const modDir = path.join(mainRoot, '.git', 'modules', rel);
+  if (fs.existsSync(path.join(modDir, 'HEAD'))) return modDir;
+  const dotGit = path.join(mainRoot, rel, '.git');
+  try {
+    if (fs.existsSync(dotGit)) {
+      const st = fs.statSync(dotGit);
+      if (st.isDirectory()) {
+        if (fs.existsSync(path.join(dotGit, 'HEAD'))) return dotGit;
+      } else {
+        const txt = fs.readFileSync(dotGit, 'utf8').trim();
+        const marker = 'gitdir:';
+        if (txt.startsWith(marker)) {
+          const p = path.resolve(path.join(mainRoot, rel), txt.slice(marker.length).trim());
+          if (fs.existsSync(path.join(p, 'HEAD'))) return p;
+        }
+      }
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
+// Parse a .gitmodules file into [{ name, path, url }] (no repo required).
+async function gcParseGitmodules(gmPath) {
+  const cwd = path.dirname(gmPath);
+  const out = (await runCombined(['config', '-f', gmPath, '--list'], cwd)).output;
+  const paths = {};
+  const urls = {};
+  for (const raw of out.split('\n')) {
+    const line = raw.trim();
+    if (!line) continue;
+    const eq = line.indexOf('=');
+    if (eq < 0) continue;
+    const key = line.slice(0, eq);
+    const val = line.slice(eq + 1).trim();
+    if (key.startsWith('submodule.') && key.endsWith('.path')) {
+      paths[key.slice(10, -5)] = val;
+    } else if (key.startsWith('submodule.') && key.endsWith('.url')) {
+      urls[key.slice(10, -4)] = val;
+    }
+  }
+  return Object.keys(paths)
+    .map((name) => ({ name, path: paths[name], url: urls[name] || '' }))
+    .sort((a, b) => a.path.localeCompare(b.path));
+}
+
+// Recursively init/update one submodule level. Reference-source preference:
+// mirror cache -> main repo module store -> network.
+async function gcUpdateSubsRec(repoRoot, mainRoot, cacheRoot, relBase, emit, items, depth) {
+  const gm = path.join(repoRoot, '.gitmodules');
+  if (!fs.existsSync(gm)) return;
+  const subs = await gcParseGitmodules(gm);
+  const indent = '  '.repeat(depth);
+  for (const s of subs) {
+    const full = relBase ? `${relBase}/${s.path}` : s.path;
+    let ref = null;
+    let source = 'network';
+    if (cacheRoot && s.url) {
+      const mp = mirrorPathForUrl(cacheRoot, s.url);
+      if (fs.existsSync(path.join(mp, 'HEAD'))) { ref = mp; source = 'mirror'; }
+    }
+    if (!ref) {
+      const md = gcResolveModuleGitDir(mainRoot, full);
+      if (md) { ref = md; source = 'local-cache'; }
+    }
+    emit(`\n${indent}[${source}] ${full}\n`);
+    emit(`${indent}   url: ${s.url || '(unknown)'}\n`);
+    if (ref) {
+      emit(`${indent}   from: ${ref}\n`);
+    } else if (cacheRoot && s.url) {
+      emit(`${indent}   no mirror at: ${mirrorPathForUrl(cacheRoot, s.url)}\n`);
+    } else if (!cacheRoot) {
+      emit(`${indent}   (no mirror cache configured for this repo)\n`);
+    }
+
+    const args = ['submodule', 'update', '--init', '--progress'];
+    if (ref) args.push('--reference', ref);
+    args.push('--', s.path);
+    const res = await runStreaming(args, repoRoot, emit);
+    const ok = res.exitCode === 0;
+    if (!ok) emit(`${indent}   FAILED (exit ${res.exitCode})\n`);
+    items.push({ path: full, url: s.url || '', source, ok });
+
+    const childRoot = path.join(repoRoot, s.path);
+    if (fs.existsSync(path.join(childRoot, '.gitmodules'))) {
+      await gcUpdateSubsRec(childRoot, mainRoot, cacheRoot, full, emit, items, depth + 1);
+    }
+  }
+}
+
+// Turn a submodule URL into a stable mirror folder name: strip scheme, embedded
+// credentials and a trailing .git, then collapse anything unusual to '_'.
+function sanitizeMirrorName(url) {
+  let u = String(url || '').trim();
+  const scheme = u.indexOf('://');
+  if (scheme >= 0) u = u.slice(scheme + 3);
+  const at = u.indexOf('@');
+  const slash = u.indexOf('/');
+  if (at >= 0 && (slash < 0 || at < slash)) u = u.slice(at + 1);
+  if (u.toLowerCase().endsWith('.git')) u = u.slice(0, -4);
+  let out = '';
+  for (const ch of u) out += /[A-Za-z0-9._-]/.test(ch) ? ch : '_';
+  return out + '.git';
+}
+
+function mirrorPathForUrl(cacheRoot, url) {
+  return path.join(cacheRoot, sanitizeMirrorName(url));
+}
+
+/**
+ * Build a golden cache of per-submodule bare mirrors under `cacheRoot`. Recurses
+ * into nested submodules. Each mirror is seeded from the main repo's local module
+ * store when available (fast, no network), otherwise cloned from the network; an
+ * existing mirror is refreshed from its remote. The cache root is saved to the
+ * main repo config (m2gitdiff.mirrorCache) so a later updateWorktreeSubmodules
+ * prefers these mirrors. Mirrors are full copies, so this can use notable disk.
+ * @param {string} mainRepoPath parent repo whose submodules to mirror
+ * @param {string} cacheRoot destination folder for the mirrors
+ * @param {(chunk:string)=>void} [onData] live progress callback
+ * @returns {Promise<{ok:boolean, command:string, output:string, exitCode:number, items:Array, cacheRoot:string}>}
+ */
+async function buildSubmoduleMirrorCache(mainRepoPath, cacheRoot, onData) {
+  const main = path.resolve(String(mainRepoPath || '').trim());
+  if (!isGitRepo(main)) throw new Error(`Not a git repository: ${main}`);
+  const root = path.resolve(String(cacheRoot || '').trim());
+  if (!root) throw new Error('A cache folder is required');
+  if (!fs.existsSync(root)) fs.mkdirSync(root, { recursive: true });
+
+  const items = [];
+  let allText = '';
+  const emit = (s) => { allText += s; try { if (onData) onData(s); } catch { /* ignore */ } };
+  const seen = new Set();
+
+  emit(`Building submodule mirror cache\nMain repo: ${main}\nCache root: ${root}\n`);
+  await gcBuildMirrorsRec(main, main, root, '', emit, items, seen);
+
+  // Remember the cache so submodule updates can prefer it.
+  try { await runCombined(['config', 'm2gitdiff.mirrorCache', root], main); } catch { /* ignore */ }
+
+  const failed = items.filter((i) => i.ok === false).length;
+  const seeded = items.filter((i) => i.source === 'seed-local').length;
+  const net = items.filter((i) => i.source === 'network').length;
+  const refreshed = items.filter((i) => i.source === 'refresh').length;
+  emit(`\n${'-'.repeat(52)}\n`);
+  emit(`Done - ${items.length} mirror(s): ${seeded} seeded from repo, ${net} from network, ${refreshed} refreshed, ${failed} failed.\n`);
+  return {
+    ok: failed === 0,
+    command: 'build submodule mirror cache',
+    output: allText.trim(),
+    exitCode: failed === 0 ? 0 : 1,
+    items,
+    cacheRoot: root
+  };
+}
+
+// Recursively create/refresh one mirror per unique submodule URL.
+async function gcBuildMirrorsRec(dir, mainRoot, cacheRoot, relBase, emit, items, seen) {
+  const gm = path.join(dir, '.gitmodules');
+  if (!fs.existsSync(gm)) return;
+  const subs = await gcParseGitmodules(gm);
+  for (const s of subs) {
+    const full = relBase ? `${relBase}/${s.path}` : s.path;
+    if (s.url && !seen.has(s.url)) {
+      seen.add(s.url);
+      const mp = mirrorPathForUrl(cacheRoot, s.url);
+      let source;
+      let ok = true;
+      if (fs.existsSync(path.join(mp, 'HEAD'))) {
+        emit(`\n[refresh] ${full}\n   ${mp}\n`);
+        const r = await runStreaming(['remote', 'update', '--prune'], mp, emit);
+        ok = r.exitCode === 0;
+        source = 'refresh';
+      } else {
+        const md = gcResolveModuleGitDir(mainRoot, full);
+        if (md) {
+          emit(`\n[seed-local] ${full}\n   from ${md}\n   -> ${mp}\n`);
+          const r = await runStreaming(['clone', '--mirror', md, mp], mainRoot, emit);
+          ok = r.exitCode === 0;
+          if (ok) { try { await runCombined(['remote', 'set-url', 'origin', s.url], mp); } catch { /* ignore */ } }
+          source = 'seed-local';
+        } else {
+          emit(`\n[network] ${full}\n   ${s.url} -> ${mp}\n`);
+          const r = await runStreaming(['clone', '--mirror', '--progress', s.url, mp], mainRoot, emit);
+          ok = r.exitCode === 0;
+          source = 'network';
+        }
+      }
+      if (!ok) emit(`   FAILED\n`);
+      items.push({ path: full, url: s.url, mirror: mp, source, ok });
+    }
+    const childDir = path.join(dir, s.path);
+    if (fs.existsSync(path.join(childDir, '.gitmodules'))) {
+      await gcBuildMirrorsRec(childDir, mainRoot, cacheRoot, full, emit, items, seen);
+    }
+  }
+}
+
+/**
  * List every worktree attached to the repo via `git worktree list --porcelain`.
  * The main worktree is always listed first. Each entry carries its path, HEAD
  * sha, the checked-out branch (short) or a detached flag, plus isMain /
@@ -634,11 +961,13 @@ async function listWorktrees(cwd) {
  *   2. if the folder somehow remains, delete it recursively (best-effort);
  *   3. `git worktree prune` to clear the admin entry (also covers a folder the
  *      user deleted by hand).
- * `ok` reflects whether the directory is gone at the end.
+ * `ok` reflects whether the directory is gone at the end. When it can't be
+ * removed because the OS still holds it (Windows EBUSY), `lockedBy` lists the
+ * offending processes so the caller can tell the user what to close.
  * @param {string} cwd repo path
  * @param {string} worktreePath path of the worktree to remove
  * @param {boolean} [force=true]
- * @returns {Promise<{ok:boolean, command:string, output:string, exitCode:number}>}
+ * @returns {Promise<{ok:boolean, command:string, output:string, exitCode:number, lockedBy:Array<{pid:number, name:string}>}>}
  */
 async function removeWorktree(cwd, worktreePath, force = true) {
   if (!isGitRepo(cwd)) throw new Error(`Not a git repository: ${cwd}`);
@@ -690,11 +1019,35 @@ async function removeWorktree(cwd, worktreePath, force = true) {
   if (pruneRes.output) lines.push(pruneRes.output);
 
   const gone = !fs.existsSync(targetResolved);
+
+  // 4. If the folder is still here, something on the OS is holding it (the
+  //    classic Windows EBUSY / "resource busy or locked"). Name the culprit
+  //    process(es) so the user can close them and retry themselves.
+  let lockedBy = [];
+  if (!gone) {
+    try {
+      lockedBy = await findLockingProcesses(targetResolved);
+    } catch {
+      lockedBy = [];
+    }
+    if (lockedBy.length) {
+      lines.push('# directory is still in use by:');
+      for (const proc of lockedBy) {
+        lines.push(`#   - ${proc.name} (PID ${proc.pid})`);
+      }
+      lines.push('# close the process(es) above, then remove the worktree again.');
+    } else {
+      lines.push('# directory is locked, but the holding process could not be identified.');
+      lines.push('# check an open editor, a terminal whose CWD is inside it, or antivirus/indexing.');
+    }
+  }
+
   return {
     ok: gone,
     command: rmRes.command,
     output: lines.join('\n').trim(),
-    exitCode: gone ? 0 : rmRes.exitCode || 1
+    exitCode: gone ? 0 : rmRes.exitCode || 1,
+    lockedBy
   };
 }
 
@@ -765,6 +1118,9 @@ module.exports = {
   switchBranch,
   updateAllBranches,
   addWorktree,
+  createMirror,
+  updateWorktreeSubmodules,
+  buildSubmoduleMirrorCache,
   listWorktrees,
   removeWorktree,
   pruneWorktrees,

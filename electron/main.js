@@ -361,6 +361,41 @@ ipcMain.handle('repo:addWorktree', async (_evt, payload) => {
   return git.addWorktree(repoPath, { parentDir, name, ref, newBranch });
 });
 
+ipcMain.handle('repo:createMirror', async (evt, payload) => {
+  const { repoPath, parentDir, streamId } = payload || {};
+  if (!repoPath) throw new Error('repoPath is required');
+  const onData = streamId
+    ? (chunk) => {
+        try { evt.sender.send('repo:gitProgress', { streamId, chunk }); } catch { /* window gone */ }
+      }
+    : null;
+  return git.createMirror(repoPath, parentDir, onData);
+});
+
+ipcMain.handle('repo:updateWorktreeSubmodules', async (evt, payload) => {
+  const { worktreePath, mainRepoPath, streamId } = payload || {};
+  if (!worktreePath) throw new Error('worktreePath is required');
+  if (!mainRepoPath) throw new Error('mainRepoPath is required');
+  const onData = streamId
+    ? (chunk) => {
+        try { evt.sender.send('repo:gitProgress', { streamId, chunk }); } catch { /* window gone */ }
+      }
+    : null;
+  return git.updateWorktreeSubmodules(worktreePath, mainRepoPath, onData);
+});
+
+ipcMain.handle('repo:buildSubmoduleMirrorCache', async (evt, payload) => {
+  const { mainRepoPath, cacheRoot, streamId } = payload || {};
+  if (!mainRepoPath) throw new Error('mainRepoPath is required');
+  if (!cacheRoot) throw new Error('cacheRoot is required');
+  const onData = streamId
+    ? (chunk) => {
+        try { evt.sender.send('repo:gitProgress', { streamId, chunk }); } catch { /* window gone */ }
+      }
+    : null;
+  return git.buildSubmoduleMirrorCache(mainRepoPath, cacheRoot, onData);
+});
+
 ipcMain.handle('repo:listWorktrees', async (_evt, payload) => {
   const { repoPath } = payload || {};
   if (!repoPath) throw new Error('repoPath is required');
@@ -446,6 +481,24 @@ ipcMain.handle('shell:openPath', async (_evt, targetPath) => {
   if (!stat.isDirectory()) throw new Error('path is not a directory');
   const err = await shell.openPath(targetPath);
   return { ok: !err, error: err || '' };
+});
+
+// Launch the OS process manager so the user can end whatever is holding a
+// worktree folder (surfaced when a worktree removal fails with a lock). Windows
+// only — Task Manager; resolves ok:false elsewhere so the UI can stay generic.
+ipcMain.handle('shell:openTaskManager', async () => {
+  if (process.platform !== 'win32') {
+    return { ok: false, error: 'unsupported platform' };
+  }
+  try {
+    const { spawn } = require('node:child_process');
+    const child = spawn('taskmgr.exe', [], { detached: true, stdio: 'ignore' });
+    child.on('error', () => {});
+    child.unref();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: String(e?.message || e) };
+  }
 });
 
 // Resolve the VS Code launcher once. On Windows the `code` shim is `code.cmd`;

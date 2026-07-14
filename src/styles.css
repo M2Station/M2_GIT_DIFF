@@ -2727,7 +2727,7 @@ mark {
    branch tree refresh in place above it and avoids a z-index fight. */
 .bmp-result {
   flex: 0 0 auto;
-  max-height: 200px;
+  max-height: 55vh;
   overflow: auto;
   padding: 8px 12px;
   background: var(--bg-soft);
@@ -2749,6 +2749,37 @@ mark {
 .bmp-result.fail .bmp-result-sum {
   color: #ff5663;
 }
+.bmp-result-msg {
+  flex: 1;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.bmp-copy {
+  flex: none;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--bg-soft);
+  color: var(--text);
+  cursor: pointer;
+}
+.bmp-copy:hover {
+  background: var(--bg);
+}
+/* Resizable log pane so long transcripts (submodule update, mirror build) are
+   easy to review — drag the bottom edge to grow/shrink. */
+.bmp-log {
+  resize: vertical;
+  overflow: auto;
+  min-height: 140px;
+  max-height: 50vh;
+  height: 260px;
+}
 .bmp-result-out {
   margin: 0;
   font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
@@ -2761,6 +2792,67 @@ mark {
   padding: 8px 10px;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* Live progress transcript (e.g. git clone --mirror) — bounded + scrollable so
+   the streamed output stays pinned to the newest line without growing the modal. */
+.wtp-progress {
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+/* Highlighted, actionable summary of which processes hold the worktree folder
+   when a removal fails with a lock (Windows EBUSY). Sits under the raw
+   transcript so the user can see at a glance what to close. */
+.bmp-locked {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: color-mix(in srgb, #ff2d3c 10%, var(--bg));
+  border: 1px solid color-mix(in srgb, #ff2d3c 45%, var(--line));
+  border-radius: 6px;
+}
+.bmp-locked-head {
+  font-size: 12px;
+  font-weight: 600;
+  color: #ff5663;
+  margin-bottom: 4px;
+}
+.bmp-locked-list {
+  list-style: none;
+  margin: 0 0 6px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.bmp-locked-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+}
+.bmp-locked-name {
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-weight: 600;
+  color: var(--text);
+  word-break: break-all;
+}
+.bmp-locked-pid {
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 11px;
+  color: var(--text-dim, var(--text));
+  opacity: 0.75;
+}
+.bmp-locked-hint {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--text);
+  opacity: 0.9;
+}
+.bmp-locked-actions {
+  margin-top: 8px;
+  display: flex;
+  justify-content: flex-end;
 }
 
 /* ---- Worktree management list inside the Worktree panel ---- */
@@ -2860,6 +2952,26 @@ mark {
 .bmp-wt-open:disabled,
 .bmp-wt-del:disabled {
   opacity: 0.35;
+  cursor: default;
+}
+.bmp-wt-sync {
+  flex: none;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 3px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.bmp-wt-sync:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+}
+.bmp-wt-sync:disabled {
+  opacity: 0.4;
   cursor: default;
 }
 .bmp-wt-confirm .btn {
