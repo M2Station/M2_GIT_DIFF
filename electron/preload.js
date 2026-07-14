@@ -27,6 +27,14 @@ contextBridge.exposeInMainWorld('api', {
   switchBranch: (opts) => ipcRenderer.invoke('repo:switchBranch', opts),
   updateAllBranches: (opts) => ipcRenderer.invoke('repo:updateAllBranches', opts),
   addWorktree: (opts) => ipcRenderer.invoke('repo:addWorktree', opts),
+  createMirror: (opts) => ipcRenderer.invoke('repo:createMirror', opts),
+  updateWorktreeSubmodules: (opts) => ipcRenderer.invoke('repo:updateWorktreeSubmodules', opts),
+  buildSubmoduleMirrorCache: (opts) => ipcRenderer.invoke('repo:buildSubmoduleMirrorCache', opts),
+  onGitProgress: (cb) => {
+    const listener = (_e, payload) => { try { cb(payload); } catch { /* ignore */ } };
+    ipcRenderer.on('repo:gitProgress', listener);
+    return () => ipcRenderer.removeListener('repo:gitProgress', listener);
+  },
   listWorktrees: (opts) => ipcRenderer.invoke('repo:listWorktrees', opts),
   removeWorktree: (opts) => ipcRenderer.invoke('repo:removeWorktree', opts),
   pruneWorktrees: (opts) => ipcRenderer.invoke('repo:pruneWorktrees', opts),
@@ -34,6 +42,7 @@ contextBridge.exposeInMainWorld('api', {
   exportMarkdown: (opts) => ipcRenderer.invoke('markdown:export', opts),
   openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
   openPath: (path) => ipcRenderer.invoke('shell:openPath', path),
+  openTaskManager: () => ipcRenderer.invoke('shell:openTaskManager'),
   getInitialRepos: () => ipcRenderer.invoke('app:getInitialRepos'),
   setStartupBg: (color) => ipcRenderer.invoke('app:setStartupBg', color),
   openInVSCodeChat: (opts) => ipcRenderer.invoke('vscode:chat', opts)

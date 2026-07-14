@@ -20,8 +20,8 @@ import DiffComparePopup from './components/DiffComparePopup.jsx';
 import VsIcon from './components/VsIcon.jsx';
 import GitTerminalPopup from './components/GitTerminalPopup.jsx';
 import BranchSwitchPopup from './components/BranchSwitchPopup.jsx';
-import BranchMapPopup from './components/BranchMapPopup.jsx';
 import WorktreePopup from './components/WorktreePopup.jsx';
+import CreateWorktreePopup from './components/CreateWorktreePopup.jsx';
 import ExportPrompt from './components/ExportPrompt.jsx';
 import HelpPopup from './components/HelpPopup.jsx';
 import SettingsPopup from './components/SettingsPopup.jsx';
@@ -760,6 +760,14 @@ export default function App() {
     });
   }, []);
 
+  // Launch Task Manager so the user can end a process that's holding a worktree
+  // folder (offered when a removal fails with a lock).
+  const openTaskManager = useCallback(() => {
+    window.api.openTaskManager?.().catch((e) => {
+      logError('git', 'open task manager failed', String(e?.message || e));
+    });
+  }, []);
+
   // Open the worktree modal for the branch selected in the Branch Map. The map
   // closes so only one modal is up at a time. For a remote branch we prefill a
   // local branch name (creating a tracking branch); a local branch checks out
@@ -855,6 +863,103 @@ export default function App() {
       setWorktreeBusy(false);
     }
   }, [worktree, left, right, activeLimit]);
+
+  // Subscribe to streamed git progress for `streamId`, throttling it (~10 fps)
+  // into the Branch Map panel's live `progress`. Returns { unsub, flush }.
+  const subscribeBranchMapProgress = useCallback((streamId) => {
+    let buf = '';
+    let scheduled = false;
+    const flush = () => {
+      scheduled = false;
+      setBranchMap((m) => (m ? { ...m, progress: buf } : m));
+    };
+    const unsub = window.api.onGitProgress(({ streamId: sid, chunk }) => {
+      if (sid !== streamId || typeof chunk !== 'string') return;
+      buf += chunk;
+      if (buf.length > 300000) buf = buf.slice(-300000);
+      if (!scheduled) {
+        scheduled = true;
+        setTimeout(flush, 100);
+      }
+    });
+    return { unsub, flush };
+  }, []);
+
+  // Build a golden cache of per-submodule bare mirrors of the MAIN repo into a
+  // folder the user picks (seeded from the repo's own module stores, so mostly
+  // local). The cache root is remembered so worktree submodule updates prefer it.
+  const createMirrorFromMap = useCallback(async () => {
+    if (!branchMap) return;
+    const { side, repoName } = branchMap;
+    const repo = side === 'L' ? left : right;
+    if (!repo.path) return;
+    let picked = null;
+    try { picked = await window.api.pickFolder(); } catch { picked = null; }
+    if (!picked) return;
+    // Default the cache into a `Mirror` subfolder of the chosen directory so the
+    // picked folder itself doesn't get polluted with bare mirror repos.
+    const BS = String.fromCharCode(92); // backslash, avoids escaping noise
+    const sep = picked.indexOf(BS) >= 0 ? BS : '/';
+    let base = picked;
+    while (base.endsWith('/') || base.endsWith(BS)) base = base.slice(0, -1);
+    const cacheRoot = base.toLowerCase().endsWith('mirror') ? base : `${base}${sep}Mirror`;
+
+    const streamId = `mirror-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    setBranchMapBusy(true);
+    setBranchMap((m) => (m ? { ...m, progress: '', result: null } : m));
+    const { unsub, flush } = subscribeBranchMapProgress(streamId);
+    try {
+      const res = await window.api.buildSubmoduleMirrorCache({ mainRepoPath: repo.path, cacheRoot, streamId });
+      flush();
+      const cmd = res?.command || 'build submodule mirror cache';
+      if (res?.ok === false) {
+        logError('git', `${repoName}: ${cmd}`, res?.output || '');
+      } else {
+        logInfo('git', `${repoName}: ${cmd}`, res?.output || '');
+      }
+      setBranchMap((m) => (m ? { ...m, result: { ...res, kind: 'mirror' } } : m));
+    } catch (e) {
+      const msg = String(e?.message || e);
+      logError('git', `${repoName}: build mirror cache failed`, msg);
+      setBranchMap((m) => (m ? { ...m, result: { ok: false, kind: 'mirror', output: msg } } : m));
+    } finally {
+      try { if (unsub) unsub(); } catch { /* ignore */ }
+      setBranchMapBusy(false);
+    }
+  }, [branchMap, left, right, subscribeBranchMapProgress]);
+
+  // Cache-aware `git submodule update --init --recursive` inside a linked
+  // worktree, borrowing objects from the MAIN repo when available. The streamed
+  // log marks each submodule as [local-cache] or [network] with its URL.
+  const updateSubmodulesFromMap = useCallback(async (worktreePath) => {
+    if (!branchMap || !worktreePath) return;
+    const { side, repoName } = branchMap;
+    const repo = side === 'L' ? left : right;
+    if (!repo.path) return;
+
+    const streamId = `subs-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    setBranchMapBusy(true);
+    setBranchMap((m) => (m ? { ...m, progress: '', result: null } : m));
+    const { unsub, flush } = subscribeBranchMapProgress(streamId);
+    try {
+      const res = await window.api.updateWorktreeSubmodules({ worktreePath, mainRepoPath: repo.path, streamId });
+      flush();
+      const cmd = res?.command || 'git submodule update --init --recursive';
+      if (res?.ok === false) {
+        logError('git', `${repoName}: ${cmd}`, res?.output || '');
+      } else {
+        logInfo('git', `${repoName}: ${cmd}`, res?.output || '');
+      }
+      setBranchMap((m) => (m ? { ...m, result: { ...res, kind: 'submodules' } } : m));
+    } catch (e) {
+      const msg = String(e?.message || e);
+      logError('git', `${repoName}: submodule update failed`, msg);
+      setBranchMap((m) => (m ? { ...m, result: { ok: false, kind: 'submodules', output: msg } } : m));
+    } finally {
+      try { if (unsub) unsub(); } catch { /* ignore */ }
+      setBranchMapBusy(false);
+    }
+  }, [branchMap, left, right, subscribeBranchMapProgress]);
 
   // Exact-match pass (common / cherry / patch-id / manual). Memoized on its own
   // so it is NOT recomputed every time a single fuzzy diff-text arrives.
@@ -2601,7 +2706,7 @@ export default function App() {
       )}
 
       {branchMap && (
-        <BranchMapPopup
+        <WorktreePopup
           side={branchMap.side}
           repoName={branchMap.repoName}
           data={branchMap.data}
@@ -2614,12 +2719,16 @@ export default function App() {
           onWorktree={openWorktreeForBranch}
           onRemoveWorktree={removeWorktreeFromMap}
           onOpenFolder={openWorktreeFolder}
+          onOpenTaskManager={openTaskManager}
+          onCreateMirror={createMirrorFromMap}
+          onUpdateSubmodules={updateSubmodulesFromMap}
+          progress={branchMap.progress}
           onClose={() => !branchMapBusy && setBranchMap(null)}
         />
       )}
 
       {worktree && (
-        <WorktreePopup
+        <CreateWorktreePopup
           side={worktree.side}
           repoName={worktree.repoName}
           source={worktree.source}
