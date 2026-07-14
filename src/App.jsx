@@ -20,6 +20,8 @@ import DiffComparePopup from './components/DiffComparePopup.jsx';
 import VsIcon from './components/VsIcon.jsx';
 import GitTerminalPopup from './components/GitTerminalPopup.jsx';
 import BranchSwitchPopup from './components/BranchSwitchPopup.jsx';
+import BranchMapPopup from './components/BranchMapPopup.jsx';
+import WorktreePopup from './components/WorktreePopup.jsx';
 import ExportPrompt from './components/ExportPrompt.jsx';
 import HelpPopup from './components/HelpPopup.jsx';
 import SettingsPopup from './components/SettingsPopup.jsx';
@@ -90,6 +92,18 @@ export default function App() {
   // `branchBusy` guards the popup while a checkout is in flight.
   const [branchPopup, setBranchPopup] = useState(null);
   const [branchBusy, setBranchBusy] = useState(false);
+
+  // Branch-map modal: { side, repoName, data:{current,local,remote}, result } |
+  // null. It lists every branch as a searchable tree and can update them all
+  // from origin. `branchMapBusy` guards the popup while the update runs.
+  const [branchMap, setBranchMap] = useState(null);
+  const [branchMapBusy, setBranchMapBusy] = useState(false);
+
+  // Worktree modal: { side, repoName, source, result } | null. Creates a new
+  // git worktree from a branch (via Branch Map) or a commit (via the row menu).
+  // `worktreeBusy` guards the popup while `git worktree add` runs.
+  const [worktree, setWorktree] = useState(null);
+  const [worktreeBusy, setWorktreeBusy] = useState(false);
 
   // Content-based cherry-pick matching: sha -> git patch-id. Filled lazily for
   // commits that stay `unique` after SHA + title matching.
@@ -544,21 +558,18 @@ export default function App() {
     }
   }, [left, right, t]);
 
-  // Perform the checkout chosen in the modal, then surface the git transcript
-  // and reload that side's repo so the graph reflects the new branch.
-  const doSwitchBranch = useCallback(async (selected) => {
-    if (!branchPopup || !selected) return;
-    const { side, repoName } = branchPopup;
+  // Perform a checkout for one side: run git switch, surface the transcript in
+  // the terminal window, and reload that repo so the graph reflects the branch.
+  // Shared by the Branch Switch popup and the Branch Map's Switch action.
+  const runSwitch = useCallback(async (side, repoName, selected) => {
     const repo = side === 'L' ? left : right;
-    if (!repo.path) return;
-    setBranchBusy(true);
+    if (!repo.path || !selected) return;
     try {
       const res = await window.api.switchBranch({
         repoPath: repo.path,
         branch: selected.ref,
         isRemote: !!selected.isRemote
       });
-      setBranchPopup(null);
       setGitTerminal({
         side,
         op: t('branchSwitch.opLabel'),
@@ -580,7 +591,6 @@ export default function App() {
         else setRight(fresh);
       }
     } catch (e) {
-      setBranchPopup(null);
       const msg = String(e?.message || e);
       setGitTerminal({
         side,
@@ -592,10 +602,259 @@ export default function App() {
         exitCode: 1
       });
       logError('git', `${repoName}: git switch ${selected.ref} failed`, msg);
+    }
+  }, [left, right, t, activeLimit]);
+
+  // Perform the checkout chosen in the Branch Switch modal, then close it (which
+  // reveals the git transcript that runSwitch surfaced underneath).
+  const doSwitchBranch = useCallback(async (selected) => {
+    if (!branchPopup || !selected) return;
+    const { side, repoName } = branchPopup;
+    setBranchBusy(true);
+    try {
+      await runSwitch(side, repoName, selected);
     } finally {
       setBranchBusy(false);
+      setBranchPopup(null);
     }
-  }, [branchPopup, left, right, t, activeLimit]);
+  }, [branchPopup, runSwitch]);
+
+  // Switch to the branch selected in the Branch Map, then close the map.
+  const switchBranchFromMap = useCallback(async (selected) => {
+    if (!branchMap || !selected) return;
+    const { side, repoName } = branchMap;
+    setBranchMapBusy(true);
+    try {
+      await runSwitch(side, repoName, selected);
+    } finally {
+      setBranchMapBusy(false);
+      setBranchMap(null);
+    }
+  }, [branchMap, runSwitch]);
+
+  // Open the branch-map modal for one side: load the branch list first so the
+  // tree renders immediately. Read-only view + a one-click "update all".
+  const openBranchMap = useCallback(async (side) => {
+    const repo = side === 'L' ? left : right;
+    if (!repo.path) return;
+    setError('');
+    try {
+      // Prune first so worktrees the user deleted by hand drop off the list.
+      await window.api.pruneWorktrees({ repoPath: repo.path }).catch(() => {});
+      const [data, worktrees] = await Promise.all([
+        window.api.listBranches({ repoPath: repo.path }),
+        window.api.listWorktrees({ repoPath: repo.path }).catch(() => [])
+      ]);
+      setBranchMap({ side, repoName: repo.name || repo.path, data, worktrees, result: null });
+    } catch (e) {
+      const msg = String(e?.message || e);
+      logError('git', `${repo.name || repo.path}: list branches failed`, msg);
+      setError(t('app.branchListFail', { msg }));
+    }
+  }, [left, right, t]);
+
+  // Re-read the branch and worktree lists for the open map (after an external
+  // change or the manual refresh button) without touching the inline result. A
+  // prune first clears worktrees whose folders were deleted outside the app.
+  const refreshBranchMap = useCallback(async () => {
+    if (!branchMap) return;
+    const repo = branchMap.side === 'L' ? left : right;
+    if (!repo.path) return;
+    try {
+      await window.api.pruneWorktrees({ repoPath: repo.path }).catch(() => {});
+      const [data, worktrees] = await Promise.all([
+        window.api.listBranches({ repoPath: repo.path }),
+        window.api.listWorktrees({ repoPath: repo.path }).catch(() => [])
+      ]);
+      setBranchMap((m) => (m ? { ...m, data, worktrees } : m));
+    } catch (e) {
+      logError('git', `${repo.name || repo.path}: list branches failed`, String(e?.message || e));
+    }
+  }, [branchMap, left, right]);
+
+  // Fetch from origin and fast-forward every tracking branch, then refresh the
+  // tree in place and reload the commit graph (HEAD's branch may have moved).
+  // The transcript is shown inline in the popup rather than the terminal window
+  // so the map stays open above it.
+  const doUpdateAllBranches = useCallback(async () => {
+    if (!branchMap) return;
+    const { side, repoName } = branchMap;
+    const repo = side === 'L' ? left : right;
+    if (!repo.path) return;
+    setBranchMapBusy(true);
+    try {
+      const res = await window.api.updateAllBranches({ repoPath: repo.path });
+      const cmd = res?.command || 'git fetch --all --prune';
+      if (res?.ok === false) {
+        logError('git', `${repoName}: ${cmd} (exit ${res?.exitCode ?? 1})`, res?.output || '');
+      } else {
+        logInfo('git', `${repoName}: ${cmd}`, res?.output || '');
+      }
+      // Refresh the tree and stash the transcript for inline display.
+      let data = branchMap.data;
+      try {
+        data = await window.api.listBranches({ repoPath: repo.path });
+      } catch {
+        /* keep the previous list if the re-read fails */
+      }
+      setBranchMap((m) => (m ? { ...m, data, result: { ...res, kind: 'update' } } : m));
+      if (res?.ok !== false) {
+        const fresh = await window.api.loadRepo({ repoPath: repo.path, limit: activeLimit() });
+        if (side === 'L') setLeft(fresh);
+        else setRight(fresh);
+      }
+    } catch (e) {
+      const msg = String(e?.message || e);
+      logError('git', `${repoName}: update all branches failed`, msg);
+      setBranchMap((m) =>
+        m ? { ...m, result: { ok: false, output: msg, updated: 0, skipped: 0, total: 0, kind: 'update' } } : m
+      );
+    } finally {
+      setBranchMapBusy(false);
+    }
+  }, [branchMap, left, right, activeLimit]);
+
+  // Remove an existing worktree listed in the panel via git worktree remove
+  // --force. The backend also guarantees the folder is deleted and prunes stale
+  // entries. Refreshes the worktree list and shows the transcript inline.
+  const removeWorktreeFromMap = useCallback(async (worktreePath) => {
+    if (!branchMap) return;
+    const { side, repoName } = branchMap;
+    const repo = side === 'L' ? left : right;
+    if (!repo.path) return;
+    setBranchMapBusy(true);
+    try {
+      const res = await window.api.removeWorktree({
+        repoPath: repo.path,
+        worktreePath,
+        force: true
+      });
+      const cmd = res?.command || 'git worktree remove --force';
+      if (res?.ok === false) {
+        logError('git', `${repoName}: ${cmd} (exit ${res?.exitCode ?? 1})`, res?.output || '');
+      } else {
+        logInfo('git', `${repoName}: ${cmd}`, res?.output || '');
+      }
+      let worktrees = branchMap.worktrees;
+      try {
+        worktrees = await window.api.listWorktrees({ repoPath: repo.path });
+      } catch {
+        /* keep the previous list if the re-read fails */
+      }
+      setBranchMap((m) => (m ? { ...m, worktrees, result: { ...res, kind: 'remove' } } : m));
+    } catch (e) {
+      const msg = String(e?.message || e);
+      logError('git', `${repoName}: git worktree remove failed`, msg);
+      setBranchMap((m) => (m ? { ...m, result: { ok: false, output: msg, kind: 'remove' } } : m));
+    } finally {
+      setBranchMapBusy(false);
+    }
+  }, [branchMap, left, right]);
+
+  // Open a worktree's folder in the OS file manager (directories only, enforced
+  // in the main process).
+  const openWorktreeFolder = useCallback((worktreePath) => {
+    if (!worktreePath) return;
+    window.api.openPath(worktreePath).catch((e) => {
+      logError('git', 'open worktree folder failed', String(e?.message || e));
+    });
+  }, []);
+
+  // Open the worktree modal for the branch selected in the Branch Map. The map
+  // closes so only one modal is up at a time. For a remote branch we prefill a
+  // local branch name (creating a tracking branch); a local branch checks out
+  // as-is unless the user names a new branch.
+  const openWorktreeForBranch = useCallback((selected) => {
+    if (!branchMap || !selected) return;
+    const { side, repoName } = branchMap;
+    const isRemote = !!selected.isRemote;
+    const stripped = isRemote ? selected.ref.replace(/^[^/]+\//, '') : selected.ref;
+    setBranchMap(null);
+    setWorktree({
+      side,
+      repoName,
+      source: {
+        kind: 'branch',
+        ref: selected.ref,
+        isRemote,
+        label: selected.ref,
+        defaultName: stripped.replace(/\//g, '-'),
+        defaultBranch: isRemote ? stripped : ''
+      },
+      result: null
+    });
+  }, [branchMap]);
+
+  // Open the worktree modal for a right-clicked commit. Defaults to a detached
+  // worktree named after the short sha; the user can name a new branch instead.
+  const openWorktreeForCommit = useCallback((side, sha) => {
+    const repo = side === 'L' ? left : right;
+    if (!repo.path) return;
+    const arr = side === 'L' ? left.commits : right.commits;
+    const c = (arr || []).find((x) => x.sha === sha);
+    const short = c?.short || sha.slice(0, 7);
+    setWorktree({
+      side,
+      repoName: repo.name || repo.path,
+      source: {
+        kind: 'commit',
+        ref: sha,
+        isRemote: false,
+        label: c?.subject ? `${short} \u00b7 ${c.subject}` : short,
+        defaultName: `wt-${short}`,
+        defaultBranch: ''
+      },
+      result: null
+    });
+  }, [left, right]);
+
+  // Native folder picker for the worktree's parent directory. Returns the chosen
+  // absolute path, or null when cancelled.
+  const pickWorktreeDir = useCallback(async () => {
+    try {
+      return (await window.api.pickFolder()) || null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  // Run `git worktree add` for the modal's source, showing the transcript inline
+  // so the window stays put. A successful create also reloads the source repo in
+  // case HEAD or the branch set changed.
+  const doCreateWorktree = useCallback(async ({ parentDir, name, newBranch }) => {
+    if (!worktree) return;
+    const { side, repoName, source } = worktree;
+    const repo = side === 'L' ? left : right;
+    if (!repo.path) return;
+    setWorktreeBusy(true);
+    try {
+      const res = await window.api.addWorktree({
+        repoPath: repo.path,
+        parentDir,
+        name,
+        ref: source.ref,
+        newBranch: newBranch || ''
+      });
+      const cmd = res?.command || 'git worktree add';
+      if (res?.ok === false) {
+        logError('git', `${repoName}: ${cmd} (exit ${res?.exitCode ?? 1})`, res?.output || '');
+      } else {
+        logInfo('git', `${repoName}: ${cmd}`, res?.output || '');
+      }
+      setWorktree((w) => (w ? { ...w, result: res } : w));
+      if (res?.ok !== false) {
+        const fresh = await window.api.loadRepo({ repoPath: repo.path, limit: activeLimit() });
+        if (side === 'L') setLeft(fresh);
+        else setRight(fresh);
+      }
+    } catch (e) {
+      const msg = String(e?.message || e);
+      logError('git', `${repoName}: git worktree add failed`, msg);
+      setWorktree((w) => (w ? { ...w, result: { ok: false, output: msg } } : w));
+    } finally {
+      setWorktreeBusy(false);
+    }
+  }, [worktree, left, right, activeLimit]);
 
   // Exact-match pass (common / cherry / patch-id / manual). Memoized on its own
   // so it is NOT recomputed every time a single fuzzy diff-text arrives.
@@ -2191,6 +2450,7 @@ export default function App() {
             customColor={customSwatch}
             onAddNote={openNote}
             onAddVtag={openVtag}
+            onWorktree={openWorktreeForCommit}
             onSetColor={setColor}
             onPickCustom={pickCustomColor}
             onClearColor={clearColor}
@@ -2340,6 +2600,37 @@ export default function App() {
         />
       )}
 
+      {branchMap && (
+        <BranchMapPopup
+          side={branchMap.side}
+          repoName={branchMap.repoName}
+          data={branchMap.data}
+          worktrees={branchMap.worktrees || []}
+          busy={branchMapBusy}
+          result={branchMap.result}
+          onUpdate={doUpdateAllBranches}
+          onRefresh={refreshBranchMap}
+          onSwitch={switchBranchFromMap}
+          onWorktree={openWorktreeForBranch}
+          onRemoveWorktree={removeWorktreeFromMap}
+          onOpenFolder={openWorktreeFolder}
+          onClose={() => !branchMapBusy && setBranchMap(null)}
+        />
+      )}
+
+      {worktree && (
+        <WorktreePopup
+          side={worktree.side}
+          repoName={worktree.repoName}
+          source={worktree.source}
+          busy={worktreeBusy}
+          result={worktree.result}
+          onPickDir={pickWorktreeDir}
+          onSubmit={doCreateWorktree}
+          onClose={() => !worktreeBusy && setWorktree(null)}
+        />
+      )}
+
       {exportPrompt && (
         <ExportPrompt
           total={exportPrompt.total}
@@ -2358,11 +2649,11 @@ export default function App() {
 
       <div className="git-bars">
         {single !== 'R' && (
-          <RepoGitBar side="L" repo={left} loading={loading.L} backfilling={backfilling.L} onGitOp={runGitOp} onReload={reload} onLoadMore={manualLoadMore} onSwitchBranch={openSwitchBranch} />
+          <RepoGitBar side="L" repo={left} loading={loading.L} backfilling={backfilling.L} onGitOp={runGitOp} onReload={reload} onLoadMore={manualLoadMore} onSwitchBranch={openSwitchBranch} onBranchMap={openBranchMap} />
         )}
         {!single && <div className="git-bars-gutter" style={{ width: GUTTER_WIDTH }} />}
         {single !== 'L' && (
-          <RepoGitBar side="R" repo={right} loading={loading.R} backfilling={backfilling.R} onGitOp={runGitOp} onReload={reload} onLoadMore={manualLoadMore} onSwitchBranch={openSwitchBranch} />
+          <RepoGitBar side="R" repo={right} loading={loading.R} backfilling={backfilling.R} onGitOp={runGitOp} onReload={reload} onLoadMore={manualLoadMore} onSwitchBranch={openSwitchBranch} onBranchMap={openBranchMap} />
         )}
       </div>
 

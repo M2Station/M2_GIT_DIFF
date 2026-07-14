@@ -349,6 +349,36 @@ ipcMain.handle('repo:switchBranch', async (_evt, payload) => {
   return git.switchBranch(repoPath, branch, !!isRemote);
 });
 
+ipcMain.handle('repo:updateAllBranches', async (_evt, payload) => {
+  const { repoPath } = payload || {};
+  if (!repoPath) throw new Error('repoPath is required');
+  return git.updateAllBranches(repoPath);
+});
+
+ipcMain.handle('repo:addWorktree', async (_evt, payload) => {
+  const { repoPath, parentDir, name, ref, newBranch } = payload || {};
+  if (!repoPath) throw new Error('repoPath is required');
+  return git.addWorktree(repoPath, { parentDir, name, ref, newBranch });
+});
+
+ipcMain.handle('repo:listWorktrees', async (_evt, payload) => {
+  const { repoPath } = payload || {};
+  if (!repoPath) throw new Error('repoPath is required');
+  return git.listWorktrees(repoPath);
+});
+
+ipcMain.handle('repo:removeWorktree', async (_evt, payload) => {
+  const { repoPath, worktreePath, force } = payload || {};
+  if (!repoPath) throw new Error('repoPath is required');
+  return git.removeWorktree(repoPath, worktreePath, force !== false);
+});
+
+ipcMain.handle('repo:pruneWorktrees', async (_evt, payload) => {
+  const { repoPath } = payload || {};
+  if (!repoPath) throw new Error('repoPath is required');
+  return git.pruneWorktrees(repoPath);
+});
+
 // Export the aligned diff (with notes, forced colors, and manual links) to a
 // styled .xlsx via a save dialog. Returns { ok, path } or { canceled: true }.
 ipcMain.handle('excel:export', async (_evt, payload) => {
@@ -400,6 +430,22 @@ ipcMain.handle('shell:openExternal', async (_evt, url) => {
   }
   await shell.openExternal(parsed.href);
   return { ok: true };
+});
+
+// Open an existing local directory in the OS file manager. Restricted to
+// directories so the renderer can never launch a file / executable via its
+// default handler.
+ipcMain.handle('shell:openPath', async (_evt, targetPath) => {
+  if (typeof targetPath !== 'string' || !targetPath) throw new Error('path is required');
+  let stat;
+  try {
+    stat = await fs.promises.stat(targetPath);
+  } catch {
+    throw new Error('path does not exist');
+  }
+  if (!stat.isDirectory()) throw new Error('path is not a directory');
+  const err = await shell.openPath(targetPath);
+  return { ok: !err, error: err || '' };
 });
 
 // Resolve the VS Code launcher once. On Windows the `code` shim is `code.cmd`;

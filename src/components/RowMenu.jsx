@@ -21,19 +21,19 @@ const COLORS = [
 
 // Right-click context menu for a commit row: add/edit a note or force-override
 // the row background color. Closes on outside click, Escape, or after a choice.
-export default function RowMenu({ side, sha, short, x, y, hasNote, hasVtag, color, customColor, onAddNote, onAddVtag, onSetColor, onPickCustom, onClearColor, onClose }) {
+export default function RowMenu({ side, sha, short, x, y, hasNote, hasVtag, color, customColor, onAddNote, onAddVtag, onWorktree, onSetColor, onPickCustom, onClearColor, onClose }) {
   const t = useT();
   const ref = useRef(null);
   const [pos, setPos] = useState(() => ({
     x: Math.min(x, window.innerWidth - 190),
-    y: Math.min(y, window.innerHeight - 240)
+    y: Math.min(y, window.innerHeight - 300)
   }));
 
   // Re-clamp if the target changes.
   useEffect(() => {
     setPos({
       x: Math.min(x, window.innerWidth - 190),
-      y: Math.min(y, window.innerHeight - 240)
+      y: Math.min(y, window.innerHeight - 300)
     });
   }, [x, y]);
 
@@ -77,6 +77,18 @@ export default function RowMenu({ side, sha, short, x, y, hasNote, hasVtag, colo
         }}
       >
         🏷️ {hasVtag ? t('rowMenu.editVtag') : t('rowMenu.addVtag')}
+      </button>
+
+      <div className="rm-sep" />
+      <button
+        type="button"
+        className="rm-item"
+        onClick={() => {
+          onWorktree(side, sha);
+          onClose();
+        }}
+      >
+        🌿 {t('rowMenu.worktree')}
       </button>
 
       <div className="rm-sep" />
