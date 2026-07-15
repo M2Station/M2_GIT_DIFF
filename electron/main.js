@@ -402,6 +402,13 @@ ipcMain.handle('repo:mergeWorktreeMain', async (evt, payload) => {
   return git.mergeMainIntoWorktree(worktreePath, source, onData);
 });
 
+ipcMain.handle('repo:setWorktreeBranch', async (_evt, payload) => {
+  const { worktreePath, branch } = payload || {};
+  if (!worktreePath) throw new Error('worktreePath is required');
+  if (!branch) throw new Error('branch is required');
+  return git.setWorktreeBranch(worktreePath, branch);
+});
+
 ipcMain.handle('repo:buildSubmoduleMirrorCache', async (evt, payload) => {
   const { mainRepoPath, cacheRoot, streamId } = payload || {};
   if (!mainRepoPath) throw new Error('mainRepoPath is required');

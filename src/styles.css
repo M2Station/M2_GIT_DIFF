@@ -2984,6 +2984,40 @@ mark {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.bmp-wt-branch-input {
+  flex: none;
+  width: 132px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  background: var(--bg-soft, var(--bg));
+  color: var(--text);
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1;
+  padding: 3px 8px;
+  border-radius: 999px;
+  outline: none;
+}
+.bmp-wt-branch-input:focus {
+  border-color: var(--accent);
+}
+.bmp-wt-cancel {
+  flex: none;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: 5px;
+  color: var(--muted);
+}
+.bmp-wt-cancel:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--unique-bd, #eb4650) 18%, transparent);
+}
+.bmp-wt-cancel:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
 .bmp-wt-confirm .btn {
   padding: 2px 8px;
   font-size: 11.5px;

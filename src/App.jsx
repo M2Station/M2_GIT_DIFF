@@ -1021,6 +1021,40 @@ export default function App() {
     }
   }, [branchMap, left, right, subscribeBranchMapProgress]);
 
+  // Give a detached-HEAD worktree a branch: create `branch` at the current HEAD
+  // (or switch to it if it already exists), then reload the worktree list so the
+  // row leaves "detached HEAD" and the Merge action lights up.
+  const setWorktreeBranchFromMap = useCallback(async (worktreePath, branch) => {
+    if (!branchMap || !worktreePath || !branch) return;
+    const { side, repoName } = branchMap;
+    const repo = side === 'L' ? left : right;
+    if (!repo.path) return;
+    setBranchMapBusy(true);
+    setBranchMap((m) => (m ? { ...m, progress: '', result: null } : m));
+    try {
+      const res = await window.api.setWorktreeBranch({ worktreePath, branch });
+      const cmd = res?.command || `git switch -c ${branch}`;
+      if (res?.ok === false) {
+        logError('git', `${repoName}: ${cmd}`, res?.output || '');
+      } else {
+        logInfo('git', `${repoName}: ${cmd}`, res?.output || '');
+      }
+      setBranchMap((m) => (m ? { ...m, result: { ...res, kind: 'setbranch', branch } } : m));
+      if (res?.ok !== false) {
+        try {
+          const worktrees = await window.api.listWorktrees({ repoPath: repo.path });
+          setBranchMap((m) => (m ? { ...m, worktrees } : m));
+        } catch { /* keep the previous list if the re-read fails */ }
+      }
+    } catch (e) {
+      const msg = String(e?.message || e);
+      logError('git', `${repoName}: git switch ${branch} failed`, msg);
+      setBranchMap((m) => (m ? { ...m, result: { ok: false, kind: 'setbranch', branch, output: msg } } : m));
+    } finally {
+      setBranchMapBusy(false);
+    }
+  }, [branchMap, left, right]);
+
   // Exact-match pass (common / cherry / patch-id / manual). Memoized on its own
   // so it is NOT recomputed every time a single fuzzy diff-text arrives.
   const baseDiff = useMemo(
@@ -2783,6 +2817,7 @@ export default function App() {
           onCreateMirror={createMirrorFromMap}
           onUpdateSubmodules={updateSubmodulesFromMap}
           onMergeMain={mergeMainFromMap}
+          onSwitchWorktreeBranch={setWorktreeBranchFromMap}
           progress={branchMap.progress}
           onClose={() => !branchMapBusy && setBranchMap(null)}
         />

@@ -30,6 +30,7 @@ contextBridge.exposeInMainWorld('api', {
   createMirror: (opts) => ipcRenderer.invoke('repo:createMirror', opts),
   updateWorktreeSubmodules: (opts) => ipcRenderer.invoke('repo:updateWorktreeSubmodules', opts),
   mergeWorktreeMain: (opts) => ipcRenderer.invoke('repo:mergeWorktreeMain', opts),
+  setWorktreeBranch: (opts) => ipcRenderer.invoke('repo:setWorktreeBranch', opts),
   exportCommitPatch: (opts) => ipcRenderer.invoke('commit:exportPatch', opts),
   pickPatch: () => ipcRenderer.invoke('patch:pick'),
   inspectPatch: (opts) => ipcRenderer.invoke('patch:inspect', opts),

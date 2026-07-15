@@ -777,6 +777,28 @@ async function mergeMainIntoWorktree(worktreePath, source, onData) {
   };
 }
 
+/**
+ * Give a worktree a branch: if a local branch `name` already exists switch to
+ * it, otherwise create it at the current HEAD (`git switch -c`). Handy for a
+ * detached-HEAD worktree that needs a branch before it can be merged. The name
+ * is validated so the renderer can never inject extra git arguments.
+ * @param {string} worktreePath the worktree to operate in
+ * @param {string} name desired local branch name
+ * @returns {Promise<{ok:boolean, command:string, output:string, exitCode:number, branch:string, created:boolean}>}
+ */
+async function setWorktreeBranch(worktreePath, name) {
+  if (!isGitRepo(worktreePath)) throw new Error(`Not a git repository: ${worktreePath}`);
+  const branch = String(name || '').trim();
+  if (!branch || branch.startsWith('-') || /[\s~^:?*\[\\]/.test(branch)) {
+    throw new Error(`Invalid branch name: ${branch || '(empty)'}`);
+  }
+  // Existing local branch -> switch to it; otherwise create it at the current HEAD.
+  const has = await runRaw(['show-ref', '--verify', '--quiet', `refs/heads/${branch}`], worktreePath);
+  const created = !has.ok;
+  const res = await runCombined(['switch', ...(created ? ['-c'] : []), branch], worktreePath);
+  return { ...res, branch, created };
+}
+
 // Run git and return its raw stdout/stderr separately (no merging/trimming),
 // so binary-safe-ish text like a full patch is preserved verbatim. Patches from
 // `format-patch --binary` are ASCII (binary hunks are base85), so utf8 is fine.
@@ -1321,6 +1343,7 @@ module.exports = {
   createMirror,
   updateWorktreeSubmodules,
   mergeMainIntoWorktree,
+  setWorktreeBranch,
   exportCommitPatch,
   inspectPatch,
   applyPatch,
