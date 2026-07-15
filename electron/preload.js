@@ -41,6 +41,7 @@ contextBridge.exposeInMainWorld('api', {
     return () => ipcRenderer.removeListener('repo:gitProgress', listener);
   },
   listWorktrees: (opts) => ipcRenderer.invoke('repo:listWorktrees', opts),
+  defaultBranch: (opts) => ipcRenderer.invoke('repo:defaultBranch', opts),
   removeWorktree: (opts) => ipcRenderer.invoke('repo:removeWorktree', opts),
   pruneWorktrees: (opts) => ipcRenderer.invoke('repo:pruneWorktrees', opts),
   exportExcel: (opts) => ipcRenderer.invoke('excel:export', opts),

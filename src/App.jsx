@@ -660,11 +660,12 @@ export default function App() {
     try {
       // Prune first so worktrees the user deleted by hand drop off the list.
       await window.api.pruneWorktrees({ repoPath: repo.path }).catch(() => {});
-      const [data, worktrees] = await Promise.all([
+      const [data, worktrees, defaultBranch] = await Promise.all([
         window.api.listBranches({ repoPath: repo.path }),
-        window.api.listWorktrees({ repoPath: repo.path }).catch(() => [])
+        window.api.listWorktrees({ repoPath: repo.path }).catch(() => []),
+        window.api.defaultBranch({ repoPath: repo.path }).catch(() => null)
       ]);
-      setBranchMap({ side, repoName: repo.name || repo.path, data, worktrees, result: null });
+      setBranchMap({ side, repoName: repo.name || repo.path, data, worktrees, defaultBranch, result: null });
     } catch (e) {
       const msg = String(e?.message || e);
       logError('git', `${repo.name || repo.path}: list branches failed`, msg);
@@ -681,11 +682,12 @@ export default function App() {
     if (!repo.path) return;
     try {
       await window.api.pruneWorktrees({ repoPath: repo.path }).catch(() => {});
-      const [data, worktrees] = await Promise.all([
+      const [data, worktrees, defaultBranch] = await Promise.all([
         window.api.listBranches({ repoPath: repo.path }),
-        window.api.listWorktrees({ repoPath: repo.path }).catch(() => [])
+        window.api.listWorktrees({ repoPath: repo.path }).catch(() => []),
+        window.api.defaultBranch({ repoPath: repo.path }).catch(() => null)
       ]);
-      setBranchMap((m) => (m ? { ...m, data, worktrees } : m));
+      setBranchMap((m) => (m ? { ...m, data, worktrees, defaultBranch } : m));
     } catch (e) {
       logError('git', `${repo.name || repo.path}: list branches failed`, String(e?.message || e));
     }
@@ -2766,6 +2768,7 @@ export default function App() {
           repoName={branchMap.repoName}
           data={branchMap.data}
           worktrees={branchMap.worktrees || []}
+          defaultBranch={branchMap.defaultBranch || ''}
           busy={branchMapBusy}
           result={branchMap.result}
           onUpdate={doUpdateAllBranches}

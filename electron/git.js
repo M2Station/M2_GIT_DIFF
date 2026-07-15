@@ -692,18 +692,57 @@ async function updateWorktreeSubmodules(worktreePath, mainRepoPath, onData) {
 }
 
 /**
- * Run `git merge main` inside a linked worktree to bring the locally-updated
- * `main` branch into the branch checked out there. Because the worktree shares
- * the parent repo's object store and refs, no fetch is needed — this merges
- * whatever `main` currently points at locally. Output (including any merge
- * conflicts) is streamed to `onData` so the UI can show exactly what happened.
- * @param {string} worktreePath worktree whose checked-out branch receives main
+ * Resolve the repo's default / primary branch name as a LOCAL ref. Tries the
+ * configured remote default (origin/HEAD), then the common names (main,
+ * master), then the branch checked out in the main worktree. Returns null when
+ * none resolve so callers can surface a clear message instead of merging the
+ * wrong branch. Works from any linked worktree since they share the repo's refs.
+ * @param {string} cwd repo or worktree path
+ * @returns {Promise<string|null>}
+ */
+async function resolveDefaultBranch(cwd) {
+  if (!isGitRepo(cwd)) return null;
+  const localExists = async (name) => {
+    if (!name) return null;
+    const r = await runRaw(['rev-parse', '--verify', '--quiet', `refs/heads/${name}`], cwd);
+    return r.ok && r.stdout.trim() ? name : null;
+  };
+  // 1. Configured default from the remote HEAD: "origin/main" -> "main".
+  const head = await runRaw(['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'], cwd);
+  if (head.ok) {
+    const hit = await localExists(head.stdout.trim().replace(/^origin\//, ''));
+    if (hit) return hit;
+  }
+  // 2. Common default branch names.
+  for (const name of ['main', 'master']) {
+    const hit = await localExists(name);
+    if (hit) return hit;
+  }
+  // 3. Last resort: whatever the main worktree currently has checked out.
+  try {
+    const main = (await listWorktrees(cwd)).find((w) => w.isMain && w.branch && !w.detached);
+    if (main) return main.branch;
+  } catch {
+    /* ignore — fall through to null */
+  }
+  return null;
+}
+
+/**
+ * Merge the repo's default branch (main / master / whatever origin/HEAD points
+ * at) into the branch checked out in a linked worktree. Because the worktree
+ * shares the parent repo's object store and refs, no fetch is needed — this
+ * merges whatever that branch currently points at locally. Output (including any
+ * merge conflicts) is streamed to `onData` so the UI can show what happened.
+ * @param {string} worktreePath worktree whose checked-out branch receives the default branch
  * @param {(chunk:string)=>void} [onData] live progress callback
  * @returns {Promise<{ok:boolean, command:string, output:string, exitCode:number}>}
  */
 async function mergeMainIntoWorktree(worktreePath, onData) {
   if (!isGitRepo(worktreePath)) throw new Error(`Not a git repository: ${worktreePath}`);
-  return runStreaming(['merge', 'main'], worktreePath, onData);
+  const branch = await resolveDefaultBranch(worktreePath);
+  if (!branch) throw new Error('Could not determine the default branch (main / master) to merge.');
+  return runStreaming(['merge', branch], worktreePath, onData);
 }
 
 // Run git and return its raw stdout/stderr separately (no merging/trimming),
@@ -1241,6 +1280,7 @@ module.exports = {
   createMirror,
   updateWorktreeSubmodules,
   mergeMainIntoWorktree,
+  resolveDefaultBranch,
   exportCommitPatch,
   inspectPatch,
   applyPatch,

@@ -2977,6 +2977,13 @@ mark {
   opacity: 0.4;
   cursor: default;
 }
+/* The merge button shows "<default> -> <branch>", so cap its width and ellipsize
+   long branch names; the full text stays in the title tooltip. */
+.bmp-wt-merge {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .bmp-wt-confirm .btn {
   padding: 2px 8px;
   font-size: 11.5px;

@@ -138,7 +138,7 @@ const GIT_SNIPPETS = [
 // button fetches from origin and fast-forwards every tracking branch; the result
 // transcript is shown inline so the tree can refresh in place. Closes on the ✕,
 // the backdrop, the Close button, or Escape.
-export default function WorktreePopup({ side, repoName, data, worktrees = [], busy, result, progress, onUpdate, onRefresh, onSwitch, onWorktree, onRemoveWorktree, onOpenFolder, onOpenTaskManager, onCreateMirror, onUpdateSubmodules, onMergeMain, onClose }) {
+export default function WorktreePopup({ side, repoName, data, worktrees = [], defaultBranch = '', busy, result, progress, onUpdate, onRefresh, onSwitch, onWorktree, onRemoveWorktree, onOpenFolder, onOpenTaskManager, onCreateMirror, onUpdateSubmodules, onMergeMain, onClose }) {
   const t = useT();
   const { current, local = [], remote = [] } = data || {};
   const [expanded, setExpanded] = useState(() => new Set());
@@ -567,10 +567,16 @@ export default function WorktreePopup({ side, repoName, data, worktrees = [], bu
                           type="button"
                           className="bmp-wt-merge"
                           onClick={() => onMergeMain(w.path)}
-                          disabled={busy || w.prunable}
-                          title={t('branchMap.mergeMainTitle')}
+                          disabled={busy || w.prunable || w.detached || !defaultBranch}
+                          title={
+                            w.detached
+                              ? t('branchMap.mergeMainDetachedTitle', { from: defaultBranch || 'main' })
+                              : t('branchMap.mergeMainTitle', { from: defaultBranch || 'main', to: w.branch || '' })
+                          }
                         >
-                          {t('branchMap.mergeMainShort')}
+                          {w.detached
+                            ? t('branchMap.mergeMainShortDetached', { from: defaultBranch || 'main' })
+                            : t('branchMap.mergeMainShort', { from: defaultBranch || 'main', to: w.branch || '' })}
                         </button>
                       )}
                       {!w.isMain && (

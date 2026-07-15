@@ -419,6 +419,16 @@ ipcMain.handle('repo:listWorktrees', async (_evt, payload) => {
   return git.listWorktrees(repoPath);
 });
 
+ipcMain.handle('repo:defaultBranch', async (_evt, payload) => {
+  const { repoPath } = payload || {};
+  if (!repoPath) return null;
+  try {
+    return await git.resolveDefaultBranch(repoPath);
+  } catch {
+    return null;
+  }
+});
+
 ipcMain.handle('repo:removeWorktree', async (_evt, payload) => {
   const { repoPath, worktreePath, force } = payload || {};
   if (!repoPath) throw new Error('repoPath is required');
