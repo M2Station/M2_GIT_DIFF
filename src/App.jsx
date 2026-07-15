@@ -835,15 +835,18 @@ export default function App() {
     });
   }, [left, right]);
 
-  // Native folder picker for the worktree's parent directory. Returns the chosen
-  // absolute path, or null when cancelled.
+  // Native folder picker for the worktree's parent directory. Opens at the
+  // source repo's own folder so the user browses next to the main repo. Returns
+  // the chosen absolute path, or null when cancelled.
   const pickWorktreeDir = useCallback(async () => {
+    const repo = worktree ? (worktree.side === 'L' ? left : right) : null;
+    const defaultPath = repo?.path || '';
     try {
-      return (await window.api.pickFolder()) || null;
+      return (await window.api.pickFolder({ defaultPath })) || null;
     } catch {
       return null;
     }
-  }, []);
+  }, [worktree, left, right]);
 
   // Run `git worktree add` for the modal's source, showing the transcript inline
   // so the window stays put. A successful create also reloads the source repo in
@@ -913,7 +916,7 @@ export default function App() {
     const repo = side === 'L' ? left : right;
     if (!repo.path) return;
     let picked = null;
-    try { picked = await window.api.pickFolder(); } catch { picked = null; }
+    try { picked = await window.api.pickFolder({ defaultPath: repo.path }); } catch { picked = null; }
     if (!picked) return;
     // Default the cache into a `Mirror` subfolder of the chosen directory so the
     // picked folder itself doesn't get polluted with bare mirror repos.
