@@ -562,15 +562,19 @@ export default function WorktreePopup({ side, repoName, data, worktrees = [], bu
                     </span>
                   ) : (
                     <span className="bmp-wt-actions">
-                      {!w.isMain && (
+                      {!w.isMain && w.linkSource && (
                         <button
                           type="button"
                           className="bmp-wt-merge"
-                          onClick={() => onMergeMain(w.path)}
-                          disabled={busy || w.prunable}
-                          title={t('branchMap.mergeMainTitle')}
+                          onClick={() => onMergeMain(w.path, w.linkSource)}
+                          disabled={busy || w.prunable || w.detached}
+                          title={
+                            w.detached
+                              ? t('branchMap.mergeMainDetachedTitle')
+                              : t('branchMap.mergeMainTitle', { source: w.linkSource })
+                          }
                         >
-                          {t('branchMap.mergeMainShort')}
+                          {t('branchMap.mergeMainShort', { source: w.linkSource })}
                         </button>
                       )}
                       {!w.isMain && (
@@ -707,7 +711,9 @@ export default function WorktreePopup({ side, repoName, data, worktrees = [], bu
                         : result?.kind === 'merge'
                           ? result.ok === false
                             ? t('branchMap.mergeMainFailed')
-                            : t('branchMap.mergeMainDone')
+                            : result.alreadyUpToDate
+                              ? t('branchMap.mergeMainSame', { source: result.source || '' })
+                              : t('branchMap.mergeMainDone', { source: result.source || '' })
                           : t('branchMap.updateDone', {
                               updated: result?.updated ?? 0,
                               skipped: result?.skipped ?? 0,

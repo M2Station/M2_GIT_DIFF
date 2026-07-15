@@ -571,6 +571,38 @@ async function updateAllBranches(cwd) {
   };
 }
 
+// Per-worktree sidecar recording which ref a worktree was forked from, so the
+// UI can offer a "merge source" action. Kept out of `git status` via the repo's
+// shared info/exclude (see ensureWorktreeLinkExcluded).
+const WT_LINK_FILE = 'M2_WT_LINK.json';
+
+// Write the fork-source sidecar into a freshly-created worktree. Best-effort.
+function writeWorktreeLink(target, source) {
+  const rec = {
+    app: 'M2_GIT_DIFF',
+    version: 1,
+    source: String(source || ''),
+    createdAt: new Date().toISOString()
+  };
+  fs.writeFileSync(path.join(target, WT_LINK_FILE), JSON.stringify(rec, null, 2) + '\n', 'utf8');
+}
+
+// Add the sidecar's name to the repo's shared info/exclude (once) so it never
+// shows up as an untracked file in any worktree's `git status`.
+async function ensureWorktreeLinkExcluded(cwd) {
+  const common = (await runRaw(['rev-parse', '--git-common-dir'], cwd)).stdout.trim();
+  if (!common) return;
+  const commonAbs = path.isAbsolute(common) ? common : path.resolve(cwd, common);
+  const infoDir = path.join(commonAbs, 'info');
+  const excludePath = path.join(infoDir, 'exclude');
+  let body = '';
+  try { body = fs.readFileSync(excludePath, 'utf8'); } catch { /* may not exist yet */ }
+  if (body.split(/\r?\n/).some((l) => l.trim() === WT_LINK_FILE)) return;
+  fs.mkdirSync(infoDir, { recursive: true });
+  const prefix = body && !body.endsWith('\n') ? '\n' : '';
+  fs.appendFileSync(excludePath, `${prefix}# M2_GIT_DIFF worktree link sidecar\n${WT_LINK_FILE}\n`, 'utf8');
+}
+
 /**
  * Create a new git worktree checked out from a branch or commit. The target
  * folder is `<parentDir>/<name>` (git creates it; it must not already exist).
@@ -611,6 +643,14 @@ async function addWorktree(cwd, opts = {}) {
   if (newBranch) args.push('-b', newBranch);
   args.push(target, ref);
   const res = await runCombined(args, cwd);
+  // Record where this worktree was forked from so the UI can offer a
+  // "merge source" action. Best-effort: the link is a convenience, not critical.
+  if (res.ok !== false) {
+    try {
+      writeWorktreeLink(target, ref);
+      await ensureWorktreeLinkExcluded(cwd);
+    } catch { /* ignore — sidecar is optional */ }
+  }
   return { ...res, target };
 }
 
@@ -692,18 +732,49 @@ async function updateWorktreeSubmodules(worktreePath, mainRepoPath, onData) {
 }
 
 /**
- * Run `git merge main` inside a linked worktree to bring the locally-updated
- * `main` branch into the branch checked out there. Because the worktree shares
- * the parent repo's object store and refs, no fetch is needed — this merges
- * whatever `main` currently points at locally. Output (including any merge
- * conflicts) is streamed to `onData` so the UI can show exactly what happened.
- * @param {string} worktreePath worktree whose checked-out branch receives main
+ * Update a worktree from its recorded source ref: fetch the source branch from
+ * origin (best-effort), then merge it into the branch checked out there
+ * (`git merge --no-edit`). If the worktree already contains everything, git
+ * reports "Already up to date" and `alreadyUpToDate` is set; otherwise the new
+ * commits are brought in. A detached HEAD has no branch to merge into and is
+ * rejected. All output (fetch + merge, incl. conflicts) is streamed to `onData`.
+ * @param {string} worktreePath worktree whose checked-out branch receives the merge
+ * @param {string} source ref to update from (the recorded fork source)
  * @param {(chunk:string)=>void} [onData] live progress callback
- * @returns {Promise<{ok:boolean, command:string, output:string, exitCode:number}>}
+ * @returns {Promise<{ok:boolean, command:string, output:string, exitCode:number, alreadyUpToDate:boolean}>}
  */
-async function mergeMainIntoWorktree(worktreePath, onData) {
+async function mergeMainIntoWorktree(worktreePath, source, onData) {
   if (!isGitRepo(worktreePath)) throw new Error(`Not a git repository: ${worktreePath}`);
-  return runStreaming(['merge', 'main'], worktreePath, onData);
+  const src = String(source || '').trim();
+  if (!src || src.startsWith('-') || /[\s~^:?*\[\\]/.test(src)) {
+    throw new Error(`Invalid source ref: ${src || '(empty)'}`);
+  }
+  const cur = await runRaw(['rev-parse', '--abbrev-ref', 'HEAD'], worktreePath);
+  const branch = cur.ok ? cur.stdout.trim() : '';
+  if (!branch || branch === 'HEAD') {
+    throw new Error('This worktree is on a detached HEAD; check out a branch before merging.');
+  }
+  // 1. Update the source from origin first (best-effort). Merge the freshly
+  //    fetched tip when origin was reachable, else the local source ref.
+  const remoteBranch = src.replace(/^refs\/(remotes|heads)\//, '').replace(/^origin\//, '');
+  let mergeRef = src;
+  let fetchOut = '';
+  const hasOrigin = (await runRaw(['remote'], worktreePath)).stdout.split(/\s+/).includes('origin');
+  if (hasOrigin) {
+    const fetch = await runStreaming(['fetch', 'origin', remoteBranch], worktreePath, onData);
+    fetchOut = fetch.output || '';
+    if (fetch.ok !== false) mergeRef = 'FETCH_HEAD';
+  }
+  // 2/3. Merge — git no-ops with "Already up to date" when there is nothing new.
+  const merge = await runStreaming(['merge', '--no-edit', mergeRef], worktreePath, onData);
+  const alreadyUpToDate = merge.ok !== false && /Already up[ -]to[ -]date/i.test(merge.output || '');
+  return {
+    ok: merge.ok !== false,
+    command: `git fetch origin ${remoteBranch} + git merge ${src}`,
+    output: [fetchOut, merge.output].filter(Boolean).join('\n'),
+    exitCode: merge.exitCode,
+    alreadyUpToDate
+  };
 }
 
 // Run git and return its raw stdout/stderr separately (no merging/trimming),
@@ -1067,6 +1138,15 @@ async function listWorktrees(cwd) {
   entries.forEach((e, i) => {
     e.isMain = i === 0;
     e.isCurrent = norm(e.path) === here;
+    // Attach the recorded fork source (M2_WT_LINK.json) when present, so the UI
+    // can offer a "merge source" action for worktrees this app created.
+    try {
+      const lp = path.join(e.path, WT_LINK_FILE);
+      if (fs.existsSync(lp)) {
+        const j = JSON.parse(fs.readFileSync(lp, 'utf8'));
+        if (j && typeof j.source === 'string' && j.source) e.linkSource = j.source;
+      }
+    } catch { /* ignore malformed/unreadable link */ }
   });
   return entries;
 }
