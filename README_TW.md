@@ -95,7 +95,7 @@ Electron (主行程)
 ├─ electron/excel.js     ExcelJS 產生 styled .xlsx（顏色填滿、註記 cell 註解、SHA 超連結到遠端 commit URL、Manual Links 工作表）
 ├─ electron/markdownReport.js 產生以表格為主的 Markdown review report (.md)，含截斷顯示欄位與遠端 commit 連結
 ├─ electron/fsdialog.js  內建 FolderPicker 的目錄列舉（dialog:listDir / dialog:rememberDir）
-└─ electron/db.js        better-sqlite3 快取層（缺少時自動退回記憶體快取）
+└─ electron/db.js        SQLite 快取層 — 優先用 Node 內建 node:sqlite，其次 better-sqlite3，否則記憶體快取
 
 Renderer (React + Vite)
 ├─ src/main.jsx                 React 入口
@@ -272,7 +272,7 @@ CSS 變數集中於 `:root`：
 | **Git** | 任意近期版本 | 本工具透過 `git` CLI 讀取兩個 repo 的紀錄；需在 `PATH` 中 | <https://git-scm.com/>（或 `winget install Git.Git`） |
 | **PowerShell** | Windows 內建即可 | 執行下列指令與 `start.cmd` | 系統內建 |
 
-> 選用：**Visual Studio C++ 工具集（含 ClangCL）** 僅在要啟用 `better-sqlite3` 持久化快取時才需要；未安裝時會自動退回記憶體快取，不影響功能（見下方「環境注意事項」）。
+> 選用：持久化快取現在透過 Node 內建的 `node:sqlite`（隨 Electron 附帶）開箱即用 — 不需任何編譯工具。**Visual Studio C++ 工具集** 僅在較舊 runtime 上要用選用的 `better-sqlite3` fallback 時才需要（見下方「環境注意事項」）。
 
 確認安裝：
 
@@ -413,7 +413,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\uninstall-context-menu
 
 ### 環境注意事項（本機已知狀況）
 
-1. **better-sqlite3 無法編譯**：本機缺少 Visual Studio 的 *ClangCL* 工具集，原生模組編不過。已將其設為 `optionalDependencies`，`db.js` 偵測不到時會自動退回**記憶體快取**，功能不受影響。若要啟用持久化快取：安裝 ClangCL（或在 VS 安裝程式勾選對應工具集）後執行 `npm run rebuild`。
+1. **持久化快取不需編譯工具**：快取使用 Node 內建的 `node:sqlite`（隨新版 Electron 附帶），所以持久化不需 C++ 工具鏈。`db.js` 優先用 `node:sqlite`，其次選用的 `better-sqlite3` 原生模組，最後才退回記憶體快取 — 缺編譯器也不影響功能。只有在沒有 `node:sqlite` 的 runtime 上才需要編 `better-sqlite3`（`npm run rebuild`）。
 2. **Electron 二進位在 `Z:` 網路磁碟解壓失敗**：安裝後的 postinstall 在 `Z:` 上靜默失敗。處置方式：用 PowerShell `Expand-Archive` 把快取中的 `electron-vXX-win32-x64.zip` 解到 `node_modules/electron/dist`，並建立 `node_modules/electron/path.txt`（內容 `electron.exe`）。重裝 `node_modules` 後需重做，或執行 `node node_modules/electron/install.js`。
 3. DevTools 的 `Autofill.enable` / GPU 警告為無害雜訊，可忽略。
 

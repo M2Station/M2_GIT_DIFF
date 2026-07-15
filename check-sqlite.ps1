@@ -31,14 +31,8 @@ if ($Mark) {
     exit 0
 }
 
-# 檢查模式：模組檔不存在 => 需要 rebuild。
-if (-not (Test-Path $node)) { exit 1 }
-
-# 無法判斷 Electron 版本 (例如二進位檔遺失) => 不強制 rebuild，交給其他流程處理。
-if (-not $elVersion) { exit 0 }
-
-# 標記檔不存在或版本不符 => 需要 rebuild。
-$built = if (Test-Path $marker) { (Get-Content $marker -Raw).Trim() } else { '' }
-if ($built -ne $elVersion) { exit 1 }
-
+# 檢查模式：持久化快取現在由 node:sqlite (Electron 內建 Node 的模組) 提供，
+# 不再依賴 better-sqlite3 原生模組，因此啟動時不需要自動重編。一律回傳 0
+# (= 無需 rebuild)，避免在沒有 C++ 編譯器的環境 (例如 ARM64) 產生重編噪音。
+# 仍保留 -Mark 供手動 npm run rebuild 之後標記使用。
 exit 0
