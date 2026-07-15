@@ -11,7 +11,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
-  pickFolder: () => ipcRenderer.invoke('dialog:pickFolder'),
+  pickFolder: (opts) => ipcRenderer.invoke('dialog:pickFolder', opts),
   listDir: (path) => ipcRenderer.invoke('dialog:listDir', { path }),
   rememberDir: (path) => ipcRenderer.invoke('dialog:rememberDir', { path }),
   recordRepoOpen: (repoPath) => ipcRenderer.invoke('picker:recordOpen', { repoPath }),

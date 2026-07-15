@@ -166,11 +166,17 @@ ipcMain.handle('app:setStartupBg', (_evt, color) => {
   }
 });
 
-ipcMain.handle('dialog:pickFolder', async () => {
-  const result = await dialog.showOpenDialog(mainWindow, {
+ipcMain.handle('dialog:pickFolder', async (_evt, opts) => {
+  const dialogOpts = {
     properties: ['openDirectory'],
     title: 'Select a local git repository'
-  });
+  };
+  // Open the native picker at a caller-supplied directory (e.g. the repo's own
+  // folder) so worktree-parent / mirror selection starts next to the repo
+  // instead of a default location. Electron ignores a blank/missing path.
+  const startAt = opts && typeof opts.defaultPath === 'string' ? opts.defaultPath.trim() : '';
+  if (startAt) dialogOpts.defaultPath = startAt;
+  const result = await dialog.showOpenDialog(mainWindow, dialogOpts);
   if (result.canceled || result.filePaths.length === 0) return null;
   return result.filePaths[0];
 });
