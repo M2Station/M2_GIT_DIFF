@@ -427,6 +427,12 @@ ipcMain.handle('repo:getMirrorCache', async (_evt, payload) => {
   return git.getMirrorCache(repoPath);
 });
 
+ipcMain.handle('repo:getMirrorCacheInfo', async (_evt, payload) => {
+  const { repoPath } = payload || {};
+  if (!repoPath) throw new Error('repoPath is required');
+  return git.getMirrorCacheInfo(repoPath);
+});
+
 ipcMain.handle('repo:updateMirrorCache', async (evt, payload) => {
   const { mainRepoPath, streamId } = payload || {};
   if (!mainRepoPath) throw new Error('mainRepoPath is required');

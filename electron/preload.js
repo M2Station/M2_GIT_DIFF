@@ -37,6 +37,7 @@ contextBridge.exposeInMainWorld('api', {
   applyPatch: (opts) => ipcRenderer.invoke('patch:apply', opts),
   buildSubmoduleMirrorCache: (opts) => ipcRenderer.invoke('repo:buildSubmoduleMirrorCache', opts),
   getMirrorCache: (opts) => ipcRenderer.invoke('repo:getMirrorCache', opts),
+  getMirrorCacheInfo: (opts) => ipcRenderer.invoke('repo:getMirrorCacheInfo', opts),
   updateMirrorCache: (opts) => ipcRenderer.invoke('repo:updateMirrorCache', opts),
   onGitProgress: (cb) => {
     const listener = (_e, payload) => { try { cb(payload); } catch { /* ignore */ } };

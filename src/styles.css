@@ -2961,6 +2961,12 @@ mark {
   font-size: 11px;
   font-weight: 600;
 }
+/* Crisp inline-SVG glyphs on worktree action buttons (e.g. the mirror-folder
+   icon): block layout drops the inline descender gap so it centres in the pad,
+   and currentColor makes it follow the button's muted/hover colour. */
+.bmp-wt-svg {
+  display: block;
+}
 .bmp-wt-sync,
 .bmp-wt-merge {
   flex: none;
@@ -3572,6 +3578,74 @@ mark {
   padding: 8px 12px;
   border-top: 1px solid var(--line);
   background: var(--bg-soft);
+}
+
+/* ---------------- Mirror-cache manager modal ---------------- */
+.mirror-pop {
+  width: 640px;
+}
+.wtp-hint {
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.mirror-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.mirror-status.muted {
+  color: var(--muted);
+  font-size: 12px;
+}
+.mirror-path {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 12px;
+  color: var(--accent);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 9px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mirror-badge {
+  flex: none;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.mirror-badge.ok {
+  color: #2ea043;
+  background: color-mix(in srgb, #2ea043 16%, transparent);
+  border-color: color-mix(in srgb, #2ea043 45%, transparent);
+}
+.mirror-badge.warn {
+  color: #d29922;
+  background: color-mix(in srgb, #d29922 16%, transparent);
+  border-color: color-mix(in srgb, #d29922 45%, transparent);
+}
+.mirror-badge.miss {
+  color: var(--unique-bd, #eb4650);
+  background: color-mix(in srgb, var(--unique-bd, #eb4650) 16%, transparent);
+  border-color: color-mix(in srgb, var(--unique-bd, #eb4650) 45%, transparent);
+}
+.mirror-foot {
+  justify-content: space-between;
+}
+.mirror-foot-left,
+.mirror-foot-right {
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 
 /* ---------------- Unified export panel ---------------- */
