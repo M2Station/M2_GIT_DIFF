@@ -114,6 +114,24 @@ function MapNode({ node, depth, expanded, toggle, currentRef, selected, onSelect
   );
 }
 
+// Handy git commands shown in the "Git commands" quick-copy panel. Clicking a
+// row copies the exact command to the clipboard so it can be pasted into a
+// terminal opened at the repo/worktree folder. Descriptions are localised via
+// branchMap.cmd.<id>; the commands themselves are literal and never translated.
+const GIT_SNIPPETS = [
+  { id: 'subUpdate', cmd: 'git submodule update --init --recursive --progress --jobs 8' },
+  { id: 'subUpdateShallow', cmd: 'git submodule update --init --recursive --progress --jobs 8 --depth 1' },
+  { id: 'subSync', cmd: 'git submodule sync --recursive' },
+  { id: 'subStatus', cmd: 'git submodule status --recursive' },
+  { id: 'status', cmd: 'git status' },
+  { id: 'fetch', cmd: 'git fetch --all --prune' },
+  { id: 'pullRebase', cmd: 'git pull --rebase' },
+  { id: 'log', cmd: 'git log --oneline --graph --decorate -20' },
+  { id: 'branchVV', cmd: 'git branch -vv' },
+  { id: 'resetHard', cmd: 'git reset --hard HEAD' },
+  { id: 'clean', cmd: 'git clean -xfd' }
+];
+
 // Floating, draggable/resizable modal that maps every branch (local + each
 // remote) as a collapsible tree with a live search filter. The footer "Update"
 // button fetches from origin and fast-forwards every tracking branch; the result
@@ -154,6 +172,34 @@ export default function WorktreePopup({ side, repoName, data, worktrees = [], bu
       /* clipboard unavailable */
     }
   }, []);
+
+  // Quick-copy "Git commands" panel: whether it's open, and which snippet was
+  // last copied (drives the transient "Copied" cue on that row).
+  const [showCmds, setShowCmds] = useState(false);
+  const [copiedCmd, setCopiedCmd] = useState('');
+  const copyCmd = useCallback((cmd) => {
+    try {
+      navigator.clipboard?.writeText(cmd || '');
+      setCopiedCmd(cmd);
+      setTimeout(() => setCopiedCmd(''), 1200);
+    } catch {
+      /* clipboard unavailable */
+    }
+  }, []);
+
+  // Independent floating geometry for the Git-commands panel so it can be
+  // dragged (by its header) and resized (bottom-right grip) separately from the
+  // branch-map window. Positioned relative to the viewport, so it is not clipped
+  // by the branch-map window bounds.
+  const CW0 = 560;
+  const CH0 = Math.min(Math.round(window.innerHeight * 0.6), 520);
+  const [cmdsPos, setCmdsPos] = useState(() => ({
+    x: Math.max(12, Math.round((window.innerWidth - CW0) / 2)),
+    y: Math.max(24, Math.round(window.innerHeight * 0.14))
+  }));
+  const [cmdsSize, setCmdsSize] = useState(() => ({ w: CW0, h: CH0 }));
+  const cmdsDragRef = useRef(null);
+  const cmdsResizeRef = useRef(null);
 
   // Clear the per-row "removing" cue once the operation settles.
   useEffect(() => {
@@ -225,6 +271,58 @@ export default function WorktreePopup({ side, repoName, data, worktrees = [], bu
     [size.w, size.h, pos.x, pos.y]
   );
 
+  const onCmdsDragStart = useCallback(
+    (e) => {
+      if (e.target.closest('button')) return;
+      e.preventDefault();
+      cmdsDragRef.current = { sx: e.clientX, sy: e.clientY, bx: cmdsPos.x, by: cmdsPos.y };
+      const onMove = (ev) => {
+        const d = cmdsDragRef.current;
+        if (!d) return;
+        const nx = d.bx + (ev.clientX - d.sx);
+        const ny = d.by + (ev.clientY - d.sy);
+        setCmdsPos({
+          x: Math.min(Math.max(-cmdsSize.w + 80, nx), window.innerWidth - 60),
+          y: Math.min(Math.max(0, ny), window.innerHeight - 40)
+        });
+      };
+      const onUp = () => {
+        cmdsDragRef.current = null;
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+      };
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+    },
+    [cmdsPos.x, cmdsPos.y, cmdsSize.w]
+  );
+
+  const onCmdsResizeStart = useCallback(
+    (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      cmdsResizeRef.current = { sx: e.clientX, sy: e.clientY, bw: cmdsSize.w, bh: cmdsSize.h };
+      const onMove = (ev) => {
+        const r = cmdsResizeRef.current;
+        if (!r) return;
+        const nw = r.bw + (ev.clientX - r.sx);
+        const nh = r.bh + (ev.clientY - r.sy);
+        setCmdsSize({
+          w: Math.min(Math.max(320, nw), window.innerWidth - cmdsPos.x - 12),
+          h: Math.min(Math.max(240, nh), window.innerHeight - cmdsPos.y - 12)
+        });
+      };
+      const onUp = () => {
+        cmdsResizeRef.current = null;
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+      };
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+    },
+    [cmdsSize.w, cmdsSize.h, cmdsPos.x, cmdsPos.y]
+  );
+
   // Case-insensitive substring filter over the full ref name. When the box is
   // empty everything passes through unchanged.
   const q = filter.trim().toLowerCase();
@@ -244,7 +342,8 @@ export default function WorktreePopup({ side, repoName, data, worktrees = [], bu
       if (e.key === 'Escape') {
         e.preventDefault();
         e.stopPropagation();
-        if (!busy) onClose();
+        if (showCmds) setShowCmds(false);
+        else if (!busy) onClose();
       } else if (e.ctrlKey && (e.key === 'F' || e.key === 'f')) {
         e.preventDefault();
         e.stopPropagation();
@@ -256,7 +355,7 @@ export default function WorktreePopup({ side, repoName, data, worktrees = [], bu
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [onClose, busy]);
+  }, [onClose, busy, showCmds]);
 
   // Group remotes by their first path segment (the remote name, e.g. origin).
   const groups = useMemo(() => {
@@ -350,12 +449,72 @@ export default function WorktreePopup({ side, repoName, data, worktrees = [], bu
           <span className="bsp-current">
             {t('branchMap.current', { branch: current || '\u2014' })}
           </span>
-          <span className="bsp-count">
-            {q
-              ? t('branchMap.countFiltered', { shown, count: total })
-              : t('branchMap.count', { count: total })}
+          <span className="bsp-subhead-right">
+            <span className="bsp-count">
+              {q
+                ? t('branchMap.countFiltered', { shown, count: total })
+                : t('branchMap.count', { count: total })}
+            </span>
+            <button
+              type="button"
+              className={'bsp-cmds-btn' + (showCmds ? ' active' : '')}
+              onClick={() => setShowCmds((v) => !v)}
+              title={t('branchMap.gitCmdsTitle')}
+              aria-expanded={showCmds}
+            >
+              {t('branchMap.gitCmds')}
+            </button>
           </span>
         </div>
+
+        {showCmds && (
+          <div className="bsp-cmds-backdrop" onMouseDown={() => setShowCmds(false)}>
+            <div
+              className="bsp-cmds"
+              style={{ left: cmdsPos.x, top: cmdsPos.y, width: cmdsSize.w, height: cmdsSize.h }}
+              onMouseDown={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-label={t('branchMap.gitCmdsTitle')}
+            >
+              <div className="bsp-cmds-head" onPointerDown={onCmdsDragStart}>
+                <span className="bsp-cmds-title">{t('branchMap.gitCmdsTitle')}</span>
+                <button
+                  type="button"
+                  className="bsp-cmds-x"
+                  onClick={() => setShowCmds(false)}
+                  title={t('common.close')}
+                  aria-label={t('common.close')}
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="bsp-cmds-hint">{t('branchMap.gitCmdsHint')}</div>
+              <div className="bsp-cmds-list">
+                {GIT_SNIPPETS.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    className={'bsp-cmd-row' + (copiedCmd === s.cmd ? ' copied' : '')}
+                    onClick={() => copyCmd(s.cmd)}
+                    title={t('branchMap.copyCmdHint')}
+                  >
+                    <span className="bsp-cmd-desc">{t('branchMap.cmd.' + s.id)}</span>
+                    <code className="bsp-cmd-code">{s.cmd}</code>
+                    <span className="bsp-cmd-flag">
+                      {copiedCmd === s.cmd ? t('branchMap.copied') : '📋'}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <div
+                className="bsp-cmds-resize"
+                onPointerDown={onCmdsResizeStart}
+                title={t('branchMap.resize')}
+                aria-hidden="true"
+              />
+            </div>
+          </div>
+        )}
 
         <div className="bmp-wt">
           <div className="bmp-wt-head">
