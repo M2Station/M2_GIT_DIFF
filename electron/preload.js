@@ -29,6 +29,7 @@ contextBridge.exposeInMainWorld('api', {
   addWorktree: (opts) => ipcRenderer.invoke('repo:addWorktree', opts),
   createMirror: (opts) => ipcRenderer.invoke('repo:createMirror', opts),
   updateWorktreeSubmodules: (opts) => ipcRenderer.invoke('repo:updateWorktreeSubmodules', opts),
+  mergeWorktreeMain: (opts) => ipcRenderer.invoke('repo:mergeWorktreeMain', opts),
   buildSubmoduleMirrorCache: (opts) => ipcRenderer.invoke('repo:buildSubmoduleMirrorCache', opts),
   onGitProgress: (cb) => {
     const listener = (_e, payload) => { try { cb(payload); } catch { /* ignore */ } };

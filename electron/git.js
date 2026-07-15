@@ -691,6 +691,21 @@ async function updateWorktreeSubmodules(worktreePath, mainRepoPath, onData) {
   };
 }
 
+/**
+ * Run `git merge main` inside a linked worktree to bring the locally-updated
+ * `main` branch into the branch checked out there. Because the worktree shares
+ * the parent repo's object store and refs, no fetch is needed — this merges
+ * whatever `main` currently points at locally. Output (including any merge
+ * conflicts) is streamed to `onData` so the UI can show exactly what happened.
+ * @param {string} worktreePath worktree whose checked-out branch receives main
+ * @param {(chunk:string)=>void} [onData] live progress callback
+ * @returns {Promise<{ok:boolean, command:string, output:string, exitCode:number}>}
+ */
+async function mergeMainIntoWorktree(worktreePath, onData) {
+  if (!isGitRepo(worktreePath)) throw new Error(`Not a git repository: ${worktreePath}`);
+  return runStreaming(['merge', 'main'], worktreePath, onData);
+}
+
 // Resolve the main repo's object store (git dir) for the submodule at the
 // superproject-relative path `rel`, or null when the main repo has no local copy.
 function gcResolveModuleGitDir(mainRoot, rel) {
@@ -1120,6 +1135,7 @@ module.exports = {
   addWorktree,
   createMirror,
   updateWorktreeSubmodules,
+  mergeMainIntoWorktree,
   buildSubmoduleMirrorCache,
   listWorktrees,
   removeWorktree,
