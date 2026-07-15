@@ -1,6 +1,6 @@
 {
   "name": "git-repro-diff",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "Side-by-side git history comparison for two local repros (GenLen-style HUD)",
   "main": "electron/main.js",
   "author": "OA Hsiao",
@@ -49,11 +49,13 @@
   "build": {
     "appId": "com.tool.gitreprodiff",
     "productName": "M2_GIT_DIFF",
+    "npmRebuild": false,
     "files": [
       "electron/**",
       "dist/**",
       "public/icon.ico",
-      "package.json"
+      "package.json",
+      "!node_modules/better-sqlite3/**"
     ],
     "extraResources": [
       {

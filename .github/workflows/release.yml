@@ -50,9 +50,6 @@ jobs:
       - name: Build renderer (vite)
         run: npm run build
 
-      - name: Rebuild native modules (better-sqlite3)
-        run: npm run rebuild
-
       - name: Build installer (electron-builder)
         # --publish never: build the multi-arch NSIS installers (x64 + arm64)
         # locally only; the "Publish GitHub Release" step below uploads them.
@@ -61,6 +58,21 @@ jobs:
         # NOTE: dist is a single electron-builder invocation, so --publish never
         # is applied exactly once (no duplicate-flag array problem).
         run: npm run dist -- --publish never
+
+      - name: Generate SHA256 checksums
+        # Hash each published installer so users can verify their download is
+        # intact and untampered (Get-FileHash on Windows, or
+        # `sha256sum -c SHA256SUMS.txt` on Git Bash / Linux / macOS). Non-recursive
+        # on purpose: only the top-level NSIS installers in release/ are hashed,
+        # matching exactly what the publish step uploads. The two-space separator
+        # is the standard sha256sum format.
+        shell: pwsh
+        run: |
+          $lines = Get-ChildItem release -Filter *.exe | ForEach-Object {
+            "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name
+          }
+          $lines | Set-Content -Path release/SHA256SUMS.txt -Encoding ascii
+          Get-Content release/SHA256SUMS.txt
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v3
@@ -72,5 +84,6 @@ jobs:
             release/*.exe
             release/*.blockmap
             release/latest.yml
+            release/SHA256SUMS.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
