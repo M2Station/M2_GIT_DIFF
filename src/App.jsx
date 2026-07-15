@@ -21,6 +21,7 @@ import VsIcon from './components/VsIcon.jsx';
 import GitTerminalPopup from './components/GitTerminalPopup.jsx';
 import BranchSwitchPopup from './components/BranchSwitchPopup.jsx';
 import WorktreePopup from './components/WorktreePopup.jsx';
+import PatchImportPopup from './components/PatchImportPopup.jsx';
 import CreateWorktreePopup from './components/CreateWorktreePopup.jsx';
 import ExportPrompt from './components/ExportPrompt.jsx';
 import HelpPopup from './components/HelpPopup.jsx';
@@ -98,6 +99,10 @@ export default function App() {
   // from origin. `branchMapBusy` guards the popup while the update runs.
   const [branchMap, setBranchMap] = useState(null);
   const [branchMapBusy, setBranchMapBusy] = useState(false);
+
+  // Import-patch modal: { side, repoPath, repoName, patchPath } | null. Previews
+  // a chosen .patch against the side's repo and applies it to the working tree.
+  const [patchImport, setPatchImport] = useState(null);
 
   // Worktree modal: { side, repoName, source, result } | null. Creates a new
   // git worktree from a branch (via Branch Map) or a commit (via the row menu).
@@ -634,6 +639,20 @@ export default function App() {
 
   // Open the branch-map modal for one side: load the branch list first so the
   // tree renders immediately. Read-only view + a one-click "update all".
+  // Import a .patch file into one side's repo: pick the file, then open the
+  // preview/apply modal (apply is working-tree only, never a commit).
+  const openImportPatch = useCallback(async (side) => {
+    const repo = side === 'L' ? left : right;
+    if (!repo.path) return;
+    try {
+      const picked = await window.api.pickPatch();
+      if (!picked || picked.canceled || !picked.path) return;
+      setPatchImport({ side, repoPath: repo.path, repoName: repo.name, patchPath: picked.path });
+    } catch (e) {
+      logError('git', 'pick patch failed', String(e?.message || e));
+    }
+  }, [left, right]);
+
   const openBranchMap = useCallback(async (side) => {
     const repo = side === 'L' ? left : right;
     if (!repo.path) return;
@@ -2761,6 +2780,21 @@ export default function App() {
         />
       )}
 
+      {patchImport && (
+        <PatchImportPopup
+          side={patchImport.side}
+          repoName={patchImport.repoName}
+          repoPath={patchImport.repoPath}
+          patchPath={patchImport.patchPath}
+          onLog={(res) => {
+            const cmd = 'git apply --3way (working tree)';
+            if (res?.ok === false) logError('git', `${patchImport.repoName}: ${cmd}`, res?.output || '');
+            else logInfo('git', `${patchImport.repoName}: ${cmd}`, res?.output || '');
+          }}
+          onClose={() => setPatchImport(null)}
+        />
+      )}
+
       {worktree && (
         <CreateWorktreePopup
           side={worktree.side}
@@ -2792,11 +2826,11 @@ export default function App() {
 
       <div className="git-bars">
         {single !== 'R' && (
-          <RepoGitBar side="L" repo={left} loading={loading.L} backfilling={backfilling.L} onGitOp={runGitOp} onReload={reload} onLoadMore={manualLoadMore} onSwitchBranch={openSwitchBranch} onBranchMap={openBranchMap} />
+          <RepoGitBar side="L" repo={left} loading={loading.L} backfilling={backfilling.L} onGitOp={runGitOp} onReload={reload} onLoadMore={manualLoadMore} onSwitchBranch={openSwitchBranch} onBranchMap={openBranchMap} onImportPatch={openImportPatch} />
         )}
         {!single && <div className="git-bars-gutter" style={{ width: GUTTER_WIDTH }} />}
         {single !== 'L' && (
-          <RepoGitBar side="R" repo={right} loading={loading.R} backfilling={backfilling.R} onGitOp={runGitOp} onReload={reload} onLoadMore={manualLoadMore} onSwitchBranch={openSwitchBranch} onBranchMap={openBranchMap} />
+          <RepoGitBar side="R" repo={right} loading={loading.R} backfilling={backfilling.R} onGitOp={runGitOp} onReload={reload} onLoadMore={manualLoadMore} onSwitchBranch={openSwitchBranch} onBranchMap={openBranchMap} onImportPatch={openImportPatch} />
         )}
       </div>
 
