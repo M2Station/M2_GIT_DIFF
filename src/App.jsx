@@ -21,6 +21,7 @@ import VsIcon from './components/VsIcon.jsx';
 import GitTerminalPopup from './components/GitTerminalPopup.jsx';
 import BranchSwitchPopup from './components/BranchSwitchPopup.jsx';
 import WorktreePopup from './components/WorktreePopup.jsx';
+import MirrorPopup from './components/MirrorPopup.jsx';
 import PatchImportPopup from './components/PatchImportPopup.jsx';
 import CreateWorktreePopup from './components/CreateWorktreePopup.jsx';
 import ExportPrompt from './components/ExportPrompt.jsx';
@@ -99,6 +100,13 @@ export default function App() {
   // from origin. `branchMapBusy` guards the popup while the update runs.
   const [branchMap, setBranchMap] = useState(null);
   const [branchMapBusy, setBranchMapBusy] = useState(false);
+
+  // Mirror-cache manager modal: { side, repoName, repoPath, info, progress,
+  // result } | null. Opened from the Branch Map's Mirror button; shows the
+  // repo's mirror-cache setting and can build or refresh it. `mirrorMgrBusy`
+  // guards the popup while a build/update streams.
+  const [mirrorMgr, setMirrorMgr] = useState(null);
+  const [mirrorMgrBusy, setMirrorMgrBusy] = useState(false);
 
   // Import-patch modal: { side, repoPath, repoName, patchPath } | null. Previews
   // a chosen .patch against the side's repo and applies it to the working tree.
@@ -923,31 +931,69 @@ export default function App() {
     return { unsub, flush };
   }, []);
 
-  // Build a golden cache of per-submodule bare mirrors of the MAIN repo into a
-  // folder the user picks (seeded from the repo's own module stores, so mostly
-  // local). The cache root is remembered so worktree submodule updates prefer it.
-  const createMirrorFromMap = useCallback(async () => {
+  // Throttled progress subscriber for the Mirror manager modal (~10 fps).
+  const subscribeMirrorProgress = useCallback((streamId) => {
+    let buf = '';
+    let scheduled = false;
+    const flush = () => {
+      scheduled = false;
+      setMirrorMgr((m) => (m ? { ...m, progress: buf } : m));
+    };
+    const unsub = window.api.onGitProgress(({ streamId: sid, chunk }) => {
+      if (sid !== streamId || typeof chunk !== 'string') return;
+      buf += chunk;
+      if (buf.length > 300000) buf = buf.slice(-300000);
+      if (!scheduled) {
+        scheduled = true;
+        setTimeout(flush, 100);
+      }
+    });
+    return { unsub, flush };
+  }, []);
+
+  // Open the Mirror-cache manager for the Branch Map's side. Reads the repo's
+  // current mirror setting (configured root + how many bare mirrors it holds) so
+  // the modal can show status and offer Build / Update.
+  const openMirrorManager = useCallback(async () => {
     if (!branchMap) return;
     const { side, repoName } = branchMap;
     const repo = side === 'L' ? left : right;
     if (!repo.path) return;
+    let info = { cacheRoot: '', exists: false, mirrorCount: 0 };
+    try { info = await window.api.getMirrorCacheInfo({ repoPath: repo.path }); } catch { /* defaults */ }
+    setMirrorMgr({ side, repoName: repo.name || repoName || repo.path, repoPath: repo.path, info, progress: '', result: null });
+  }, [branchMap, left, right]);
+
+  // Native folder picker for the mirror cache. Defaults the cache into a
+  // `Mirror` subfolder of the chosen directory so the picked folder isn't
+  // polluted with bare mirror repos. Returns the cache-root path, or null.
+  const pickMirrorFolder = useCallback(async (defaultPath) => {
+    const start = defaultPath || mirrorMgr?.repoPath || '';
     let picked = null;
-    try { picked = await window.api.pickFolder({ defaultPath: repo.path }); } catch { picked = null; }
-    if (!picked) return;
-    // Default the cache into a `Mirror` subfolder of the chosen directory so the
-    // picked folder itself doesn't get polluted with bare mirror repos.
+    try { picked = await window.api.pickFolder({ defaultPath: start }); } catch { picked = null; }
+    if (!picked) return null;
     const BS = String.fromCharCode(92); // backslash, avoids escaping noise
     const sep = picked.indexOf(BS) >= 0 ? BS : '/';
     let base = picked;
     while (base.endsWith('/') || base.endsWith(BS)) base = base.slice(0, -1);
-    const cacheRoot = base.toLowerCase().endsWith('mirror') ? base : `${base}${sep}Mirror`;
+    return base.toLowerCase().endsWith('mirror') ? base : `${base}${sep}Mirror`;
+  }, [mirrorMgr]);
+
+  // Build a golden cache of per-submodule bare mirrors of the MAIN repo into the
+  // chosen folder (seeded from the repo's own module stores, so mostly local).
+  // The cache root is remembered so worktree submodule updates prefer it.
+  const buildMirror = useCallback(async (cacheRoot) => {
+    if (!mirrorMgr) return;
+    const { repoName, repoPath } = mirrorMgr;
+    const folder = String(cacheRoot || '').trim();
+    if (!repoPath || !folder) return;
 
     const streamId = `mirror-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    setBranchMapBusy(true);
-    setBranchMap((m) => (m ? { ...m, progress: '', result: null } : m));
-    const { unsub, flush } = subscribeBranchMapProgress(streamId);
+    setMirrorMgrBusy(true);
+    setMirrorMgr((m) => (m ? { ...m, progress: '', result: null } : m));
+    const { unsub, flush } = subscribeMirrorProgress(streamId);
     try {
-      const res = await window.api.buildSubmoduleMirrorCache({ mainRepoPath: repo.path, cacheRoot, streamId });
+      const res = await window.api.buildSubmoduleMirrorCache({ mainRepoPath: repoPath, cacheRoot: folder, streamId });
       flush();
       const cmd = res?.command || 'build submodule mirror cache';
       if (res?.ok === false) {
@@ -955,16 +1001,53 @@ export default function App() {
       } else {
         logInfo('git', `${repoName}: ${cmd}`, res?.output || '');
       }
-      setBranchMap((m) => (m ? { ...m, mirrorCache: res?.cacheRoot || m.mirrorCache, result: { ...res, kind: 'mirror' } } : m));
+      let info = mirrorMgr.info;
+      try { info = await window.api.getMirrorCacheInfo({ repoPath }); } catch { /* keep previous */ }
+      setMirrorMgr((m) => (m ? { ...m, info, result: { ...res, kind: 'build' } } : m));
+      // Reflect the new cache in the open Branch Map so its main-row buttons show.
+      if (res?.ok !== false) setBranchMap((bm) => (bm ? { ...bm, mirrorCache: res?.cacheRoot || bm.mirrorCache } : bm));
     } catch (e) {
       const msg = String(e?.message || e);
       logError('git', `${repoName}: build mirror cache failed`, msg);
-      setBranchMap((m) => (m ? { ...m, result: { ok: false, kind: 'mirror', output: msg } } : m));
+      setMirrorMgr((m) => (m ? { ...m, result: { ok: false, kind: 'build', output: msg } } : m));
     } finally {
       try { if (unsub) unsub(); } catch { /* ignore */ }
-      setBranchMapBusy(false);
+      setMirrorMgrBusy(false);
     }
-  }, [branchMap, left, right, subscribeBranchMapProgress]);
+  }, [mirrorMgr, subscribeMirrorProgress]);
+
+  // Refresh every bare mirror in the configured cache (git remote update
+  // --prune per mirror) from inside the Mirror manager modal.
+  const updateMirrorInManager = useCallback(async () => {
+    if (!mirrorMgr) return;
+    const { repoName, repoPath } = mirrorMgr;
+    if (!repoPath) return;
+
+    const streamId = `mirrorup-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    setMirrorMgrBusy(true);
+    setMirrorMgr((m) => (m ? { ...m, progress: '', result: null } : m));
+    const { unsub, flush } = subscribeMirrorProgress(streamId);
+    try {
+      const res = await window.api.updateMirrorCache({ mainRepoPath: repoPath, streamId });
+      flush();
+      const cmd = res?.command || 'git remote update --prune (every mirror)';
+      if (res?.ok === false) {
+        logError('git', `${repoName}: ${cmd}`, res?.output || '');
+      } else {
+        logInfo('git', `${repoName}: ${cmd}`, res?.output || '');
+      }
+      let info = mirrorMgr.info;
+      try { info = await window.api.getMirrorCacheInfo({ repoPath }); } catch { /* keep previous */ }
+      setMirrorMgr((m) => (m ? { ...m, info, result: { ...res, kind: 'update' } } : m));
+    } catch (e) {
+      const msg = String(e?.message || e);
+      logError('git', `${repoName}: update mirror cache failed`, msg);
+      setMirrorMgr((m) => (m ? { ...m, result: { ok: false, kind: 'update', output: msg } } : m));
+    } finally {
+      try { if (unsub) unsub(); } catch { /* ignore */ }
+      setMirrorMgrBusy(false);
+    }
+  }, [mirrorMgr, subscribeMirrorProgress]);
 
   // Refresh every bare mirror in the repo's configured mirror cache (git remote
   // update --prune per mirror), streaming progress into the Branch Map panel.
@@ -2861,12 +2944,29 @@ export default function App() {
           onOpenMirrorFolder={openFolderPath}
           onUpdateMirror={updateMirrorFromMap}
           onOpenTaskManager={openTaskManager}
-          onCreateMirror={createMirrorFromMap}
+          onOpenMirror={openMirrorManager}
           onUpdateSubmodules={updateSubmodulesFromMap}
           onMergeMain={mergeMainFromMap}
           onSwitchWorktreeBranch={setWorktreeBranchFromMap}
           progress={branchMap.progress}
           onClose={() => !branchMapBusy && setBranchMap(null)}
+        />
+      )}
+
+      {mirrorMgr && (
+        <MirrorPopup
+          side={mirrorMgr.side}
+          repoName={mirrorMgr.repoName}
+          repoPath={mirrorMgr.repoPath}
+          info={mirrorMgr.info}
+          busy={mirrorMgrBusy}
+          progress={mirrorMgr.progress}
+          result={mirrorMgr.result}
+          onPickFolder={pickMirrorFolder}
+          onBuild={buildMirror}
+          onUpdate={updateMirrorInManager}
+          onOpenFolder={openFolderPath}
+          onClose={() => !mirrorMgrBusy && setMirrorMgr(null)}
         />
       )}
 

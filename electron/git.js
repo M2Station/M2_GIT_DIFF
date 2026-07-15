@@ -663,6 +663,27 @@ async function getMirrorCache(cwd) {
   return '';
 }
 
+// Summarise the repo's mirror-cache setting for the Mirror manager UI: the
+// configured root, whether it exists on disk, and how many bare mirrors it
+// currently holds (direct child folders with a HEAD file).
+async function getMirrorCacheInfo(cwd) {
+  const cacheRoot = await getMirrorCache(cwd);
+  let exists = false;
+  let mirrorCount = 0;
+  if (cacheRoot) {
+    try {
+      if (fs.existsSync(cacheRoot)) {
+        exists = true;
+        const dirents = fs.readdirSync(cacheRoot, { withFileTypes: true }).filter((d) => d.isDirectory());
+        for (const d of dirents) {
+          if (fs.existsSync(path.join(cacheRoot, d.name, 'HEAD'))) mirrorCount++;
+        }
+      }
+    } catch { /* unreadable -> report as not existing */ }
+  }
+  return { cacheRoot, exists, mirrorCount };
+}
+
 /**
  * Create a new git worktree checked out from a branch or commit. The target
  * folder is `<parentDir>/<name>` (git creates it; it must not already exist).
@@ -1485,6 +1506,7 @@ module.exports = {
   buildSubmoduleMirrorCache,
   updateMirrorCache,
   getMirrorCache,
+  getMirrorCacheInfo,
   listWorktrees,
   removeWorktree,
   pruneWorktrees,

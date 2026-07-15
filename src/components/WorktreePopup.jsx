@@ -138,7 +138,7 @@ const GIT_SNIPPETS = [
 // button fetches from origin and fast-forwards every tracking branch; the result
 // transcript is shown inline so the tree can refresh in place. Closes on the ✕,
 // the backdrop, the Close button, or Escape.
-export default function WorktreePopup({ side, repoName, data, worktrees = [], mirrorCache = '', busy, result, progress, onUpdate, onRefresh, onSwitch, onWorktree, onRemoveWorktree, onOpenFolder, onOpenGitDir, onOpenMirrorFolder, onUpdateMirror, onOpenTaskManager, onCreateMirror, onUpdateSubmodules, onMergeMain, onSwitchWorktreeBranch, onClose }) {
+export default function WorktreePopup({ side, repoName, data, worktrees = [], mirrorCache = '', busy, result, progress, onUpdate, onRefresh, onSwitch, onWorktree, onRemoveWorktree, onOpenFolder, onOpenGitDir, onOpenMirrorFolder, onUpdateMirror, onOpenTaskManager, onOpenMirror, onUpdateSubmodules, onMergeMain, onSwitchWorktreeBranch, onClose }) {
   const t = useT();
   const { current, local = [], remote = [] } = data || {};
   const [expanded, setExpanded] = useState(() => new Set());
@@ -670,7 +670,10 @@ export default function WorktreePopup({ side, repoName, data, worktrees = [], mi
                           title={t('branchMap.openMirrorFolderTitle', { path: mirrorCache })}
                           aria-label={t('branchMap.openMirrorFolderTitle', { path: mirrorCache })}
                         >
-                          🗂
+                          <svg className="bmp-wt-svg" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false">
+                            <path fill="currentColor" opacity="0.4" d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2Z" />
+                            <path fill="currentColor" d="M3.3 20.2 5.9 12a2 2 0 0 1 1.9-1.4h13.4c.7 0 1.2.68 1 1.35L20.7 19a2.5 2.5 0 0 1-2.4 1.8H4a1 1 0 0 1-.7-.6Z" />
+                          </svg>
                         </button>
                       )}
                       {w.isMain && w.gitDir && (
@@ -919,7 +922,7 @@ export default function WorktreePopup({ side, repoName, data, worktrees = [], mi
             <button
               type="button"
               className="btn"
-              onClick={onCreateMirror}
+              onClick={onOpenMirror}
               disabled={busy}
               title={t('branchMap.createMirrorTitle')}
             >
