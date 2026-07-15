@@ -16,13 +16,16 @@ import { useT } from '../lib/i18n.js';
 // inline so the window stays put. Closes on the ✕, the backdrop, Cancel, or
 // Escape. `source` = { kind:'branch'|'commit', ref, isRemote, label,
 // defaultName, defaultBranch }.
-export default function CreateWorktreePopup({ side, repoName, source, busy, result, onPickDir, onSubmit, onClose }) {
+export default function CreateWorktreePopup({ side, repoName, source, busy, result, branchInUse = false, inUseAt = '', onPickDir, onSubmit, onClose }) {
   const t = useT();
   const [parentDir, setParentDir] = useState('');
   const [name, setName] = useState(source?.defaultName || '');
   const [newBranch, setNewBranch] = useState(source?.defaultBranch || '');
 
   const created = !!(result && result.ok !== false);
+  // git refuses to check out a branch that's already checked out in another
+  // worktree, so when the source branch is in use we require a new branch name.
+  const requireNewBranch = branchInUse && !newBranch.trim();
 
   // Close on Escape (capture so it wins over the app's global handlers).
   useEffect(() => {
@@ -46,13 +49,14 @@ export default function CreateWorktreePopup({ side, repoName, source, busy, resu
     if (busy || created) return;
     const nm = name.trim();
     if (!parentDir || !nm) return;
+    if (branchInUse && !newBranch.trim()) return;
     onSubmit({ parentDir: parentDir.trim(), name: nm, newBranch: newBranch.trim() });
-  }, [busy, created, name, parentDir, newBranch, onSubmit]);
+  }, [busy, created, name, parentDir, newBranch, branchInUse, onSubmit]);
 
   const sideLabel = side === 'L' ? t('common.left') : side === 'R' ? t('common.right') : '';
   const sep = parentDir.includes('\\') ? '\\' : '/';
   const preview = parentDir && name.trim() ? `${parentDir}${sep}${name.trim()}` : '';
-  const canCreate = !busy && !created && !!parentDir && !!name.trim();
+  const canCreate = !busy && !created && !!parentDir && !!name.trim() && !requireNewBranch;
 
   const isCommit = source?.kind === 'commit';
   const branchFieldLabel = isCommit
@@ -131,6 +135,9 @@ export default function CreateWorktreePopup({ side, repoName, source, busy, resu
               spellCheck={false}
               disabled={busy}
             />
+            {branchInUse && (
+              <div className="wtp-req">{t('worktree.branchInUse', { path: inUseAt || '' })}</div>
+            )}
           </div>
 
           {preview && (

@@ -3510,6 +3510,13 @@ mark {
   font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
   color: var(--text);
 }
+.wtp-req {
+  margin-top: 4px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--unique-bd, #eb4650);
+  word-break: break-all;
+}
 .wtp-foot {
   display: flex;
   justify-content: flex-end;
