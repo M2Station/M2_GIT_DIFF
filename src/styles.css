@@ -2954,7 +2954,8 @@ mark {
   opacity: 0.35;
   cursor: default;
 }
-.bmp-wt-sync {
+.bmp-wt-sync,
+.bmp-wt-merge {
   flex: none;
   border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
   background: color-mix(in srgb, var(--accent) 14%, transparent);
@@ -2967,10 +2968,12 @@ mark {
   border-radius: 999px;
   white-space: nowrap;
 }
-.bmp-wt-sync:hover:not(:disabled) {
+.bmp-wt-sync:hover:not(:disabled),
+.bmp-wt-merge:hover:not(:disabled) {
   background: color-mix(in srgb, var(--accent) 24%, transparent);
 }
-.bmp-wt-sync:disabled {
+.bmp-wt-sync:disabled,
+.bmp-wt-merge:disabled {
   opacity: 0.4;
   cursor: default;
 }

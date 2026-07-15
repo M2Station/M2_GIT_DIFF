@@ -138,7 +138,7 @@ const GIT_SNIPPETS = [
 // button fetches from origin and fast-forwards every tracking branch; the result
 // transcript is shown inline so the tree can refresh in place. Closes on the ✕,
 // the backdrop, the Close button, or Escape.
-export default function WorktreePopup({ side, repoName, data, worktrees = [], busy, result, progress, onUpdate, onRefresh, onSwitch, onWorktree, onRemoveWorktree, onOpenFolder, onOpenTaskManager, onCreateMirror, onUpdateSubmodules, onClose }) {
+export default function WorktreePopup({ side, repoName, data, worktrees = [], busy, result, progress, onUpdate, onRefresh, onSwitch, onWorktree, onRemoveWorktree, onOpenFolder, onOpenTaskManager, onCreateMirror, onUpdateSubmodules, onMergeMain, onClose }) {
   const t = useT();
   const { current, local = [], remote = [] } = data || {};
   const [expanded, setExpanded] = useState(() => new Set());
@@ -565,6 +565,17 @@ export default function WorktreePopup({ side, repoName, data, worktrees = [], bu
                       {!w.isMain && (
                         <button
                           type="button"
+                          className="bmp-wt-merge"
+                          onClick={() => onMergeMain(w.path)}
+                          disabled={busy || w.prunable}
+                          title={t('branchMap.mergeMainTitle')}
+                        >
+                          {t('branchMap.mergeMainShort')}
+                        </button>
+                      )}
+                      {!w.isMain && (
+                        <button
+                          type="button"
                           className="bmp-wt-sync"
                           onClick={() => onUpdateSubmodules(w.path)}
                           disabled={busy || w.prunable}
@@ -693,11 +704,15 @@ export default function WorktreePopup({ side, repoName, data, worktrees = [], bu
                               network: (result.items || []).filter((i) => i.source === 'network').length,
                               total: (result.items || []).length
                             })
-                        : t('branchMap.updateDone', {
-                            updated: result?.updated ?? 0,
-                            skipped: result?.skipped ?? 0,
-                            total: result?.total ?? 0
-                          })}
+                        : result?.kind === 'merge'
+                          ? result.ok === false
+                            ? t('branchMap.mergeMainFailed')
+                            : t('branchMap.mergeMainDone')
+                          : t('branchMap.updateDone', {
+                              updated: result?.updated ?? 0,
+                              skipped: result?.skipped ?? 0,
+                              total: result?.total ?? 0
+                            })}
               </span>
               {logText && (
                 <button
