@@ -273,7 +273,7 @@
     "folderName": "Worktree folder name",
     "folderNamePlaceholder": "New folder name",
     "newBranchLocal": "New branch (optional — blank checks out the branch)",
-    "newBranchRemote": "New local branch (tracks the remote)",
+    "newBranchRemote": "New local branch (tracks the remote; blank uses a detached HEAD)",
     "newBranchCommit": "New branch (optional — blank uses a detached HEAD)",
     "newBranchPlaceholder": "Branch name",
     "branchInUse": "This branch is already checked out in another worktree ({path}). Enter a new branch name to create a worktree from it.",
