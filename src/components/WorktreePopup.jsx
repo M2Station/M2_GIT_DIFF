@@ -126,6 +126,7 @@ const GIT_SNIPPETS = [
   { id: 'status', cmd: 'git status' },
   { id: 'fetch', cmd: 'git fetch --all --prune' },
   { id: 'pullRebase', cmd: 'git pull --rebase' },
+  { id: 'mergeMain', cmd: 'git merge main' },
   { id: 'log', cmd: 'git log --oneline --graph --decorate -20' },
   { id: 'branchVV', cmd: 'git branch -vv' },
   { id: 'resetHard', cmd: 'git reset --hard HEAD' },
@@ -496,7 +497,7 @@ export default function WorktreePopup({ side, repoName, data, worktrees = [], bu
                     type="button"
                     className={'bsp-cmd-row' + (copiedCmd === s.cmd ? ' copied' : '')}
                     onClick={() => copyCmd(s.cmd)}
-                    title={t('branchMap.copyCmdHint')}
+                    title={t('branchMap.cmdTip.' + s.id)}
                   >
                     <span className="bsp-cmd-desc">{t('branchMap.cmd.' + s.id)}</span>
                     <code className="bsp-cmd-code">{s.cmd}</code>
