@@ -138,7 +138,7 @@ const GIT_SNIPPETS = [
 // button fetches from origin and fast-forwards every tracking branch; the result
 // transcript is shown inline so the tree can refresh in place. Closes on the ✕,
 // the backdrop, the Close button, or Escape.
-export default function WorktreePopup({ side, repoName, data, worktrees = [], busy, result, progress, onUpdate, onRefresh, onSwitch, onWorktree, onRemoveWorktree, onOpenFolder, onOpenTaskManager, onCreateMirror, onUpdateSubmodules, onMergeMain, onClose }) {
+export default function WorktreePopup({ side, repoName, data, worktrees = [], busy, result, progress, onUpdate, onRefresh, onSwitch, onWorktree, onRemoveWorktree, onOpenFolder, onOpenTaskManager, onCreateMirror, onUpdateSubmodules, onMergeMain, onSwitchWorktreeBranch, onClose }) {
   const t = useT();
   const { current, local = [], remote = [] } = data || {};
   const [expanded, setExpanded] = useState(() => new Set());
@@ -148,6 +148,20 @@ export default function WorktreePopup({ side, repoName, data, worktrees = [], bu
   const [confirmPath, setConfirmPath] = useState(null);
   // Path of the worktree currently being removed, for the inline progress cue.
   const [removingPath, setRemovingPath] = useState(null);
+  // Inline "name a branch here" editor for a detached-HEAD worktree row.
+  const [branchEditPath, setBranchEditPath] = useState(null);
+  const [branchName, setBranchName] = useState('');
+  const confirmSetBranch = useCallback((wtPath) => {
+    const nm = branchName.trim();
+    if (!nm) return;
+    onSwitchWorktreeBranch(wtPath, nm);
+    setBranchEditPath(null);
+    setBranchName('');
+  }, [branchName, onSwitchWorktreeBranch]);
+  const cancelSetBranch = useCallback(() => {
+    setBranchEditPath(null);
+    setBranchName('');
+  }, []);
   const searchRef = useRef(null);
   // Keep the live progress pane pinned to the newest output.
   const progressRef = useRef(null);
@@ -565,21 +579,65 @@ export default function WorktreePopup({ side, repoName, data, worktrees = [], bu
                   ) : (
                     <span className="bmp-wt-actions">
                       {!w.isMain && w.linkSource && (
-                        <button
-                          type="button"
-                          className="bmp-wt-merge"
-                          onClick={() => onMergeMain(w.path, w.linkSource)}
-                          disabled={busy || w.prunable || w.detached}
-                          title={
-                            w.detached
-                              ? t('branchMap.mergeMainDetachedTitle')
-                              : t('branchMap.mergeMainTitle', { source: w.linkSource })
-                          }
-                        >
-                          {w.detached
-                            ? t('branchMap.detached')
-                            : t('branchMap.mergeMainShort', { source: w.linkSource })}
-                        </button>
+                        w.detached ? (
+                          branchEditPath === w.path ? (
+                            <span className="bmp-wt-setbranch">
+                              <input
+                                type="text"
+                                className="bmp-wt-branch-input"
+                                value={branchName}
+                                onChange={(e) => setBranchName(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') { e.preventDefault(); confirmSetBranch(w.path); }
+                                  else if (e.key === 'Escape') { e.preventDefault(); cancelSetBranch(); }
+                                }}
+                                placeholder={t('branchMap.setBranchPlaceholder')}
+                                spellCheck={false}
+                                autoFocus
+                                disabled={busy}
+                              />
+                              <button
+                                type="button"
+                                className="bmp-wt-merge"
+                                onClick={() => confirmSetBranch(w.path)}
+                                disabled={busy || !branchName.trim()}
+                                title={t('branchMap.setBranchConfirmTitle')}
+                              >
+                                {t('branchMap.setBranchConfirm')}
+                              </button>
+                              <button
+                                type="button"
+                                className="bmp-wt-cancel"
+                                onClick={cancelSetBranch}
+                                disabled={busy}
+                                title={t('common.cancel')}
+                                aria-label={t('common.cancel')}
+                              >
+                                ✕
+                              </button>
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              className="bmp-wt-merge detached"
+                              onClick={() => { setBranchEditPath(w.path); setBranchName(''); }}
+                              disabled={busy || w.prunable}
+                              title={t('branchMap.mergeMainDetachedTitle')}
+                            >
+                              {t('branchMap.detached')}
+                            </button>
+                          )
+                        ) : (
+                          <button
+                            type="button"
+                            className="bmp-wt-merge"
+                            onClick={() => onMergeMain(w.path, w.linkSource)}
+                            disabled={busy || w.prunable}
+                            title={t('branchMap.mergeMainTitle', { source: w.linkSource })}
+                          >
+                            {t('branchMap.mergeMainShort', { source: w.linkSource })}
+                          </button>
+                        )
                       )}
                       {!w.isMain && (
                         <button
@@ -718,6 +776,10 @@ export default function WorktreePopup({ side, repoName, data, worktrees = [], bu
                             : result.alreadyUpToDate
                               ? t('branchMap.mergeMainSame', { source: result.source || '' })
                               : t('branchMap.mergeMainDone', { source: result.source || '' })
+                          : result?.kind === 'setbranch'
+                            ? result.ok === false
+                              ? t('branchMap.setBranchFailed')
+                              : t('branchMap.setBranchDone', { branch: result.branch || '' })
                           : t('branchMap.updateDone', {
                               updated: result?.updated ?? 0,
                               skipped: result?.skipped ?? 0,
