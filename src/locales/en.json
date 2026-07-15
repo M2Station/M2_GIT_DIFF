@@ -334,6 +334,13 @@
     }
   },
   "patchImport": {
+    "purpose": "Preview this patch against the selected repo, check for conflicts, then apply it to the working tree (no commit).",
+    "sectionStatus": "Apply check",
+    "sectionWhy": "Why it will not apply cleanly",
+    "sectionFiles": "Files changed",
+    "sectionPatch": "Patch contents",
+    "sectionResult": "Apply result",
+    "resize": "Drag to resize",
     "title": "Import patch",
     "loading": "Inspecting patch\u2026",
     "clean": "\u2705 Applies cleanly to this repo.",

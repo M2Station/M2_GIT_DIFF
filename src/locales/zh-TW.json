@@ -334,6 +334,13 @@
     }
   },
   "patchImport": {
+    "purpose": "先預覽這個 patch 對選定 repo 的影響、檢查衝突，再套用到工作區（不 commit）。",
+    "sectionStatus": "套用檢查",
+    "sectionWhy": "無法乾淨套用的原因",
+    "sectionFiles": "變更的檔案",
+    "sectionPatch": "Patch 內容",
+    "sectionResult": "套用結果",
+    "resize": "拖曳調整大小",
     "title": "匯入 Patch",
     "loading": "檢查 patch 中\u2026",
     "clean": "\u2705 可乾淨套用到這個 repo。",

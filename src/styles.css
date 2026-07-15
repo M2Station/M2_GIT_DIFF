@@ -3194,8 +3194,11 @@ mark {
   padding: 16px;
 }
 .pi {
-  width: min(860px, 100%);
-  max-height: min(88vh, 900px);
+  position: fixed;
+  min-width: 420px;
+  min-height: 320px;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 16px);
   display: flex;
   flex-direction: column;
   background: var(--panel);
@@ -3212,6 +3215,8 @@ mark {
   padding: 8px 10px;
   background: var(--bg-soft);
   border-bottom: 1px solid var(--line);
+  user-select: none;
+  cursor: move;
 }
 .pi-title { font-weight: 600; color: var(--text); }
 .pi-side { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -3227,6 +3232,14 @@ mark {
 }
 .pi-x:hover:not(:disabled) { color: var(--text); background: rgba(255, 255, 255, 0.08); }
 .pi-x:disabled { opacity: 0.4; cursor: default; }
+.pi-purpose {
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
 .pi-sub {
   padding: 6px 12px;
   border-bottom: 1px solid var(--line);
@@ -3236,9 +3249,28 @@ mark {
   font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
   color: var(--text);
 }
+.pi-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 8px;
+}
+.pi-body--center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 .pi-loading { padding: 20px; text-align: center; color: var(--muted); }
+.pi-label {
+  margin: 10px 12px 3px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
 .pi-banner {
-  margin: 8px 12px 0;
+  margin: 0 12px;
   padding: 7px 10px;
   border-radius: 6px;
   font-size: 12px;
@@ -3266,9 +3298,9 @@ mark {
   border-color: color-mix(in srgb, var(--accent) 40%, transparent);
 }
 .pi-check {
-  margin: 6px 12px 0;
+  margin: 0 12px;
   padding: 6px 8px;
-  max-height: 120px;
+  max-height: 160px;
   overflow: auto;
   background: var(--bg-soft);
   border: 1px solid var(--line);
@@ -3279,7 +3311,7 @@ mark {
   white-space: pre-wrap;
 }
 .pi-stat {
-  margin: 8px 12px 0;
+  margin: 0 12px;
   padding: 6px 8px;
   background: var(--bg-soft);
   border: 1px solid var(--line);
@@ -3289,13 +3321,11 @@ mark {
   color: var(--muted);
   white-space: pre-wrap;
   overflow: auto;
-  max-height: 140px;
+  max-height: 200px;
 }
 .pi-content {
-  flex: 1 1 auto;
-  min-height: 120px;
-  overflow: auto;
-  margin: 8px 12px;
+  margin: 0 12px 8px;
+  overflow-x: auto;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--bg-soft);
@@ -3342,6 +3372,23 @@ mark {
 }
 .pi-note { font-size: 11px; color: var(--muted); }
 .pi-foot-actions { margin-left: auto; display: flex; gap: 8px; }
+.pi-resize {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+  border-radius: 0 0 8px 0;
+  background: linear-gradient(
+    135deg,
+    transparent 0 50%,
+    color-mix(in srgb, var(--accent) 55%, transparent) 50% 60%,
+    transparent 60% 72%,
+    color-mix(in srgb, var(--accent) 55%, transparent) 72% 82%,
+    transparent 82%
+  );
+}
 
 /* ---------------- Worktree popup (git worktree add) ---------------- */
 .wtp-backdrop {

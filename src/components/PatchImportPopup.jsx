@@ -6,7 +6,7 @@
  * This source code is licensed under the MIT License found in the
  * LICENSE file in the root directory of this source tree.
  */
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useT } from '../lib/i18n.js';
 
 // Classify a patch line so the preview can colour it like a diff. Order matters:
@@ -60,6 +60,71 @@ export default function PatchImportPopup({ side, repoName, repoPath, patchPath, 
 
   const fileName = useMemo(() => String(patchPath || '').split(/[\\/]/).pop(), [patchPath]);
   const sideName = side === 'L' ? t('common.left') : side === 'R' ? t('common.right') : '';
+
+  // Floating-window geometry so the popup can be dragged (by its header) and
+  // resized (bottom-right grip) — a patch preview usually needs more room than
+  // a fixed modal. Position + size are clamped to the viewport.
+  const W0 = 820;
+  const H0 = Math.min(Math.round(window.innerHeight * 0.84), 820);
+  const [pos, setPos] = useState(() => ({
+    x: Math.max(12, Math.round((window.innerWidth - W0) / 2)),
+    y: Math.max(20, Math.round(window.innerHeight * 0.08)),
+  }));
+  const [size, setSize] = useState(() => ({ w: W0, h: H0 }));
+  const dragRef = useRef(null);
+  const resizeRef = useRef(null);
+
+  const onDragStart = useCallback(
+    (e) => {
+      if (e.target.closest('button')) return;
+      e.preventDefault();
+      dragRef.current = { sx: e.clientX, sy: e.clientY, bx: pos.x, by: pos.y };
+      const onMove = (ev) => {
+        const d = dragRef.current;
+        if (!d) return;
+        const nx = d.bx + (ev.clientX - d.sx);
+        const ny = d.by + (ev.clientY - d.sy);
+        setPos({
+          x: Math.min(Math.max(-size.w + 80, nx), window.innerWidth - 60),
+          y: Math.min(Math.max(0, ny), window.innerHeight - 40),
+        });
+      };
+      const onUp = () => {
+        dragRef.current = null;
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+      };
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+    },
+    [pos.x, pos.y, size.w]
+  );
+
+  const onResizeStart = useCallback(
+    (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      resizeRef.current = { sx: e.clientX, sy: e.clientY, bw: size.w, bh: size.h };
+      const onMove = (ev) => {
+        const r = resizeRef.current;
+        if (!r) return;
+        const nw = r.bw + (ev.clientX - r.sx);
+        const nh = r.bh + (ev.clientY - r.sy);
+        setSize({
+          w: Math.min(Math.max(420, nw), window.innerWidth - pos.x - 12),
+          h: Math.min(Math.max(320, nh), window.innerHeight - pos.y - 12),
+        });
+      };
+      const onUp = () => {
+        resizeRef.current = null;
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+      };
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+    },
+    [size.w, size.h, pos.x, pos.y]
+  );
 
   // Inspect the patch on mount (content + diffstat + conflict check).
   useEffect(() => {
@@ -134,8 +199,14 @@ export default function PatchImportPopup({ side, repoName, repoPath, patchPath, 
 
   return (
     <div className="pi-backdrop" onMouseDown={() => !applying && onClose()}>
-      <div className="pi" onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-label={t('patchImport.title')}>
-        <div className="pi-head">
+      <div
+        className="pi"
+        style={{ left: pos.x, top: pos.y, width: size.w, height: size.h }}
+        onMouseDown={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-label={t('patchImport.title')}
+      >
+        <div className="pi-head" onPointerDown={onDragStart}>
           <span className="pi-title">{t('patchImport.title')}</span>
           <span className="pi-side">{sideName}{repoName ? ` \u00b7 ${repoName}` : ''}</span>
           <button className="pi-x" onClick={onClose} disabled={applying} title={t('common.closeEsc')} aria-label={t('common.close')}>
@@ -143,33 +214,56 @@ export default function PatchImportPopup({ side, repoName, repoPath, patchPath, 
           </button>
         </div>
 
+        <div className="pi-purpose">{t('patchImport.purpose')}</div>
+
         <div className="pi-sub">
           <span className="pi-file" title={patchPath}>📄 {fileName}</span>
         </div>
 
         {loading ? (
-          <div className="pi-loading">{t('patchImport.loading')}</div>
+          <div className="pi-body pi-body--center">
+            <div className="pi-loading">{t('patchImport.loading')}</div>
+          </div>
         ) : error ? (
-          <div className="pi-banner pi-conflict">{error}</div>
+          <div className="pi-body">
+            <div className="pi-label">{t('patchImport.sectionStatus')}</div>
+            <div className="pi-banner pi-conflict">{error}</div>
+          </div>
         ) : (
-          <>
+          <div className="pi-body">
+            <div className="pi-label">{t('patchImport.sectionStatus')}</div>
             <div className={'pi-banner ' + bannerClass}>{bannerText}</div>
+
             {!info.clean && info.checkOutput && (
-              <pre className="pi-check">{info.checkOutput}</pre>
+              <>
+                <div className="pi-label">{t('patchImport.sectionWhy')}</div>
+                <pre className="pi-check">{info.checkOutput}</pre>
+              </>
             )}
-            {info.stat && <pre className="pi-stat">{info.stat}</pre>}
+
+            {info.stat && (
+              <>
+                <div className="pi-label">{t('patchImport.sectionFiles')}</div>
+                <pre className="pi-stat">{info.stat}</pre>
+              </>
+            )}
+
+            <div className="pi-label">{t('patchImport.sectionPatch')}</div>
             <div className="pi-content" ref={contentRef}>
               {lines.map((l, i) => (
                 <div key={i} className={'pi-line ' + patchLineClass(l)}>{l || '\u00a0'}</div>
               ))}
             </div>
-          </>
-        )}
 
-        {result && (
-          <div className={'pi-result' + (result.ok ? '' : ' fail')}>
-            <div className="pi-result-msg">{result.ok ? t('patchImport.appliedOk') : t('patchImport.appliedFail')}</div>
-            {result.output && <pre className="pi-result-out">{result.output}</pre>}
+            {result && (
+              <>
+                <div className="pi-label">{t('patchImport.sectionResult')}</div>
+                <div className={'pi-result' + (result.ok ? '' : ' fail')}>
+                  <div className="pi-result-msg">{result.ok ? t('patchImport.appliedOk') : t('patchImport.appliedFail')}</div>
+                  {result.output && <pre className="pi-result-out">{result.output}</pre>}
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -190,6 +284,13 @@ export default function PatchImportPopup({ side, repoName, repoPath, patchPath, 
             </button>
           </span>
         </div>
+
+        <div
+          className="pi-resize"
+          onPointerDown={onResizeStart}
+          title={t('patchImport.resize')}
+          aria-hidden="true"
+        />
       </div>
     </div>
   );
