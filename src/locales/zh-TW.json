@@ -277,7 +277,7 @@
     "folderName": "Worktree 資料夾名稱",
     "folderNamePlaceholder": "新資料夾名稱",
     "newBranchLocal": "新分支（選填 — 留空則直接切出此分支）",
-    "newBranchRemote": "新本地分支（追蹤遠端）",
+    "newBranchRemote": "新本地分支（追蹤遠端；留空則使用分離 HEAD）",
     "newBranchCommit": "新分支（選填 — 留空則使用分離 HEAD）",
     "newBranchPlaceholder": "分支名稱",
     "branchInUse": "此分支已在另一個 worktree 被 checkout（{path}）。請填一個新分支名，才能從它建立 worktree。",
