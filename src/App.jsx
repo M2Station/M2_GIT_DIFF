@@ -29,6 +29,7 @@ import HelpPopup from './components/HelpPopup.jsx';
 import SettingsPopup from './components/SettingsPopup.jsx';
 import FolderPicker from './components/FolderPicker.jsx';
 import LogPanel from './components/LogPanel.jsx';
+import UpdatePopup from './components/UpdatePopup.jsx';
 import logoUrl from './assets/logo.svg';
 import { computeDiff, applyFuzzy, matchesQuery, alignLayout, patchSimilarity } from './lib/diff.js';
 import { ROW_HEIGHT, GUTTER_WIDTH, PAGE_BATCH, HISTORY_LIMIT } from './lib/constants.js';
@@ -213,6 +214,12 @@ export default function App() {
   const [helpOpen, setHelpOpen] = useState(false);
   // Settings modal (language picker, etc.).
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Auto-update: `updateInfo` holds the result of the last successful check that
+  // found a newer release (with a matching installer asset); `updateOpen` drives
+  // the UpdatePopup. A check runs once automatically on launch (packaged builds
+  // only) and can be re-run manually from Settings.
+  const [updateInfo, setUpdateInfo] = useState(null);
+  const [updateOpen, setUpdateOpen] = useState(false);
   // Centralized error / log panel (git failures, cache problems, export errors).
   // `logEntries` is the live store snapshot; `logSeenId` marks the newest entry
   // the user has already seen so the toolbar badge can count only NEW problems.
@@ -229,6 +236,36 @@ export default function App() {
     setLogOpen(true);
     setLogSeenId(logEntries.length ? logEntries[logEntries.length - 1].id : 0);
   }, [logEntries]);
+
+  // Open the update prompt for a check result that found a newer release. Shared
+  // by the automatic launch check and the manual "Check for updates" in Settings
+  // (which hands off its result here and steps aside).
+  const showUpdate = useCallback((info) => {
+    if (!info) return;
+    setUpdateInfo(info);
+    setUpdateOpen(true);
+    setSettingsOpen(false);
+  }, []);
+
+  // One automatic check a few seconds after launch — packaged builds only (dev
+  // loads over http://localhost, prod from file://), so developing doesn't nag.
+  // Stays silent unless a newer release with an installer is actually found.
+  useEffect(() => {
+    if (window.location.protocol !== 'file:') return undefined;
+    let cancelled = false;
+    const id = setTimeout(async () => {
+      try {
+        const res = await window.api.checkUpdate();
+        if (!cancelled && res && res.hasUpdate) showUpdate(res);
+      } catch {
+        /* offline / failed — stay quiet */
+      }
+    }, 3000);
+    return () => {
+      cancelled = true;
+      clearTimeout(id);
+    };
+  }, [showUpdate]);
   // Single-repo mode: null = dual compare; 'L' or 'R' = show only that repo,
   // full width. Toggled from the toolbar.
   const [single, setSingle] = useState(null);
@@ -3010,7 +3047,11 @@ export default function App() {
 
       {helpOpen && <HelpPopup onClose={() => setHelpOpen(false)} />}
 
-      {settingsOpen && <SettingsPopup onClose={() => setSettingsOpen(false)} />}
+      {settingsOpen && <SettingsPopup onClose={() => setSettingsOpen(false)} onShowUpdate={showUpdate} />}
+
+      {updateOpen && updateInfo && (
+        <UpdatePopup info={updateInfo} onClose={() => setUpdateOpen(false)} />
+      )}
 
       {pickerSide && (
         <FolderPicker onPick={onPickFolder} onClose={() => setPickerSide(null)} />

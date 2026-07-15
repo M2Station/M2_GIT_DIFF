@@ -89,7 +89,27 @@
     "preload": "預載入筆數 / Pre-load commits",
     "preloadHint": "開啟 repo 時先載入的 commit 筆數，加快開啟速度。預設 250 筆。按「Load all logs」才會載入完整的「載入筆數 / Commits to load」。",
     "autoFill": "自動補齊範圍 / Auto-fill range",
-    "autoFillHint": "當兩側歷史深度不一致時，自動把較淺的一側往下載入，以對齊因截斷而被藏起的配對（0 = 關閉）。此值同時是每次自動載入的上限。預設 100 筆。"
+    "autoFillHint": "當兩側歷史深度不一致時，自動把較淺的一側往下載入，以對齊因截斷而被藏起的配對（0 = 關閉）。此值同時是每次自動載入的上限。預設 100 筆。",
+    "updates": "軟體更新 / Updates",
+    "updatesHint": "向 GitHub 檢查是否有新版本。App 啟動時也會自動檢查一次。",
+    "checkUpdate": "檢查更新",
+    "currentVersion": "目前版本：v{version}"
+  },
+  "update": {
+    "title": "發現新版本",
+    "notes": "更新內容",
+    "viewRelease": "在 GitHub 檢視發行說明",
+    "download": "下載",
+    "downloading": "下載中… {pct}%（{received} / {total} MB）",
+    "downloadingShort": "下載中…",
+    "readyMsg": "下載完成，可以安裝了。",
+    "install": "安裝並重新啟動",
+    "installing": "安裝中…",
+    "later": "稍後",
+    "retry": "重試",
+    "checking": "檢查中…",
+    "upToDate": "已是最新版本。",
+    "noAssetYet": "已有 {version} 版，但安裝檔尚未發佈。"
   },
   "search": {
     "title": "🔍 Search",

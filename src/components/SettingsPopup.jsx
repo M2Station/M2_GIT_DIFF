@@ -28,12 +28,51 @@ import {
 // and theme pickers; both lists are discovered automatically from the JSON
 // files in src/locales and src/themes. Closes on the ✕ button, a backdrop
 // click, or Escape.
-export default function SettingsPopup({ onClose }) {
+export default function SettingsPopup({ onClose, onShowUpdate }) {
   const { t, lang, setLang, locales } = useI18n();
   const { theme, setTheme, themes } = useTheme();
   const [commitLimit, setCommitLimitState] = useState(() => String(getCommitLimit()));
   const [preload, setPreloadState] = useState(() => String(getPreloadCount()));
   const [autoFill, setAutoFillState] = useState(() => String(getAutoFillRange()));
+  const [version, setVersion] = useState('');
+  // idle | checking | latest | error
+  const [updateState, setUpdateState] = useState('idle');
+  const [updateMsg, setUpdateMsg] = useState('');
+
+  // Show the running app version next to the check button.
+  useEffect(() => {
+    let alive = true;
+    window.api.getAppVersion?.()
+      .then((v) => { if (alive) setVersion(v || ''); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
+  // Manual "Check for updates": hands a found update off to the full prompt
+  // (via onShowUpdate) and otherwise reports "up to date" / an error inline.
+  const runCheck = async () => {
+    setUpdateState('checking');
+    setUpdateMsg('');
+    try {
+      const res = await window.api.checkUpdate();
+      if (res && res.hasUpdate) {
+        onShowUpdate?.(res);
+        setUpdateState('idle');
+      } else if (res && res.updateWithoutAsset) {
+        setUpdateState('latest');
+        setUpdateMsg(t('update.noAssetYet', { version: res.latestVersion }));
+      } else if (res && res.error) {
+        setUpdateState('error');
+        setUpdateMsg(res.error);
+      } else {
+        setUpdateState('latest');
+        setUpdateMsg(t('update.upToDate'));
+      }
+    } catch (e) {
+      setUpdateState('error');
+      setUpdateMsg(String(e?.message || e));
+    }
+  };
 
   useEffect(() => {
     const onKey = (e) => {
@@ -149,6 +188,30 @@ export default function SettingsPopup({ onClose }) {
               onBlur={() => setAutoFillState(String(setAutoFillRange(autoFill)))}
             />
             <p className="settings-hint">{t('settings.autoFillHint')}</p>
+          </div>
+
+          <div className="settings-field">
+            <label className="settings-label">{t('settings.updates')}</label>
+            <div className="settings-update-row">
+              <span className="settings-version">
+                {t('settings.currentVersion', { version: version || '—' })}
+              </span>
+              <button
+                type="button"
+                className="btn"
+                onClick={runCheck}
+                disabled={updateState === 'checking'}
+              >
+                {updateState === 'checking' ? t('update.checking') : t('settings.checkUpdate')}
+              </button>
+            </div>
+            {updateState === 'latest' ? (
+              <p className="settings-hint ok">✓ {updateMsg}</p>
+            ) : updateState === 'error' ? (
+              <p className="settings-hint err">⚠ {updateMsg}</p>
+            ) : (
+              <p className="settings-hint">{t('settings.updatesHint')}</p>
+            )}
           </div>
         </div>
 

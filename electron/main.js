@@ -15,6 +15,7 @@ const fs = require('node:fs');
 const git = require('./git');
 const db = require('./db');
 const fsdialog = require('./fsdialog');
+const updater = require('./update');
 
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -237,6 +238,11 @@ app.whenReady().then(() => {
   createWindow();
   db.init(app.getPath('userData'));
 
+  // Sweep any installer left behind by a previous update. A running installer
+  // keeps its file locked on Windows, so the download that just updated the app
+  // is deleted here, on the next launch — completing the update's cleanup step.
+  updater.cleanupUpdates();
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
@@ -264,6 +270,55 @@ ipcMain.handle('app:setStartupBg', (_evt, color) => {
   } catch {
     return false;
   }
+});
+
+// ---- Auto-update (see electron/update.js) ----
+
+// The running app version — shown in Settings and used as the compare baseline.
+ipcMain.handle('app:getVersion', () => app.getVersion());
+
+// Query GitHub Releases for a newer build. Returns a plain descriptor, or an
+// { error } object, so a failed/offline check degrades quietly in the UI.
+ipcMain.handle('update:check', async () => {
+  try {
+    return await updater.checkForUpdate();
+  } catch (e) {
+    return { hasUpdate: false, error: String(e?.message || e) };
+  }
+});
+
+// Download the installer for the chosen asset, streaming throttled progress to
+// the renderer over 'update:progress'. Resolves to { path, name }.
+ipcMain.handle('update:download', async (evt, payload) => {
+  const asset = payload && payload.asset;
+  if (!asset) throw new Error('asset is required');
+  let last = 0;
+  const onProgress = (received, total) => {
+    const now = Date.now();
+    // Throttle to ~15 fps, but always let the final 100% through.
+    if (now - last < 66 && !(total && received >= total)) return;
+    last = now;
+    try {
+      evt.sender.send('update:progress', { received, total });
+    } catch {
+      /* window gone */
+    }
+  };
+  return updater.downloadUpdate(asset, onProgress);
+});
+
+// Run a downloaded installer and quit so it can replace the running exe. The
+// quit is deferred a beat so this call resolves in the renderer first.
+ipcMain.handle('update:install', async (_evt, payload) => {
+  updater.installUpdate(payload && payload.path);
+  setTimeout(() => app.quit(), 400);
+  return { ok: true };
+});
+
+// Delete any downloaded installer immediately (e.g. the user chose "Later").
+ipcMain.handle('update:cleanup', async () => {
+  updater.cleanupUpdates();
+  return { ok: true };
 });
 
 ipcMain.handle('dialog:pickFolder', async (_evt, opts) => {
