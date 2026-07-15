@@ -660,11 +660,12 @@ export default function App() {
     try {
       // Prune first so worktrees the user deleted by hand drop off the list.
       await window.api.pruneWorktrees({ repoPath: repo.path }).catch(() => {});
-      const [data, worktrees] = await Promise.all([
+      const [data, worktrees, mirrorCache] = await Promise.all([
         window.api.listBranches({ repoPath: repo.path }),
-        window.api.listWorktrees({ repoPath: repo.path }).catch(() => [])
+        window.api.listWorktrees({ repoPath: repo.path }).catch(() => []),
+        window.api.getMirrorCache({ repoPath: repo.path }).catch(() => '')
       ]);
-      setBranchMap({ side, repoName: repo.name || repo.path, data, worktrees, result: null });
+      setBranchMap({ side, repoName: repo.name || repo.path, data, worktrees, mirrorCache, result: null });
     } catch (e) {
       const msg = String(e?.message || e);
       logError('git', `${repo.name || repo.path}: list branches failed`, msg);
@@ -681,11 +682,12 @@ export default function App() {
     if (!repo.path) return;
     try {
       await window.api.pruneWorktrees({ repoPath: repo.path }).catch(() => {});
-      const [data, worktrees] = await Promise.all([
+      const [data, worktrees, mirrorCache] = await Promise.all([
         window.api.listBranches({ repoPath: repo.path }),
-        window.api.listWorktrees({ repoPath: repo.path }).catch(() => [])
+        window.api.listWorktrees({ repoPath: repo.path }).catch(() => []),
+        window.api.getMirrorCache({ repoPath: repo.path }).catch(() => '')
       ]);
-      setBranchMap((m) => (m ? { ...m, data, worktrees } : m));
+      setBranchMap((m) => (m ? { ...m, data, worktrees, mirrorCache } : m));
     } catch (e) {
       logError('git', `${repo.name || repo.path}: list branches failed`, String(e?.message || e));
     }
@@ -776,6 +778,15 @@ export default function App() {
     if (!worktreePath) return;
     window.api.openPath(worktreePath).catch((e) => {
       logError('git', 'open worktree folder failed', String(e?.message || e));
+    });
+  }, []);
+
+  // Open an arbitrary folder (the main repo's .git directory, or the submodule
+  // mirror-cache root) in the OS file manager.
+  const openFolderPath = useCallback((folderPath) => {
+    if (!folderPath) return;
+    window.api.openPath(folderPath).catch((e) => {
+      logError('git', 'open folder failed', String(e?.message || e));
     });
   }, []);
 
@@ -944,11 +955,43 @@ export default function App() {
       } else {
         logInfo('git', `${repoName}: ${cmd}`, res?.output || '');
       }
-      setBranchMap((m) => (m ? { ...m, result: { ...res, kind: 'mirror' } } : m));
+      setBranchMap((m) => (m ? { ...m, mirrorCache: res?.cacheRoot || m.mirrorCache, result: { ...res, kind: 'mirror' } } : m));
     } catch (e) {
       const msg = String(e?.message || e);
       logError('git', `${repoName}: build mirror cache failed`, msg);
       setBranchMap((m) => (m ? { ...m, result: { ok: false, kind: 'mirror', output: msg } } : m));
+    } finally {
+      try { if (unsub) unsub(); } catch { /* ignore */ }
+      setBranchMapBusy(false);
+    }
+  }, [branchMap, left, right, subscribeBranchMapProgress]);
+
+  // Refresh every bare mirror in the repo's configured mirror cache (git remote
+  // update --prune per mirror), streaming progress into the Branch Map panel.
+  const updateMirrorFromMap = useCallback(async () => {
+    if (!branchMap) return;
+    const { side, repoName } = branchMap;
+    const repo = side === 'L' ? left : right;
+    if (!repo.path) return;
+
+    const streamId = `mirrorup-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    setBranchMapBusy(true);
+    setBranchMap((m) => (m ? { ...m, progress: '', result: null } : m));
+    const { unsub, flush } = subscribeBranchMapProgress(streamId);
+    try {
+      const res = await window.api.updateMirrorCache({ mainRepoPath: repo.path, streamId });
+      flush();
+      const cmd = res?.command || 'git remote update --prune (every mirror)';
+      if (res?.ok === false) {
+        logError('git', `${repoName}: ${cmd}`, res?.output || '');
+      } else {
+        logInfo('git', `${repoName}: ${cmd}`, res?.output || '');
+      }
+      setBranchMap((m) => (m ? { ...m, result: { ...res, kind: 'mirrorUpdate' } } : m));
+    } catch (e) {
+      const msg = String(e?.message || e);
+      logError('git', `${repoName}: update mirror cache failed`, msg);
+      setBranchMap((m) => (m ? { ...m, result: { ok: false, kind: 'mirrorUpdate', output: msg } } : m));
     } finally {
       try { if (unsub) unsub(); } catch { /* ignore */ }
       setBranchMapBusy(false);
@@ -2805,6 +2848,7 @@ export default function App() {
           repoName={branchMap.repoName}
           data={branchMap.data}
           worktrees={branchMap.worktrees || []}
+          mirrorCache={branchMap.mirrorCache || ''}
           busy={branchMapBusy}
           result={branchMap.result}
           onUpdate={doUpdateAllBranches}
@@ -2813,6 +2857,9 @@ export default function App() {
           onWorktree={openWorktreeForBranch}
           onRemoveWorktree={removeWorktreeFromMap}
           onOpenFolder={openWorktreeFolder}
+          onOpenGitDir={openFolderPath}
+          onOpenMirrorFolder={openFolderPath}
+          onUpdateMirror={updateMirrorFromMap}
           onOpenTaskManager={openTaskManager}
           onCreateMirror={createMirrorFromMap}
           onUpdateSubmodules={updateSubmodulesFromMap}

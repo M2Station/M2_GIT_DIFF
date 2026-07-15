@@ -571,36 +571,96 @@ async function updateAllBranches(cwd) {
   };
 }
 
-// Per-worktree sidecar recording which ref a worktree was forked from, so the
-// UI can offer a "merge source" action. Kept out of `git status` via the repo's
-// shared info/exclude (see ensureWorktreeLinkExcluded).
-const WT_LINK_FILE = 'M2_WT_LINK.json';
+// The fork source a worktree was created from is recorded in the MAIN repo's
+// git config (shared by every worktree) rather than a per-worktree file, so the
+// UI can offer a "merge source" action without leaving an untracked sidecar in
+// the working tree. Each worktree gets its own subsection keyed by its folder
+// name, e.g.:
+//   [m2gitdiff "wtmain"]
+//       source = origin/main
+//       path = C:/repos/wtmain
+//       createdAt = 2026-07-15T10:54:28.284Z
+const WT_CONFIG_SECTION = 'm2gitdiff';
 
-// Write the fork-source sidecar into a freshly-created worktree. Best-effort.
-function writeWorktreeLink(target, source) {
-  const rec = {
-    app: 'M2_GIT_DIFF',
-    version: 1,
-    source: String(source || ''),
-    createdAt: new Date().toISOString()
-  };
-  fs.writeFileSync(path.join(target, WT_LINK_FILE), JSON.stringify(rec, null, 2) + '\n', 'utf8');
+// Absolute path normalised to forward slashes + lower case, for stable matching
+// between `git worktree list` paths and the paths stored in config.
+function normPath(p) {
+  try {
+    return path.resolve(String(p || '')).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+  } catch {
+    return String(p || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+  }
 }
 
-// Add the sidecar's name to the repo's shared info/exclude (once) so it never
-// shows up as an untracked file in any worktree's `git status`.
-async function ensureWorktreeLinkExcluded(cwd) {
-  const common = (await runRaw(['rev-parse', '--git-common-dir'], cwd)).stdout.trim();
-  if (!common) return;
-  const commonAbs = path.isAbsolute(common) ? common : path.resolve(cwd, common);
-  const infoDir = path.join(commonAbs, 'info');
-  const excludePath = path.join(infoDir, 'exclude');
-  let body = '';
-  try { body = fs.readFileSync(excludePath, 'utf8'); } catch { /* may not exist yet */ }
-  if (body.split(/\r?\n/).some((l) => l.trim() === WT_LINK_FILE)) return;
-  fs.mkdirSync(infoDir, { recursive: true });
-  const prefix = body && !body.endsWith('\n') ? '\n' : '';
-  fs.appendFileSync(excludePath, `${prefix}# M2_GIT_DIFF worktree link sidecar\n${WT_LINK_FILE}\n`, 'utf8');
+// Record where a worktree was forked from in the main repo's config. Config is
+// shared across worktrees, so writing from any worktree lands in the common
+// `.git/config`. Best-effort: the record is a convenience, not critical.
+async function writeWorktreeConfig(cwd, name, source, worktreePath) {
+  const sub = String(name || '').trim();
+  const src = String(source || '').trim();
+  if (!sub || !src) return;
+  const key = (k) => `${WT_CONFIG_SECTION}.${sub}.${k}`;
+  const storedPath = path.resolve(String(worktreePath || '')).replace(/\\/g, '/');
+  await runCombined(['config', key('source'), src], cwd);
+  if (storedPath) await runCombined(['config', key('path'), storedPath], cwd);
+  await runCombined(['config', key('createdAt'), new Date().toISOString()], cwd);
+}
+
+// Read every worktree record from the main repo's config into a map keyed by the
+// subsection (worktree folder name): { source, path, createdAt }. `git config`
+// reads the shared config from any worktree, so `cwd` may be any of them.
+async function readWorktreeConfigMap(cwd) {
+  const map = new Map();
+  let out = '';
+  try {
+    const r = await runCombined(['config', '--get-regexp', `^${WT_CONFIG_SECTION}\\.`], cwd);
+    if (r.ok) out = r.output || '';
+  } catch { /* no records yet -> empty map */ }
+  for (const line of out.split(/\r?\n/)) {
+    const sp = line.indexOf(' ');
+    if (sp < 0) continue;
+    const rawKey = line.slice(0, sp);
+    const value = line.slice(sp + 1);
+    const firstDot = rawKey.indexOf('.');
+    const lastDot = rawKey.lastIndexOf('.');
+    // Need distinct first/last dots so a subsection actually exists (this also
+    // skips single-dot keys like `m2gitdiff.mirrorCache`).
+    if (firstDot < 0 || lastDot <= firstDot) continue;
+    const sub = rawKey.slice(firstDot + 1, lastDot);
+    const varName = rawKey.slice(lastDot + 1).toLowerCase();
+    if (!sub) continue;
+    const rec = map.get(sub) || {};
+    if (varName === 'source') rec.source = value;
+    else if (varName === 'path') rec.path = value;
+    else if (varName === 'createdat') rec.createdAt = value;
+    map.set(sub, rec);
+  }
+  return map;
+}
+
+// Best-effort removal of a worktree's config record when it is deleted. Matches
+// the recorded `path` first, then falls back to the folder-name subsection.
+async function removeWorktreeConfig(cwd, worktreePath) {
+  try {
+    const map = await readWorktreeConfigMap(cwd);
+    const target = normPath(worktreePath);
+    const base = path.basename(String(worktreePath || '').replace(/[\\/]+$/, ''));
+    let sub = null;
+    for (const [k, rec] of map) {
+      if (rec.path && normPath(rec.path) === target) { sub = k; break; }
+    }
+    if (!sub && map.has(base)) sub = base;
+    if (sub) await runCombined(['config', '--remove-section', `${WT_CONFIG_SECTION}.${sub}`], cwd);
+  } catch { /* stale record is harmless */ }
+}
+
+// Read the configured submodule mirror-cache root for a repo (empty when unset).
+async function getMirrorCache(cwd) {
+  try {
+    const c = await runCombined(['config', '--get', `${WT_CONFIG_SECTION}.mirrorCache`], cwd);
+    if (c.ok && c.output.trim()) return c.output.trim();
+  } catch { /* unset */ }
+  return '';
 }
 
 /**
@@ -643,13 +703,13 @@ async function addWorktree(cwd, opts = {}) {
   if (newBranch) args.push('-b', newBranch);
   args.push(target, ref);
   const res = await runCombined(args, cwd);
-  // Record where this worktree was forked from so the UI can offer a
-  // "merge source" action. Best-effort: the link is a convenience, not critical.
+  // Record where this worktree was forked from (in the main repo's config) so
+  // the UI can offer a "merge source" action. Best-effort: the record is a
+  // convenience, not critical.
   if (res.ok !== false) {
     try {
-      writeWorktreeLink(target, ref);
-      await ensureWorktreeLinkExcluded(cwd);
-    } catch { /* ignore — sidecar is optional */ }
+      await writeWorktreeConfig(cwd, name, ref, target);
+    } catch { /* ignore — the record is optional */ }
   }
   return { ...res, target };
 }
@@ -1104,6 +1164,61 @@ async function gcBuildMirrorsRec(dir, mainRoot, cacheRoot, relBase, emit, items,
 }
 
 /**
+ * Refresh every bare mirror already sitting in the repo's configured mirror
+ * cache (m2gitdiff.mirrorCache) by running `git remote update --prune` in each.
+ * Unlike buildSubmoduleMirrorCache this only pulls the latest into mirrors that
+ * already exist — it never walks the main repo's submodules — so it is a fast
+ * "bring the cache up to date" action. The cache root is read from the main
+ * repo's config; every direct child folder that looks like a bare repo (has a
+ * HEAD file) is updated. Progress streams to `onData`.
+ * @param {string} mainRepoPath repo whose configured mirror cache to refresh
+ * @param {(chunk:string)=>void} [onData] live progress callback
+ * @returns {Promise<{ok:boolean, command:string, output:string, exitCode:number, items:Array, cacheRoot:string}>}
+ */
+async function updateMirrorCache(mainRepoPath, onData) {
+  const main = path.resolve(String(mainRepoPath || '').trim());
+  if (!isGitRepo(main)) throw new Error(`Not a git repository: ${main}`);
+  const root = await getMirrorCache(main);
+  if (!root) throw new Error('No mirror cache is configured for this repo.');
+  if (!fs.existsSync(root)) throw new Error(`Mirror cache folder not found: ${root}`);
+
+  const items = [];
+  let allText = '';
+  const emit = (s) => { allText += s; try { if (onData) onData(s); } catch { /* ignore */ } };
+
+  emit(`Updating mirror cache\nCache root: ${root}\n`);
+  let dirents = [];
+  try {
+    dirents = fs.readdirSync(root, { withFileTypes: true }).filter((d) => d.isDirectory());
+  } catch (e) {
+    throw new Error(`Cannot read mirror cache folder: ${String(e?.message || e)}`);
+  }
+  for (const d of dirents) {
+    const mp = path.join(root, d.name);
+    // A bare mirror has a HEAD file at its root; skip anything else.
+    if (!fs.existsSync(path.join(mp, 'HEAD'))) continue;
+    emit(`\n[update] ${d.name}\n   ${mp}\n`);
+    const r = await runStreaming(['remote', 'update', '--prune'], mp, emit);
+    const ok = r.exitCode === 0;
+    if (!ok) emit(`   FAILED\n`);
+    items.push({ mirror: mp, name: d.name, ok });
+  }
+
+  const failed = items.filter((i) => i.ok === false).length;
+  emit(`\n${'-'.repeat(52)}\n`);
+  if (items.length === 0) emit('No bare mirrors found in the cache folder.\n');
+  else emit(`Done - ${items.length - failed} of ${items.length} mirror(s) updated, ${failed} failed.\n`);
+  return {
+    ok: failed === 0,
+    command: 'git remote update --prune (every mirror in cache)',
+    output: allText.trim(),
+    exitCode: failed === 0 ? 0 : 1,
+    items,
+    cacheRoot: root
+  };
+}
+
+/**
  * List every worktree attached to the repo via `git worktree list --porcelain`.
  * The main worktree is always listed first. Each entry carries its path, HEAD
  * sha, the checked-out branch (short) or a detached flag, plus isMain /
@@ -1157,18 +1272,35 @@ async function listWorktrees(cwd) {
     }
   }
   if (cur) entries.push(cur);
+
+  // Fork sources are recorded in the main repo's shared config (see
+  // writeWorktreeConfig). Build a match index by normalised path and by folder
+  // name so each worktree can surface its "merge source" action.
+  const cfgMap = await readWorktreeConfigMap(cwd);
+  const byPath = new Map();
+  const byName = new Map();
+  for (const [sub, rec] of cfgMap) {
+    if (!rec.source) continue;
+    if (rec.path) byPath.set(norm(rec.path), rec.source);
+    byName.set(sub.toLowerCase(), rec.source);
+  }
+
+  // The main worktree's `.git` is the shared common dir; expose it so the UI can
+  // offer an "open .git folder" action for the primary repo.
+  let gitDir = '';
+  try {
+    const gc = (await runRaw(['rev-parse', '--git-common-dir'], cwd)).stdout.trim();
+    if (gc) gitDir = path.isAbsolute(gc) ? gc : path.resolve(cwd, gc);
+  } catch { /* ignore — the button just won't show */ }
+
   entries.forEach((e, i) => {
     e.isMain = i === 0;
     e.isCurrent = norm(e.path) === here;
-    // Attach the recorded fork source (M2_WT_LINK.json) when present, so the UI
-    // can offer a "merge source" action for worktrees this app created.
-    try {
-      const lp = path.join(e.path, WT_LINK_FILE);
-      if (fs.existsSync(lp)) {
-        const j = JSON.parse(fs.readFileSync(lp, 'utf8'));
-        if (j && typeof j.source === 'string' && j.source) e.linkSource = j.source;
-      }
-    } catch { /* ignore malformed/unreadable link */ }
+    if (e.isMain && gitDir) e.gitDir = gitDir;
+    // Attach the recorded fork source (main repo config) when present, matching
+    // by path first, then by folder name.
+    const src = byPath.get(norm(e.path)) || byName.get(path.basename(e.path).toLowerCase());
+    if (src) e.linkSource = src;
   });
   return entries;
 }
@@ -1239,6 +1371,9 @@ async function removeWorktree(cwd, worktreePath, force = true) {
   const pruneRes = await runCombined(['worktree', 'prune'], cwd);
   lines.push('$ ' + pruneRes.command);
   if (pruneRes.output) lines.push(pruneRes.output);
+
+  // Best-effort: drop this worktree's fork-source record from the main config.
+  await removeWorktreeConfig(cwd, p);
 
   const gone = !fs.existsSync(targetResolved);
 
@@ -1348,6 +1483,8 @@ module.exports = {
   inspectPatch,
   applyPatch,
   buildSubmoduleMirrorCache,
+  updateMirrorCache,
+  getMirrorCache,
   listWorktrees,
   removeWorktree,
   pruneWorktrees,

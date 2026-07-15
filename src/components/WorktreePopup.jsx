@@ -138,7 +138,7 @@ const GIT_SNIPPETS = [
 // button fetches from origin and fast-forwards every tracking branch; the result
 // transcript is shown inline so the tree can refresh in place. Closes on the ✕,
 // the backdrop, the Close button, or Escape.
-export default function WorktreePopup({ side, repoName, data, worktrees = [], busy, result, progress, onUpdate, onRefresh, onSwitch, onWorktree, onRemoveWorktree, onOpenFolder, onOpenTaskManager, onCreateMirror, onUpdateSubmodules, onMergeMain, onSwitchWorktreeBranch, onClose }) {
+export default function WorktreePopup({ side, repoName, data, worktrees = [], mirrorCache = '', busy, result, progress, onUpdate, onRefresh, onSwitch, onWorktree, onRemoveWorktree, onOpenFolder, onOpenGitDir, onOpenMirrorFolder, onUpdateMirror, onOpenTaskManager, onCreateMirror, onUpdateSubmodules, onMergeMain, onSwitchWorktreeBranch, onClose }) {
   const t = useT();
   const { current, local = [], remote = [] } = data || {};
   const [expanded, setExpanded] = useState(() => new Set());
@@ -650,6 +650,41 @@ export default function WorktreePopup({ side, repoName, data, worktrees = [], bu
                           {t('branchMap.updateSubmodulesShort')}
                         </button>
                       )}
+                      {w.isMain && mirrorCache && (
+                        <button
+                          type="button"
+                          className="bmp-wt-sync"
+                          onClick={() => onUpdateMirror()}
+                          disabled={busy}
+                          title={t('branchMap.updateMirrorTitle', { path: mirrorCache })}
+                        >
+                          {t('branchMap.updateMirrorShort')}
+                        </button>
+                      )}
+                      {w.isMain && mirrorCache && (
+                        <button
+                          type="button"
+                          className="bmp-wt-open"
+                          onClick={() => onOpenMirrorFolder(mirrorCache)}
+                          disabled={busy}
+                          title={t('branchMap.openMirrorFolderTitle', { path: mirrorCache })}
+                          aria-label={t('branchMap.openMirrorFolderTitle', { path: mirrorCache })}
+                        >
+                          🗂
+                        </button>
+                      )}
+                      {w.isMain && w.gitDir && (
+                        <button
+                          type="button"
+                          className="bmp-wt-open bmp-wt-gitdir"
+                          onClick={() => onOpenGitDir(w.gitDir)}
+                          disabled={busy}
+                          title={t('branchMap.openGitDirTitle')}
+                          aria-label={t('branchMap.openGitDirTitle')}
+                        >
+                          .git
+                        </button>
+                      )}
                       <button
                         type="button"
                         className="bmp-wt-open"
@@ -761,6 +796,13 @@ export default function WorktreePopup({ side, repoName, data, worktrees = [], bu
                       ? result.ok === false
                         ? t('branchMap.mirrorFailed')
                         : t('branchMap.mirrorDone', { count: result?.items?.length ?? 0, path: result?.cacheRoot || '' })
+                      : result?.kind === 'mirrorUpdate'
+                        ? result.ok === false
+                          ? t('branchMap.mirrorUpdateFailed')
+                          : t('branchMap.mirrorUpdateDone', {
+                              updated: (result.items || []).filter((i) => i.ok !== false).length,
+                              total: (result.items || []).length
+                            })
                       : result?.kind === 'submodules'
                         ? result.ok === false
                           ? t('branchMap.submodulesFailed')

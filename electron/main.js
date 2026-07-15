@@ -421,6 +421,23 @@ ipcMain.handle('repo:buildSubmoduleMirrorCache', async (evt, payload) => {
   return git.buildSubmoduleMirrorCache(mainRepoPath, cacheRoot, onData);
 });
 
+ipcMain.handle('repo:getMirrorCache', async (_evt, payload) => {
+  const { repoPath } = payload || {};
+  if (!repoPath) throw new Error('repoPath is required');
+  return git.getMirrorCache(repoPath);
+});
+
+ipcMain.handle('repo:updateMirrorCache', async (evt, payload) => {
+  const { mainRepoPath, streamId } = payload || {};
+  if (!mainRepoPath) throw new Error('mainRepoPath is required');
+  const onData = streamId
+    ? (chunk) => {
+        try { evt.sender.send('repo:gitProgress', { streamId, chunk }); } catch { /* window gone */ }
+      }
+    : null;
+  return git.updateMirrorCache(mainRepoPath, onData);
+});
+
 ipcMain.handle('repo:listWorktrees', async (_evt, payload) => {
   const { repoPath } = payload || {};
   if (!repoPath) throw new Error('repoPath is required');
