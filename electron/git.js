@@ -692,18 +692,27 @@ async function updateWorktreeSubmodules(worktreePath, mainRepoPath, onData) {
 }
 
 /**
- * Run `git merge main` inside a linked worktree to bring the locally-updated
- * `main` branch into the branch checked out there. Because the worktree shares
- * the parent repo's object store and refs, no fetch is needed — this merges
- * whatever `main` currently points at locally. Output (including any merge
- * conflicts) is streamed to `onData` so the UI can show exactly what happened.
- * @param {string} worktreePath worktree whose checked-out branch receives main
+ * Update a linked worktree's branch from its own remote: fetch `origin/<branch>`
+ * and merge it into the checked-out branch (`git pull --no-rebase --no-edit
+ * origin <branch>`). Use it when someone pushed new commits to the SAME branch
+ * on origin and you want them in this worktree. A detached HEAD has no branch to
+ * update and is rejected. Output (the fetch + merge, including any conflicts) is
+ * streamed to `onData` so the UI can show exactly what happened.
+ * @param {string} worktreePath worktree whose checked-out branch is updated from origin
  * @param {(chunk:string)=>void} [onData] live progress callback
  * @returns {Promise<{ok:boolean, command:string, output:string, exitCode:number}>}
  */
 async function mergeMainIntoWorktree(worktreePath, onData) {
   if (!isGitRepo(worktreePath)) throw new Error(`Not a git repository: ${worktreePath}`);
-  return runStreaming(['merge', 'main'], worktreePath, onData);
+  // The worktree's own branch; a detached HEAD reports "HEAD" and has nothing to pull into.
+  const cur = await runRaw(['rev-parse', '--abbrev-ref', 'HEAD'], worktreePath);
+  const branch = cur.ok ? cur.stdout.trim() : '';
+  if (!branch || branch === 'HEAD') {
+    throw new Error('This worktree is on a detached HEAD; check out a branch before pulling from origin.');
+  }
+  // --no-rebase forces a merge (not a rebase) regardless of pull.rebase config;
+  // --no-edit takes the default merge message so no editor is spawned.
+  return runStreaming(['pull', '--no-rebase', '--no-edit', 'origin', branch], worktreePath, onData);
 }
 
 // Run git and return its raw stdout/stderr separately (no merging/trimming),

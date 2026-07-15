@@ -983,9 +983,9 @@ export default function App() {
     }
   }, [branchMap, left, right, subscribeBranchMapProgress]);
 
-  // Run `git merge main` inside a linked worktree to bring the locally-updated
-  // main into the branch checked out there. Because the worktree shares the
-  // repo's refs, no fetch is needed; output (incl. conflicts) is streamed live.
+  // Update a worktree's branch from ITS OWN origin: fetch origin/<branch> and
+  // merge the new commits into the checked-out branch (git pull --no-rebase
+  // origin <branch>). Output (fetch + merge, incl. conflicts) is streamed live.
   const mergeMainFromMap = useCallback(async (worktreePath) => {
     if (!branchMap || !worktreePath) return;
     const { side, repoName } = branchMap;
@@ -999,7 +999,7 @@ export default function App() {
     try {
       const res = await window.api.mergeWorktreeMain({ worktreePath, streamId });
       flush();
-      const cmd = res?.command || 'git merge main';
+      const cmd = res?.command || 'git pull origin';
       if (res?.ok === false) {
         logError('git', `${repoName}: ${cmd}`, res?.output || '');
       } else {
@@ -1008,7 +1008,7 @@ export default function App() {
       setBranchMap((m) => (m ? { ...m, result: { ...res, kind: 'merge' } } : m));
     } catch (e) {
       const msg = String(e?.message || e);
-      logError('git', `${repoName}: merge main failed`, msg);
+      logError('git', `${repoName}: git pull origin failed`, msg);
       setBranchMap((m) => (m ? { ...m, result: { ok: false, kind: 'merge', output: msg } } : m));
     } finally {
       try { if (unsub) unsub(); } catch { /* ignore */ }

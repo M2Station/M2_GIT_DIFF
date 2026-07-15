@@ -567,10 +567,16 @@ export default function WorktreePopup({ side, repoName, data, worktrees = [], bu
                           type="button"
                           className="bmp-wt-merge"
                           onClick={() => onMergeMain(w.path)}
-                          disabled={busy || w.prunable}
-                          title={t('branchMap.mergeMainTitle')}
+                          disabled={busy || w.prunable || w.detached}
+                          title={
+                            w.detached
+                              ? t('branchMap.mergeMainDetachedTitle')
+                              : t('branchMap.mergeMainTitle', { branch: w.branch || '' })
+                          }
                         >
-                          {t('branchMap.mergeMainShort')}
+                          {w.detached
+                            ? t('branchMap.mergeMainShortDetached')
+                            : t('branchMap.mergeMainShort', { branch: w.branch || '' })}
                         </button>
                       )}
                       {!w.isMain && (
