@@ -732,16 +732,16 @@ async function updateWorktreeSubmodules(worktreePath, mainRepoPath, onData) {
 }
 
 /**
- * Merge a worktree's recorded source ref (the branch it was forked from, e.g.
- * `main`) into the branch checked out there — `git merge --no-edit <source>`.
- * Because the worktree shares the parent repo's object store and refs, no fetch
- * is needed; it merges whatever `source` currently points at locally. A detached
- * HEAD has no branch to merge into and is rejected. Output (including any merge
- * conflicts) is streamed to `onData` so the UI can show exactly what happened.
+ * Update a worktree from its recorded source ref: fetch the source branch from
+ * origin (best-effort), then merge it into the branch checked out there
+ * (`git merge --no-edit`). If the worktree already contains everything, git
+ * reports "Already up to date" and `alreadyUpToDate` is set; otherwise the new
+ * commits are brought in. A detached HEAD has no branch to merge into and is
+ * rejected. All output (fetch + merge, incl. conflicts) is streamed to `onData`.
  * @param {string} worktreePath worktree whose checked-out branch receives the merge
- * @param {string} source ref to merge in (the recorded fork source)
+ * @param {string} source ref to update from (the recorded fork source)
  * @param {(chunk:string)=>void} [onData] live progress callback
- * @returns {Promise<{ok:boolean, command:string, output:string, exitCode:number}>}
+ * @returns {Promise<{ok:boolean, command:string, output:string, exitCode:number, alreadyUpToDate:boolean}>}
  */
 async function mergeMainIntoWorktree(worktreePath, source, onData) {
   if (!isGitRepo(worktreePath)) throw new Error(`Not a git repository: ${worktreePath}`);
@@ -754,7 +754,27 @@ async function mergeMainIntoWorktree(worktreePath, source, onData) {
   if (!branch || branch === 'HEAD') {
     throw new Error('This worktree is on a detached HEAD; check out a branch before merging.');
   }
-  return runStreaming(['merge', '--no-edit', src], worktreePath, onData);
+  // 1. Update the source from origin first (best-effort). Merge the freshly
+  //    fetched tip when origin was reachable, else the local source ref.
+  const remoteBranch = src.replace(/^refs\/(remotes|heads)\//, '').replace(/^origin\//, '');
+  let mergeRef = src;
+  let fetchOut = '';
+  const hasOrigin = (await runRaw(['remote'], worktreePath)).stdout.split(/\s+/).includes('origin');
+  if (hasOrigin) {
+    const fetch = await runStreaming(['fetch', 'origin', remoteBranch], worktreePath, onData);
+    fetchOut = fetch.output || '';
+    if (fetch.ok !== false) mergeRef = 'FETCH_HEAD';
+  }
+  // 2/3. Merge — git no-ops with "Already up to date" when there is nothing new.
+  const merge = await runStreaming(['merge', '--no-edit', mergeRef], worktreePath, onData);
+  const alreadyUpToDate = merge.ok !== false && /Already up[ -]to[ -]date/i.test(merge.output || '');
+  return {
+    ok: merge.ok !== false,
+    command: `git fetch origin ${remoteBranch} + git merge ${src}`,
+    output: [fetchOut, merge.output].filter(Boolean).join('\n'),
+    exitCode: merge.exitCode,
+    alreadyUpToDate
+  };
 }
 
 // Run git and return its raw stdout/stderr separately (no merging/trimming),

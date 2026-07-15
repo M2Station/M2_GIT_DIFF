@@ -983,9 +983,9 @@ export default function App() {
     }
   }, [branchMap, left, right, subscribeBranchMapProgress]);
 
-  // Merge a worktree's recorded source ref (the branch it was forked from) into
-  // the branch checked out there. The worktree shares the repo's object store,
-  // so no fetch is needed; output (incl. conflicts) is streamed live.
+  // Update a worktree from its recorded source: fetch the source from origin,
+  // then merge it into the checked-out branch. If nothing changed git reports
+  // "already up to date". Output (fetch + merge, incl. conflicts) streams live.
   const mergeMainFromMap = useCallback(async (worktreePath, source) => {
     if (!branchMap || !worktreePath || !source) return;
     const { side, repoName } = branchMap;
@@ -1005,11 +1005,11 @@ export default function App() {
       } else {
         logInfo('git', `${repoName}: ${cmd}`, res?.output || '');
       }
-      setBranchMap((m) => (m ? { ...m, result: { ...res, kind: 'merge' } } : m));
+      setBranchMap((m) => (m ? { ...m, result: { ...res, kind: 'merge', source } } : m));
     } catch (e) {
       const msg = String(e?.message || e);
       logError('git', `${repoName}: git merge ${source} failed`, msg);
-      setBranchMap((m) => (m ? { ...m, result: { ok: false, kind: 'merge', output: msg } } : m));
+      setBranchMap((m) => (m ? { ...m, result: { ok: false, kind: 'merge', source, output: msg } } : m));
     } finally {
       try { if (unsub) unsub(); } catch { /* ignore */ }
       setBranchMapBusy(false);

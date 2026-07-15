@@ -562,7 +562,7 @@ export default function WorktreePopup({ side, repoName, data, worktrees = [], bu
                     </span>
                   ) : (
                     <span className="bmp-wt-actions">
-                      {!w.isMain && w.linkSource && w.linkSource !== w.branch && (
+                      {!w.isMain && w.linkSource && (
                         <button
                           type="button"
                           className="bmp-wt-merge"
@@ -711,7 +711,9 @@ export default function WorktreePopup({ side, repoName, data, worktrees = [], bu
                         : result?.kind === 'merge'
                           ? result.ok === false
                             ? t('branchMap.mergeMainFailed')
-                            : t('branchMap.mergeMainDone')
+                            : result.alreadyUpToDate
+                              ? t('branchMap.mergeMainSame', { source: result.source || '' })
+                              : t('branchMap.mergeMainDone', { source: result.source || '' })
                           : t('branchMap.updateDone', {
                               updated: result?.updated ?? 0,
                               skipped: result?.skipped ?? 0,
