@@ -49,11 +49,13 @@
   "build": {
     "appId": "com.tool.gitreprodiff",
     "productName": "M2_GIT_DIFF",
+    "npmRebuild": false,
     "files": [
       "electron/**",
       "dist/**",
       "public/icon.ico",
-      "package.json"
+      "package.json",
+      "!node_modules/better-sqlite3/**"
     ],
     "extraResources": [
       {

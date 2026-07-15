@@ -340,8 +340,8 @@ npm version patch                 # 0.1.0 -> 0.1.1 (also: minor | major | 1.2.3)
 git push --follow-tags            # pushes the commit AND the vX.Y.Z tag
 ```
 
-Pushing the `vX.Y.Z` tag triggers the workflow, which runs `npm ci`, builds,
-rebuilds `better-sqlite3`, packages with `electron-builder --publish never`, and
+Pushing the `vX.Y.Z` tag triggers the workflow, which runs `npm ci`, builds and
+packages with `electron-builder --publish never`, and
 then publishes the release via `softprops/action-gh-release` using the
 built-in `GITHUB_TOKEN` (no PAT needed). You can also trigger it manually from
 **Actions → Release → Run workflow**.
@@ -350,7 +350,7 @@ built-in `GITHUB_TOKEN` (no PAT needed). You can also trigger it manually from
 
 `scripts/release.ps1` (exposed as `npm run release`) is now a **local
 verification tool**. By default it builds the installer — handling the
-winCodeSign symlink workaround and the `better-sqlite3` ABI rebuild — and then
+winCodeSign symlink workaround — and then
 **stops without modifying `package.json`, committing, tagging, pushing, or
 publishing anything**. Use it to confirm a build packages cleanly before you
 push a tag.
@@ -381,6 +381,50 @@ pre-flight git checks, suggests a local `npm run release` verification build
 first, and prefers the CI tag-push path — only falling back to `-Publish` with
 your explicit confirmation. The agent definition lives in
 `.github/agents/release-manager.agent.md`.
+
+### Verifying a download & fixing a blocked install (antivirus false positive)
+
+Every GitHub Release publishes a `SHA256SUMS.txt` next to the installers so you
+can confirm your download is intact and untampered before running it:
+
+```powershell
+# PowerShell — compare the printed hash with the matching line in SHA256SUMS.txt
+Get-FileHash ".\M2_GIT_DIFF Setup <version> x64.exe" -Algorithm SHA256
+```
+
+```bash
+# Git Bash / Linux / macOS — verifies every file listed in SHA256SUMS.txt
+sha256sum -c SHA256SUMS.txt
+```
+
+**Installed app won't launch — "Missing Shortcut", or the main `M2_GIT_DIFF.exe`
+is gone from the install folder.** This is almost always a **Windows Defender (or
+third-party antivirus) false positive**: the installer extracts the whole app,
+then the AV quarantines the *unsigned* main executable. The tell-tale sign is
+that the install folder still holds every Electron runtime file (`*.pak`,
+`icudtl.dat`, `*_blob.bin`, `locales/`, `resources/`, and even
+`Uninstall M2_GIT_DIFF.exe`) — only `M2_GIT_DIFF.exe` itself is missing.
+
+Recover on the affected machine:
+
+```powershell
+# 1. Confirm the AV removed it
+Get-MpThreat | Select-Object ThreatName, Resources
+Get-MpThreatDetection | Sort-Object InitialDetectionTime -Descending |
+    Select-Object -First 5 InitialDetectionTime, Resources
+
+# 2. Exclude the install folder (run as Administrator), then reinstall.
+#    Per-user installs land in %LOCALAPPDATA%\Programs\M2_GIT_DIFF;
+#    an all-users install lands in "C:\Program Files (x86)\M2_GIT_DIFF".
+Add-MpPreference -ExclusionPath "$env:LOCALAPPDATA\Programs\M2_GIT_DIFF"
+```
+
+Alternatively open **Windows Security → Virus & threat protection → Protection
+history**, find the quarantined `M2_GIT_DIFF.exe`, and click **Restore**. You can
+also report the false positive at
+<https://www.microsoft.com/en-us/wdsi/filesubmission> so future builds stop being
+flagged. The durable fix is Authenticode **code signing** of the installer (not
+yet configured for this project).
 
 ### Launch and auto-open repros (-L / -R)
 

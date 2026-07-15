@@ -25,7 +25,7 @@
     Verify steps (default):
       1. Verify clean working tree on the target branch (default: main)
       2. Pre-extract the winCodeSign cache (skips the darwin symlinks that fail)
-      3. npm install + npm run rebuild (native better-sqlite3) + npm run dist
+      3. npm install + npm run dist (uses node:sqlite; no native rebuild)
       4. Confirm the installer exists, then stop (nothing pushed/published)
 
     Publish adds (only with -Publish): bump package.json + commit, tag vX.Y.Z,
@@ -178,10 +178,6 @@ else {
 Write-Step 'Installing dependencies'
 npm install
 if ($LASTEXITCODE -ne 0) { Fail 'npm install failed.' }
-
-Write-Step 'Rebuilding native modules'
-npm run rebuild
-if ($LASTEXITCODE -ne 0) { Fail 'npm run rebuild failed.' }
 
 Write-Step 'Building installer (npm run dist)'
 npm run dist

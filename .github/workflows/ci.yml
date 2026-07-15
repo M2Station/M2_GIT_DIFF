@@ -1,7 +1,7 @@
 name: CI
 
 # Verifies the same build steps that `npm run release` depends on
-# (install -> rebuild native modules -> electron-builder dist) succeed
+# (install -> vite build -> electron-builder dist) succeed
 # in a clean environment. Does NOT tag or publish a release.
 
 on:
@@ -77,9 +77,6 @@ jobs:
 
       - name: Build renderer (vite)
         run: npm run build
-
-      - name: Rebuild native modules (better-sqlite3)
-        run: npm run rebuild
 
       - name: Build installer (electron-builder)
         # On PRs, package x64 only for a fast packaging smoke test; build the
