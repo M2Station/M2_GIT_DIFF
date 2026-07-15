@@ -52,6 +52,8 @@ A desktop tool dedicated to **comparing the commit history of two local Git repo
 | **Keyboard shortcuts help** | Toolbar top-right **❓ Help** opens a centred modal listing all shortcuts (keycap style); the bottom has a clickable `Powered by OA Hsiao` badge linking to the author's GitHub. Click the backdrop / ✕ / `Esc` to close | — |
 | **Internationalization (i18n)** | Toolbar top-right **⚙ Settings** opens a settings popup to switch the UI language (currently **English** and **中文（繁體）** built in). Locale strings live in `src/locales/*.json`; the app uses Vite `import.meta.glob` to **auto-scan that directory** and decide which languages are supported—adding an `xx.json` makes it appear in the language list automatically, no code changes. The choice is stored in `localStorage` as `appLang` and remembered across restarts | — |
 | **Multiple themes (Theme)** | The same **⚙ Settings** popup can switch the colour theme (**Low Key** (default dark), **Daylight** (light), **Army** (tactical olive), **Army (Dark)** (steel grey), **VS Code Dark** built in). Theme definitions live in `src/themes/*.json`, each file mapping a `vars` object to CSS custom properties (such as `--accent`, `--bg`); the app uses Vite `import.meta.glob` to **auto-scan that directory**—drop an `xx.json` in and it appears in the theme list automatically, no code changes. On switching it writes `vars` to `<html>` and sets the `data-theme` attribute. The choice is stored in `localStorage` as `appTheme` and applied before React renders to avoid a flash of the wrong theme (FOUC) | — |
+| **Check for updates** | The **⚙ Settings** popup shows the current version and a **Check for updates** button; the app also checks automatically a few seconds after launch (packaged builds only). When a newer GitHub release exists, a prompt shows the `current → new` version and release notes, then **downloads the matching-architecture installer** with a live progress bar (verifying its byte size and SHA-256 digest), **installs and restarts**, and the leftover download is swept on the next launch. Built directly on the GitHub Releases API — no extra update server, pinned to this repo's HTTPS release URLs | — |
+| **Remembers window size & position** | The window reopens at the same size, position, and maximized state it was closed at (persisted to `window-state.json` under userData). A position on a since-disconnected monitor falls back to a centred default so the window never opens off-screen | — |
 | Cache | Parsing results are cached versioned by HEAD SHA, so reopening the same repo skips re-parsing | — |
 | LOGO / branding | LOGO + `M2_GIT_DIFF` name at the toolbar top-left; window title and favicon stay in sync | — |
 
@@ -94,7 +96,8 @@ Electron (main process)
 ├─ electron/excel.js     ExcelJS generates styled .xlsx (colour fills, note cell comments, SHA hyperlink to remote commit URL, Manual Links worksheet)
 ├─ electron/markdownReport.js Builds the table-heavy Markdown review report (.md) with truncated display cells and remote commit links
 ├─ electron/fsdialog.js  Directory listing for the in-app FolderPicker (dialog:listDir / dialog:rememberDir)
-└─ electron/db.js        SQLite cache layer — prefers Node's built-in node:sqlite, then better-sqlite3, else in-memory
+├─ electron/db.js        SQLite cache layer — prefers Node's built-in node:sqlite, then better-sqlite3, else in-memory
+└─ electron/update.js    In-app updater — checks GitHub Releases, downloads the arch-matched installer (size + SHA-256 verified), runs it, and sweeps old downloads on launch
 
 Renderer (React + Vite)
 ├─ src/main.jsx                 React entry
@@ -118,7 +121,8 @@ Renderer (React + Vite)
    ├─ FolderPicker.jsx     In-app keyboard-driven repo/folder picker (replaces the OS dialog; scans for git repos incl. submodules, repos-only filter, remembers the last visited folder)
   ├─ ExportPrompt.jsx     Unified export panel (Excel or Markdown, default ALL or first N rows)
    ├─ HelpPopup.jsx       Keyboard shortcuts help popup (centred modal, keycap list, OA Hsiao badge, `Esc`/backdrop to close)
-   ├─ SettingsPopup.jsx   Settings popup (language selector + theme selector; locales from `src/locales`, themes from `src/themes`, both auto-scanned)
+   ├─ SettingsPopup.jsx   Settings popup (language + theme selectors, commit-load limits, and a Check for updates button showing the current version)
+   ├─ UpdatePopup.jsx     Update prompt (new-version notes → download with progress → install & restart; downloads verified by byte size + SHA-256)
    └─ CommitDetail.jsx     Commit detail popup (Markdown rendering, Related item, 🔗 Web / 🔀 PR / 🔍 code-search links next to SHA, movable/resizable, multi-open, 💬 Chat opens VS Code)
    └─ DiffComparePopup.jsx Side-by-side inline-diff compare window (fetches both commits' unified diffs, file-aligned two-column +/- view, overall + per-file similarity %, draggable/resizable)
 ```
@@ -507,6 +511,8 @@ How it works:
 | Shortcuts help popup (Help) | `src/components/HelpPopup.jsx`, `src/components/Toolbar.jsx` (`onOpenHelp`), `src/App.jsx` (`helpOpen`) |
 | Internationalization (i18n / locale strings / auto-scan) | `src/locales/*.json`, `src/lib/i18n.js` (`I18nProvider`/`useT`/`makeT`/`import.meta.glob`), `src/components/SettingsPopup.jsx`, `src/main.jsx` (`I18nProvider` wrapper) |
 | Multiple themes (Theme / theme files / auto-scan) | `src/themes/*.json`, `src/lib/theme.js` (`ThemeProvider`/`useTheme`/`applyTheme`/`import.meta.glob`), `src/components/SettingsPopup.jsx`, `src/main.jsx` (`ThemeProvider` wrapper) |
+| Check for updates (auto-update / download / install) | `electron/update.js`, `electron/main.js` (`update:check`/`update:download`/`update:install`/`update:cleanup`), `src/components/UpdatePopup.jsx`, `src/components/SettingsPopup.jsx`, `src/App.jsx` (auto-check + `showUpdate`) |
+| Remember window size / position / maximized | `electron/main.js` (`readWindowState` / `saveWindowState` / `window-state.json`) |
 | Floating search panel / 📝 Notes navigation | `src/components/SearchPanel.jsx`, `src/App.jsx` (`noteHits` / `cycleNote`) |
 | Note popup / logic | `src/components/NotePopup.jsx`, `src/App.jsx` (`openNote`/`saveNote`/`deleteNote`/`clearNotes`) |
 | Per-commit virtual tag (🏷️) | `src/components/VtagPopup.jsx`, `src/App.jsx` (`openVtag`/`vtags`/`vtagMap`), `src/components/RowMenu.jsx` (`onAddVtag`) |
