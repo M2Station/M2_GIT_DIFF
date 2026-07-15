@@ -94,7 +94,7 @@ Electron (main process)
 ├─ electron/excel.js     ExcelJS generates styled .xlsx (colour fills, note cell comments, SHA hyperlink to remote commit URL, Manual Links worksheet)
 ├─ electron/markdownReport.js Builds the table-heavy Markdown review report (.md) with truncated display cells and remote commit links
 ├─ electron/fsdialog.js  Directory listing for the in-app FolderPicker (dialog:listDir / dialog:rememberDir)
-└─ electron/db.js        better-sqlite3 cache layer (auto-falls back to in-memory cache when absent)
+└─ electron/db.js        SQLite cache layer — prefers Node's built-in node:sqlite, then better-sqlite3, else in-memory
 
 Renderer (React + Vite)
 ├─ src/main.jsx                 React entry
@@ -278,7 +278,7 @@ Line styles: `.link.common` (grey solid), `.link.cherry` (yellow dashed), `.link
 | **Git** | Any recent version | This tool reads the two repos' history via the `git` CLI; must be on `PATH` | <https://git-scm.com/> (or `winget install Git.Git`) |
 | **PowerShell** | Built into Windows | Run the commands below and `start.cmd` | Built into the system |
 
-> Optional: **Visual Studio C++ tools (incl. ClangCL)** are only needed to enable `better-sqlite3` persistent caching; when not installed it auto-falls back to in-memory caching, with no functional impact (see "Environment notes" below).
+> Optional: persistent caching works out of the box via Node's built-in `node:sqlite` (bundled with Electron) — no build tools required. **Visual Studio C++ tools** are only needed for the optional legacy `better-sqlite3` fallback on older runtimes (see "Environment notes" below).
 
 Verify the installation:
 
@@ -426,7 +426,7 @@ How it works:
 
 ### Environment notes (known local conditions)
 
-1. **better-sqlite3 cannot compile**: this machine lacks Visual Studio's *ClangCL* toolset, so the native module fails to build. It is set as an `optionalDependency`, and when `db.js` does not detect it, it auto-falls back to **in-memory caching** with no functional impact. To enable persistent caching: install ClangCL (or tick the corresponding toolset in the VS installer) then run `npm run rebuild`.
+1. **Persistent cache needs no build tools**: caching uses Node's built-in `node:sqlite` (bundled with modern Electron), so persistence works without a C++ toolchain. `db.js` prefers `node:sqlite`, then the optional `better-sqlite3` native module, then an in-memory fallback — so a missing compiler has no functional impact. `better-sqlite3` is only worth building (`npm run rebuild`) on runtimes without `node:sqlite`.
 2. **Electron binary fails to extract on the `Z:` network drive**: the post-install silently fails on `Z:`. Workaround: use PowerShell `Expand-Archive` to extract the cached `electron-vXX-win32-x64.zip` into `node_modules/electron/dist`, and create `node_modules/electron/path.txt` (content `electron.exe`). After reinstalling `node_modules` you must redo this, or run `node node_modules/electron/install.js`.
 3. The DevTools `Autofill.enable` / GPU warnings are harmless noise and can be ignored.
 

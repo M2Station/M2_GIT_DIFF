@@ -8,23 +8,43 @@
  */
 'use strict';
 
-// Lightweight caching layer for parsed git logs. better-sqlite3 is a native
-// module; if it fails to load (e.g. not rebuilt for the current Electron ABI)
-// we degrade gracefully to an in-memory cache so the app still works.
+// Lightweight caching layer for parsed git logs. Persistence prefers Node's
+// built-in SQLite (node:sqlite), which needs no native build toolchain and is
+// bundled with modern Electron; it falls back to the better-sqlite3 native
+// module when present, and finally to an in-memory cache — so the app always
+// works, gaining on-disk persistence whenever any SQLite driver is available.
 
 const path = require('node:path');
 
-let Database = null;
 let db = null;
 let usingSqlite = false;
+let sqliteDriver = '';
 const memCache = new Map();
+
+// Open the cache database with the first available SQLite driver. node:sqlite is
+// preferred (zero native build, always ABI-matched to Electron); better-sqlite3
+// is used only when node:sqlite is missing (older runtimes). Both expose the
+// same prepare()/get()/run()/exec() surface the rest of this module relies on.
+function openDatabase(file) {
+  try {
+    const { DatabaseSync } = require('node:sqlite');
+    return { db: new DatabaseSync(file), driver: 'node:sqlite' };
+  } catch {
+    /* runtime without node:sqlite — try the optional native module instead */
+  }
+  const BetterSqlite3 = require('better-sqlite3');
+  return { db: new BetterSqlite3(file), driver: 'better-sqlite3' };
+}
 
 function init(userDataDir) {
   try {
-    Database = require('better-sqlite3');
     const file = path.join(userDataDir, 'repro-diff-cache.sqlite');
-    db = new Database(file);
-    db.pragma('journal_mode = WAL');
+    const opened = openDatabase(file);
+    db = opened.db;
+    sqliteDriver = opened.driver;
+    // Run PRAGMA via exec() so it works on both drivers (node:sqlite has no
+    // better-sqlite3-style .pragma() helper).
+    db.exec('PRAGMA journal_mode = WAL');
     db.exec(`
       CREATE TABLE IF NOT EXISTS repo_cache (
         key TEXT PRIMARY KEY,
@@ -38,10 +58,12 @@ function init(userDataDir) {
       );
     `);
     usingSqlite = true;
+    // eslint-disable-next-line no-console
+    console.log(`[db] persistent cache enabled via ${sqliteDriver}`);
   } catch (err) {
     usingSqlite = false;
     // eslint-disable-next-line no-console
-    console.warn('[db] better-sqlite3 unavailable, using in-memory cache:', err.message);
+    console.warn('[db] SQLite unavailable, using in-memory cache:', err.message);
   }
 }
 
