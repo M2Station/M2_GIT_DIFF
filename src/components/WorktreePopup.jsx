@@ -562,15 +562,19 @@ export default function WorktreePopup({ side, repoName, data, worktrees = [], bu
                     </span>
                   ) : (
                     <span className="bmp-wt-actions">
-                      {!w.isMain && (
+                      {!w.isMain && w.linkSource && w.linkSource !== w.branch && (
                         <button
                           type="button"
                           className="bmp-wt-merge"
-                          onClick={() => onMergeMain(w.path)}
-                          disabled={busy || w.prunable}
-                          title={t('branchMap.mergeMainTitle')}
+                          onClick={() => onMergeMain(w.path, w.linkSource)}
+                          disabled={busy || w.prunable || w.detached}
+                          title={
+                            w.detached
+                              ? t('branchMap.mergeMainDetachedTitle')
+                              : t('branchMap.mergeMainTitle', { source: w.linkSource })
+                          }
                         >
-                          {t('branchMap.mergeMainShort')}
+                          {t('branchMap.mergeMainShort', { source: w.linkSource })}
                         </button>
                       )}
                       {!w.isMain && (

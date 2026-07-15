@@ -983,11 +983,11 @@ export default function App() {
     }
   }, [branchMap, left, right, subscribeBranchMapProgress]);
 
-  // Run `git merge main` inside a linked worktree to bring the locally-updated
-  // main into the branch checked out there. Because the worktree shares the
-  // repo's refs, no fetch is needed; output (incl. conflicts) is streamed live.
-  const mergeMainFromMap = useCallback(async (worktreePath) => {
-    if (!branchMap || !worktreePath) return;
+  // Merge a worktree's recorded source ref (the branch it was forked from) into
+  // the branch checked out there. The worktree shares the repo's object store,
+  // so no fetch is needed; output (incl. conflicts) is streamed live.
+  const mergeMainFromMap = useCallback(async (worktreePath, source) => {
+    if (!branchMap || !worktreePath || !source) return;
     const { side, repoName } = branchMap;
     const repo = side === 'L' ? left : right;
     if (!repo.path) return;
@@ -997,9 +997,9 @@ export default function App() {
     setBranchMap((m) => (m ? { ...m, progress: '', result: null } : m));
     const { unsub, flush } = subscribeBranchMapProgress(streamId);
     try {
-      const res = await window.api.mergeWorktreeMain({ worktreePath, streamId });
+      const res = await window.api.mergeWorktreeMain({ worktreePath, source, streamId });
       flush();
-      const cmd = res?.command || 'git merge main';
+      const cmd = res?.command || `git merge ${source}`;
       if (res?.ok === false) {
         logError('git', `${repoName}: ${cmd}`, res?.output || '');
       } else {
@@ -1008,7 +1008,7 @@ export default function App() {
       setBranchMap((m) => (m ? { ...m, result: { ...res, kind: 'merge' } } : m));
     } catch (e) {
       const msg = String(e?.message || e);
-      logError('git', `${repoName}: merge main failed`, msg);
+      logError('git', `${repoName}: git merge ${source} failed`, msg);
       setBranchMap((m) => (m ? { ...m, result: { ok: false, kind: 'merge', output: msg } } : m));
     } finally {
       try { if (unsub) unsub(); } catch { /* ignore */ }

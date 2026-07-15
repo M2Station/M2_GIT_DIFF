@@ -391,14 +391,15 @@ ipcMain.handle('repo:updateWorktreeSubmodules', async (evt, payload) => {
 });
 
 ipcMain.handle('repo:mergeWorktreeMain', async (evt, payload) => {
-  const { worktreePath, streamId } = payload || {};
+  const { worktreePath, source, streamId } = payload || {};
   if (!worktreePath) throw new Error('worktreePath is required');
+  if (!source) throw new Error('source is required');
   const onData = streamId
     ? (chunk) => {
         try { evt.sender.send('repo:gitProgress', { streamId, chunk }); } catch { /* window gone */ }
       }
     : null;
-  return git.mergeMainIntoWorktree(worktreePath, onData);
+  return git.mergeMainIntoWorktree(worktreePath, source, onData);
 });
 
 ipcMain.handle('repo:buildSubmoduleMirrorCache', async (evt, payload) => {
