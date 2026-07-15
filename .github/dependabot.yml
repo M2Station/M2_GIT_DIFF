@@ -59,6 +59,15 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    # 暫時凍結 electron-builder 的 major 升級（維持在 25.x）：
+    # electron-builder 26 會改寫打包後的 Windows .exe（resedit / NSIS 行為變更），
+    # 使 Windows Defender 雲端「首見即封鎖」在安裝當下把主程式 M2_GIT_DIFF.exe
+    # 誤判移除，安裝完卻無法啟動。經二分測試確認：eb 25 正常、eb 26 壞（與 electron
+    # 版本無關）。待安裝檔完成 Authenticode 程式碼簽章後，即可移除此項並升回 26。
+    ignore:
+      - dependency-name: "electron-builder"
+        update-types:
+          - "version-update:semver-major"
 
   # ── GitHub Actions（.github/workflows/*.yml）──────────────────
   - package-ecosystem: "github-actions"
