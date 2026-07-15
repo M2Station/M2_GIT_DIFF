@@ -793,13 +793,18 @@ export default function App() {
   // as-is unless the user names a new branch.
   const openWorktreeForBranch = useCallback((selected) => {
     if (!branchMap || !selected) return;
-    const { side, repoName } = branchMap;
+    const { side, repoName, worktrees = [] } = branchMap;
     const isRemote = !!selected.isRemote;
     const stripped = isRemote ? selected.ref.replace(/^[^/]+\//, '') : selected.ref;
+    // A local branch already checked out in another worktree can't be checked
+    // out again; the popup will then require a new branch name.
+    const inUse = isRemote ? null : worktrees.find((w) => !w.detached && w.branch === selected.ref);
     setBranchMap(null);
     setWorktree({
       side,
       repoName,
+      branchInUse: !!inUse,
+      inUseAt: inUse?.path || '',
       source: {
         kind: 'branch',
         ref: selected.ref,
@@ -2803,6 +2808,8 @@ export default function App() {
           side={worktree.side}
           repoName={worktree.repoName}
           source={worktree.source}
+          branchInUse={worktree.branchInUse}
+          inUseAt={worktree.inUseAt}
           busy={worktreeBusy}
           result={worktree.result}
           onPickDir={pickWorktreeDir}
