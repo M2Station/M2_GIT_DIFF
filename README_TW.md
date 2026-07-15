@@ -53,6 +53,8 @@
 | **快捷鍵說明（Help）** | 工具列右上 **❓ Help** 開啟置中彈窗，列出全部快捷鍵（鍵帽樣式）；底部含可點擊的 `Powered by OA Hsiao` 徽章連到作者 GitHub。背景點擊 / ✕ / `Esc` 皆可關閉 | — |
 | **多國語言（i18n）** | 工具列右上 **⚙ Settings** 開啟設定彈窗，可切換介面語言（目前內建 **English** 與 **中文（繁體）**）。語系字串放在 `src/locales/*.json`，程式以 Vite `import.meta.glob` **自動掃描該目錄**決定支援哪些語言——新增一個 `xx.json` 即自動出現在語言清單，無需改程式。選擇存於 `localStorage` 的 `appLang`，重開仍記住 | — |
 | **多主題配色（Theme）** | 同一個 **⚙ Settings** 彈窗可切換配色主題（內建 **Low Key**（預設深色）、**Daylight**（淺色）、**Army**（戰術橄欖綠）、**Army (Dark)**（鋼鐵灰）、**VS Code Dark**）。主題定義放在 `src/themes/*.json`，每個檔以 `vars` 物件對應 CSS 自訂屬性（如 `--accent`、`--bg`）；程式以 Vite `import.meta.glob` **自動掃描該目錄**——丟一個 `xx.json` 進去即自動出現在主題清單，無需改程式。切換時把 `vars` 寫到 `<html>` 並設 `data-theme` 屬性。選擇存於 `localStorage` 的 `appTheme`，且在 React 渲染前即套用以避免閃爍（FOUC） | — |
+| **檢查更新** | **⚙ Settings** 彈窗顯示目前版本與 **檢查更新** 按鈕；App 也會在啟動後幾秒自動檢查一次（僅打包版）。當 GitHub 上有更新版本時，彈出提示顯示 `目前版本 → 新版本` 與更新內容，接著**下載對應架構的安裝檔**並顯示即時進度條（驗證檔案位元組大小與 SHA-256 digest），**安裝並重新啟動**，殘留的下載檔會在下次啟動時清除。直接建構於 GitHub Releases API——不需額外的更新伺服器，且鎖定本 repo 的 HTTPS release 網址 | — |
+| **記住視窗大小與位置** | 視窗會以關閉時的大小、位置與最大化狀態重新開啟（存到 userData 下的 `window-state.json`）。若上次位置落在已拔除的螢幕上，則回到置中預設，確保視窗不會開在畫面外 | — |
 | 快取 | 解析結果以 HEAD SHA 為版本快取，重開同 repo 免重新解析 | — |
 | LOGO / 品牌 | 工具列左上角 LOGO ＋ `M2_GIT_DIFF` 名稱；視窗標題與 favicon 同步 | — |
 
@@ -95,7 +97,8 @@ Electron (主行程)
 ├─ electron/excel.js     ExcelJS 產生 styled .xlsx（顏色填滿、註記 cell 註解、SHA 超連結到遠端 commit URL、Manual Links 工作表）
 ├─ electron/markdownReport.js 產生以表格為主的 Markdown review report (.md)，含截斷顯示欄位與遠端 commit 連結
 ├─ electron/fsdialog.js  內建 FolderPicker 的目錄列舉（dialog:listDir / dialog:rememberDir）
-└─ electron/db.js        SQLite 快取層 — 優先用 Node 內建 node:sqlite，其次 better-sqlite3，否則記憶體快取
+├─ electron/db.js        SQLite 快取層 — 優先用 Node 內建 node:sqlite，其次 better-sqlite3，否則記憶體快取
+└─ electron/update.js    內建更新器 — 檢查 GitHub Releases、下載對應架構的安裝檔（驗證大小＋SHA-256）、執行安裝並於啟動時清除舊下載
 
 Renderer (React + Vite)
 ├─ src/main.jsx                 React 入口
@@ -119,7 +122,8 @@ Renderer (React + Vite)
    ├─ FolderPicker.jsx     內建、以鍵盤操作的 repo/資料夾選擇器（取代 OS 對話框；掃描 git 倉庫含 submodule、僅顯示 repo 過濾、記住上次造訪資料夾）
   ├─ ExportPrompt.jsx     統一匯出面板（Excel 或 Markdown，預設 ALL 或前 N 筆）
    ├─ HelpPopup.jsx       快捷鍵說明彈窗（置中 Modal、鍵帽列表、OA Hsiao 徽章，`Esc`/背景關閉）
-   ├─ SettingsPopup.jsx   設定彈窗（語言選擇器 + 主題選擇器；語系由 `src/locales`、主題由 `src/themes` 自動掃描）
+   ├─ SettingsPopup.jsx   設定彈窗（語言 + 主題選擇器、commit 載入筆數，以及顯示目前版本的「檢查更新」按鈕）
+   ├─ UpdatePopup.jsx     更新提示彈窗（新版更新內容 → 進度條下載 → 安裝並重啟；下載以位元組大小＋SHA-256 驗證）
    └─ CommitDetail.jsx     Commit 詳情浮窗（Markdown 渲染、Related item、SHA 旁 🔗 Web / 🔀 PR / 🔍 程式碼搜尋連結、可移動縮放、可多開、💬 Chat 開 VS Code）
    └─ DiffComparePopup.jsx 並排行內 diff 比對視窗（抓取兩個 commit 的 unified diff、依檔案對齊的雙欄 +/- 檢視、整體＋逐檔相似度 %、可拖曳縮放）
 ```
@@ -508,5 +512,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\uninstall-context-menu
 | 虛擬化渲染 | `src/components/RepoColumn.jsx` |
 | git log 解析欄位 / patch-id | `electron/git.js` |
 | 快取邏輯 | `electron/db.js` |
+| 檢查更新（自動更新 / 下載 / 安裝） | `electron/update.js`、`electron/main.js`（`update:check`/`update:download`/`update:install`/`update:cleanup`）、`src/components/UpdatePopup.jsx`、`src/components/SettingsPopup.jsx`、`src/App.jsx`（自動檢查 + `showUpdate`） |
+| 記住視窗大小 / 位置 / 最大化 | `electron/main.js`（`readWindowState` / `saveWindowState` / `window-state.json`） |
 | 視窗 / IPC / CLI 參數 / App 名稱與圖示 | `electron/main.js` |
 | 啟動檢查 / Electron 修復 / -L -R 轉傳 | `start.cmd`（一般/production）、`start_dev.cmd`（開發）、`repair-electron.ps1` |
