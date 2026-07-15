@@ -706,6 +706,111 @@ async function mergeMainIntoWorktree(worktreePath, onData) {
   return runStreaming(['merge', 'main'], worktreePath, onData);
 }
 
+// Run git and return its raw stdout/stderr separately (no merging/trimming),
+// so binary-safe-ish text like a full patch is preserved verbatim. Patches from
+// `format-patch --binary` are ASCII (binary hunks are base85), so utf8 is fine.
+function runRaw(args, cwd) {
+  return new Promise((resolve) => {
+    execFile(
+      'git',
+      args,
+      { cwd, maxBuffer: 1024 * 1024 * 256, windowsHide: true, encoding: 'utf8' },
+      (err, stdout, stderr) => {
+        resolve({
+          ok: !err,
+          stdout: stdout || '',
+          stderr: stderr || '',
+          code: err && typeof err.code === 'number' ? err.code : err ? 1 : 0
+        });
+      }
+    );
+  });
+}
+
+/**
+ * Produce a single-commit patch (`git format-patch -1 --binary --stdout`) as
+ * text: author/date/subject/message + the diff, with `--binary` so binary
+ * changes can be applied later. The root commit is handled with `--root`; merge
+ * commits have no single diff and are rejected with a clear message.
+ * @param {string} cwd repo path
+ * @param {string} sha commit to export
+ * @returns {Promise<string>} the patch text
+ */
+async function exportCommitPatch(cwd, sha) {
+  if (!isGitRepo(cwd)) throw new Error(`Not a git repository: ${cwd}`);
+  const id = String(sha || '').trim();
+  if (!id || /[^0-9a-fA-F]/.test(id)) throw new Error(`Invalid commit sha: ${id || '(empty)'}`);
+  // rev-list --parents prints "<sha> <parent1> <parent2>..."; >1 parent = merge,
+  // exactly the commit alone (no parent) = root.
+  const rp = await runRaw(['rev-list', '--parents', '-n', '1', id], cwd);
+  if (!rp.ok) throw new Error(rp.stderr.trim() || `Unknown commit: ${id}`);
+  const tokens = rp.stdout.trim().split(/\s+/).filter(Boolean);
+  if (tokens.length > 2) throw new Error('This is a merge commit; it has no single patch. Pick a non-merge commit.');
+  const isRoot = tokens.length === 1;
+  const args = ['format-patch', '-1', '--binary', '--stdout'];
+  if (isRoot) args.push('--root');
+  args.push(id);
+  const res = await runRaw(args, cwd);
+  if (!res.ok || !res.stdout) throw new Error(res.stderr.trim() || 'git format-patch failed');
+  return res.stdout;
+}
+
+/**
+ * Inspect a patch file against a repo WITHOUT applying it: returns the patch
+ * text, a diffstat summary, and how it would apply. States (checked in order):
+ *  - `clean`: a plain `git apply --check` succeeds (byte-exact apply).
+ *  - `alreadyApplied`: a clean `--reverse --check` — every change is already
+ *    present, so the repo content is identical and there is nothing to do.
+ *  - `threeway`: a 3-way check succeeds (auto-merge, no conflict).
+ *  - none of the above => real conflicts (see `checkOutput`).
+ * @param {string} cwd repo path
+ * @param {string} patchPath path to the .patch file
+ */
+async function inspectPatch(cwd, patchPath) {
+  if (!isGitRepo(cwd)) throw new Error(`Not a git repository: ${cwd}`);
+  const p = String(patchPath || '').trim();
+  if (!p || !fs.existsSync(p)) throw new Error(`Patch file not found: ${p || '(empty)'}`);
+  const content = fs.readFileSync(p, 'utf8');
+  const stat = (await runRaw(['apply', '--stat', p], cwd)).stdout.trim();
+  // Forward check: does the patch apply byte-exactly to the current tree?
+  const plain = await runRaw(['apply', '--check', p], cwd);
+  // If not, is it ALREADY applied? A clean reverse check means every change is
+  // already present — the repo content is identical, so there is nothing to do.
+  let reverse = { ok: false };
+  if (!plain.ok) reverse = await runRaw(['apply', '--reverse', '--check', p], cwd);
+  const alreadyApplied = !plain.ok && reverse.ok;
+  // Otherwise, can a 3-way merge apply it with no conflicts?
+  let three = { ok: false, stdout: '', stderr: '' };
+  if (!plain.ok && !alreadyApplied) three = await runRaw(['apply', '--3way', '--check', p], cwd);
+  const checkOutput = plain.ok || alreadyApplied
+    ? ''
+    : (three.stderr || three.stdout || plain.stderr || plain.stdout).trim();
+  return {
+    content,
+    stat,
+    clean: plain.ok,
+    alreadyApplied,
+    threeway: plain.ok || three.ok,
+    checkOutput,
+    patchPath: p,
+  };
+}
+
+/**
+ * Apply a patch to the repo's WORKING TREE only (`git apply --3way`). No index
+ * staging, no commit — the user reviews and commits themselves. `--3way` leaves
+ * conflict markers when a hunk can't apply cleanly. Output is streamed.
+ * @param {string} cwd repo path
+ * @param {string} patchPath path to the .patch file
+ * @param {(chunk:string)=>void} [onData] live progress callback
+ */
+async function applyPatch(cwd, patchPath, onData) {
+  if (!isGitRepo(cwd)) throw new Error(`Not a git repository: ${cwd}`);
+  const p = String(patchPath || '').trim();
+  if (!p || !fs.existsSync(p)) throw new Error(`Patch file not found: ${p || '(empty)'}`);
+  return runStreaming(['apply', '--3way', '--verbose', p], cwd, onData);
+}
+
 // Resolve the main repo's object store (git dir) for the submodule at the
 // superproject-relative path `rel`, or null when the main repo has no local copy.
 function gcResolveModuleGitDir(mainRoot, rel) {
@@ -1136,6 +1241,9 @@ module.exports = {
   createMirror,
   updateWorktreeSubmodules,
   mergeMainIntoWorktree,
+  exportCommitPatch,
+  inspectPatch,
+  applyPatch,
   buildSubmoduleMirrorCache,
   listWorktrees,
   removeWorktree,

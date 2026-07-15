@@ -461,6 +461,61 @@ ipcMain.handle('markdown:export', async (_evt, payload) => {
   return { ok: true, path: result.filePath };
 });
 
+// Export a single commit as a .patch file (git format-patch) the user can
+// import into another repo. The patch text is produced in the source repo,
+// then written to a location the user picks.
+ipcMain.handle('commit:exportPatch', async (_evt, payload) => {
+  const { repoPath, sha, defaultName } = payload || {};
+  if (!repoPath) throw new Error('repoPath is required');
+  if (!sha) throw new Error('sha is required');
+  const patch = await git.exportCommitPatch(repoPath, sha);
+  const fs = require('node:fs');
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: 'Export commit as patch',
+    defaultPath: (defaultName || String(sha).slice(0, 12)) + '.patch',
+    filters: [{ name: 'Patch', extensions: ['patch', 'diff'] }]
+  });
+  if (result.canceled || !result.filePath) return { canceled: true };
+  await fs.promises.writeFile(result.filePath, patch, 'utf8');
+  return { ok: true, path: result.filePath };
+});
+
+// Let the user pick a .patch file to import.
+ipcMain.handle('patch:pick', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Select a patch to import',
+    properties: ['openFile'],
+    filters: [
+      { name: 'Patch', extensions: ['patch', 'diff'] },
+      { name: 'All files', extensions: ['*'] }
+    ]
+  });
+  if (result.canceled || !result.filePaths || !result.filePaths.length) return { canceled: true };
+  return { path: result.filePaths[0] };
+});
+
+// Inspect a patch against a repo (content + diffstat + conflict check) without
+// applying it, so the renderer can preview and warn before Apply.
+ipcMain.handle('patch:inspect', async (_evt, payload) => {
+  const { repoPath, patchPath } = payload || {};
+  if (!repoPath) throw new Error('repoPath is required');
+  if (!patchPath) throw new Error('patchPath is required');
+  return git.inspectPatch(repoPath, patchPath);
+});
+
+// Apply a patch to the repo's working tree only (no commit).
+ipcMain.handle('patch:apply', async (evt, payload) => {
+  const { repoPath, patchPath, streamId } = payload || {};
+  if (!repoPath) throw new Error('repoPath is required');
+  if (!patchPath) throw new Error('patchPath is required');
+  const onData = streamId
+    ? (chunk) => {
+        try { evt.sender.send('repo:gitProgress', { streamId, chunk }); } catch { /* window gone */ }
+      }
+    : null;
+  return git.applyPatch(repoPath, patchPath, onData);
+});
+
 // Open an external URL in the user's default browser. Only http(s) URLs are
 // allowed so the renderer can never launch arbitrary protocols / executables.
 ipcMain.handle('shell:openExternal', async (_evt, url) => {

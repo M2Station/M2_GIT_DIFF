@@ -30,6 +30,10 @@ contextBridge.exposeInMainWorld('api', {
   createMirror: (opts) => ipcRenderer.invoke('repo:createMirror', opts),
   updateWorktreeSubmodules: (opts) => ipcRenderer.invoke('repo:updateWorktreeSubmodules', opts),
   mergeWorktreeMain: (opts) => ipcRenderer.invoke('repo:mergeWorktreeMain', opts),
+  exportCommitPatch: (opts) => ipcRenderer.invoke('commit:exportPatch', opts),
+  pickPatch: () => ipcRenderer.invoke('patch:pick'),
+  inspectPatch: (opts) => ipcRenderer.invoke('patch:inspect', opts),
+  applyPatch: (opts) => ipcRenderer.invoke('patch:apply', opts),
   buildSubmoduleMirrorCache: (opts) => ipcRenderer.invoke('repo:buildSubmoduleMirrorCache', opts),
   onGitProgress: (cb) => {
     const listener = (_e, payload) => { try { cb(payload); } catch { /* ignore */ } };

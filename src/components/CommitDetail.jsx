@@ -481,6 +481,28 @@ export default function CommitDetail({ side, commit, related, repoPath, remoteUr
           </svg>
           <span className="cd-chat-label">{t('detail.chat')}</span>
         </button>
+        <button
+          className="cd-export"
+          onPointerDown={(e) => e.stopPropagation()}
+          title={t('detail.exportPatchTitle')}
+          aria-label={t('detail.exportPatch')}
+          onClick={async () => {
+            if (!repoPath || !commit?.sha) return;
+            try {
+              const slug = String(commit.subject || '')
+                .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+              const defaultName = String(commit.sha).slice(0, 12) + (slug ? '-' + slug : '');
+              const res = await window.api.exportCommitPatch({ repoPath, sha: commit.sha, defaultName });
+              if (res?.canceled) return;
+              if (res?.ok) setToast(t('detail.patchExported', { path: res.path }));
+              else setToast(t('detail.patchExportFailed', { msg: res?.output || res?.message || '' }));
+            } catch (e) {
+              setToast(t('detail.patchExportFailed', { msg: e?.message || String(e) }));
+            }
+          }}
+        >
+          ⬇ {t('detail.exportPatch')}
+        </button>
         <button className="cd-close" onClick={onClose} title={t('common.closeEsc')} aria-label={t('common.close')}>
           ✕
         </button>
