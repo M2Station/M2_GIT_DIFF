@@ -5,6 +5,10 @@
   "main": "electron/main.js",
   "author": "OA Hsiao",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/M2Station/M2_GIT_DIFF.git"
+  },
   "scripts": {
     "dev": "concurrently -k -n VITE,ELECTRON -c cyan,magenta \"npm:dev:vite\" \"npm:dev:electron\"",
     "dev:vite": "vite",

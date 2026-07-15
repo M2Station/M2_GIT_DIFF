@@ -89,7 +89,27 @@
     "preload": "Pre-load commits",
     "preloadHint": "How many commits to load when a repo first opens, for a fast start. Default is 250. Click \"Load all logs\" to load the full \"Commits to load\" amount.",
     "autoFill": "Auto-fill commit range",
-    "autoFillHint": "When the two sides stop at different points in history, automatically load the shallower side deeper to realign matched commits hidden by truncation (0 = off). Also caps how many commits each side may auto-load per pass. Default is 100."
+    "autoFillHint": "When the two sides stop at different points in history, automatically load the shallower side deeper to realign matched commits hidden by truncation (0 = off). Also caps how many commits each side may auto-load per pass. Default is 100.",
+    "updates": "Updates",
+    "updatesHint": "Check GitHub for a newer version. The app also checks automatically at startup.",
+    "checkUpdate": "Check for updates",
+    "currentVersion": "Current version: v{version}"
+  },
+  "update": {
+    "title": "Update available",
+    "notes": "What's new",
+    "viewRelease": "View release notes on GitHub",
+    "download": "Download",
+    "downloading": "Downloading… {pct}% ({received} / {total} MB)",
+    "downloadingShort": "Downloading…",
+    "readyMsg": "Download complete — ready to install.",
+    "install": "Install & Restart",
+    "installing": "Installing…",
+    "later": "Later",
+    "retry": "Retry",
+    "checking": "Checking…",
+    "upToDate": "You're on the latest version.",
+    "noAssetYet": "Version {version} is available, but its installer isn't published yet."
   },
   "search": {
     "title": "🔍 Search",

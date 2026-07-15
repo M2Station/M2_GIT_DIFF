@@ -54,5 +54,15 @@ contextBridge.exposeInMainWorld('api', {
   openTaskManager: () => ipcRenderer.invoke('shell:openTaskManager'),
   getInitialRepos: () => ipcRenderer.invoke('app:getInitialRepos'),
   setStartupBg: (color) => ipcRenderer.invoke('app:setStartupBg', color),
-  openInVSCodeChat: (opts) => ipcRenderer.invoke('vscode:chat', opts)
+  openInVSCodeChat: (opts) => ipcRenderer.invoke('vscode:chat', opts),
+  getAppVersion: () => ipcRenderer.invoke('app:getVersion'),
+  checkUpdate: () => ipcRenderer.invoke('update:check'),
+  downloadUpdate: (asset) => ipcRenderer.invoke('update:download', { asset }),
+  installUpdate: (filePath) => ipcRenderer.invoke('update:install', { path: filePath }),
+  cleanupUpdate: () => ipcRenderer.invoke('update:cleanup'),
+  onUpdateProgress: (cb) => {
+    const listener = (_e, payload) => { try { cb(payload); } catch { /* ignore */ } };
+    ipcRenderer.on('update:progress', listener);
+    return () => ipcRenderer.removeListener('update:progress', listener);
+  }
 });
