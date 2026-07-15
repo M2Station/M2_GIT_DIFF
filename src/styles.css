@@ -3260,6 +3260,11 @@ mark {
   background: color-mix(in srgb, var(--unique-bd, #eb4650) 14%, transparent);
   border-color: color-mix(in srgb, var(--unique-bd, #eb4650) 45%, transparent);
 }
+.pi-banner.pi-applied {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+}
 .pi-check {
   margin: 6px 12px 0;
   padding: 6px 8px;

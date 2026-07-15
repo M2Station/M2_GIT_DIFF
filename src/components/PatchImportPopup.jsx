@@ -112,11 +112,15 @@ export default function PatchImportPopup({ side, repoName, repoPath, patchPath, 
     [info]
   );
 
-  // Conflict banner: clean apply, clean 3-way merge, or real conflict.
+  // Conflict banner: already-applied, clean apply, clean 3-way merge, or real
+  // conflict. Check already-applied first — it is the most specific state.
   let bannerClass = 'pi-ok';
   let bannerText = '';
   if (info) {
-    if (info.clean) {
+    if (info.alreadyApplied) {
+      bannerClass = 'pi-applied';
+      bannerText = t('patchImport.alreadyApplied');
+    } else if (info.clean) {
       bannerClass = 'pi-ok';
       bannerText = t('patchImport.clean');
     } else if (info.threeway) {
@@ -176,7 +180,7 @@ export default function PatchImportPopup({ side, repoName, repoPath, patchPath, 
               type="button"
               className="btn primary"
               onClick={apply}
-              disabled={loading || applying || !!error}
+              disabled={loading || applying || !!error || !!info?.alreadyApplied}
               title={t('patchImport.applyTitle')}
             >
               {applying ? t('patchImport.applying') : t('patchImport.apply')}

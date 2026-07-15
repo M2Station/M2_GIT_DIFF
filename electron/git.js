@@ -757,9 +757,12 @@ async function exportCommitPatch(cwd, sha) {
 
 /**
  * Inspect a patch file against a repo WITHOUT applying it: returns the patch
- * text, a diffstat summary, and whether it would apply cleanly. `clean` = a
- * plain `git apply --check` succeeds; `threeway` = a 3-way check succeeds (auto
- * merge, no conflict). Not clean and not threeway => real conflicts.
+ * text, a diffstat summary, and how it would apply. States (checked in order):
+ *  - `clean`: a plain `git apply --check` succeeds (byte-exact apply).
+ *  - `alreadyApplied`: a clean `--reverse --check` — every change is already
+ *    present, so the repo content is identical and there is nothing to do.
+ *  - `threeway`: a 3-way check succeeds (auto-merge, no conflict).
+ *  - none of the above => real conflicts (see `checkOutput`).
  * @param {string} cwd repo path
  * @param {string} patchPath path to the .patch file
  */
@@ -769,13 +772,28 @@ async function inspectPatch(cwd, patchPath) {
   if (!p || !fs.existsSync(p)) throw new Error(`Patch file not found: ${p || '(empty)'}`);
   const content = fs.readFileSync(p, 'utf8');
   const stat = (await runRaw(['apply', '--stat', p], cwd)).stdout.trim();
+  // Forward check: does the patch apply byte-exactly to the current tree?
   const plain = await runRaw(['apply', '--check', p], cwd);
+  // If not, is it ALREADY applied? A clean reverse check means every change is
+  // already present — the repo content is identical, so there is nothing to do.
+  let reverse = { ok: false };
+  if (!plain.ok) reverse = await runRaw(['apply', '--reverse', '--check', p], cwd);
+  const alreadyApplied = !plain.ok && reverse.ok;
+  // Otherwise, can a 3-way merge apply it with no conflicts?
   let three = { ok: false, stdout: '', stderr: '' };
-  if (!plain.ok) three = await runRaw(['apply', '--3way', '--check', p], cwd);
-  const checkOutput = plain.ok
+  if (!plain.ok && !alreadyApplied) three = await runRaw(['apply', '--3way', '--check', p], cwd);
+  const checkOutput = plain.ok || alreadyApplied
     ? ''
     : (three.stderr || three.stdout || plain.stderr || plain.stdout).trim();
-  return { content, stat, clean: plain.ok, threeway: plain.ok || three.ok, checkOutput, patchPath: p };
+  return {
+    content,
+    stat,
+    clean: plain.ok,
+    alreadyApplied,
+    threeway: plain.ok || three.ok,
+    checkOutput,
+    patchPath: p,
+  };
 }
 
 /**
