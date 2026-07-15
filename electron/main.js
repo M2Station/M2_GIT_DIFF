@@ -8,7 +8,7 @@
  */
 'use strict';
 
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, screen } = require('electron');
 const path = require('node:path');
 const os = require('node:os');
 const fs = require('node:fs');
@@ -81,12 +81,91 @@ function startupBackground() {
   return DEFAULT_STARTUP_BG;
 }
 
+// Default window geometry, used on first launch or whenever the saved state is
+// missing / unusable. Electron centers a window with no explicit x/y.
+const DEFAULT_WINDOW = { width: 1480, height: 920 };
+const MIN_WINDOW_WIDTH = 900;
+const MIN_WINDOW_HEIGHT = 600;
+
+// True when the rectangle overlaps the work area of ANY connected display, so a
+// restored window is at least partially on-screen (and thus draggable). Guards
+// against reopening on a monitor that has since been disconnected.
+function isVisibleOnSomeDisplay(x, y, width, height) {
+  try {
+    return screen.getAllDisplays().some((d) => {
+      const wa = d.workArea;
+      return (
+        x < wa.x + wa.width &&
+        x + width > wa.x &&
+        y < wa.y + wa.height &&
+        y + height > wa.y
+      );
+    });
+  } catch {
+    return false;
+  }
+}
+
+// Read the window bounds + maximized flag saved on the last run
+// (userData/window-state.json) so the window reopens where the user left it.
+// Falls back to the default size (Electron-centered) on first launch, any
+// read/parse error, or when the saved position is no longer on a connected
+// display. Never throws. Must be called after `app` is ready (uses `screen`).
+function readWindowState() {
+  const fallback = { ...DEFAULT_WINDOW, isMaximized: false };
+  try {
+    const file = path.join(app.getPath('userData'), 'window-state.json');
+    const s = JSON.parse(fs.readFileSync(file, 'utf8'));
+    const width = Math.max(MIN_WINDOW_WIDTH, Math.round(s.width) || DEFAULT_WINDOW.width);
+    const height = Math.max(MIN_WINDOW_HEIGHT, Math.round(s.height) || DEFAULT_WINDOW.height);
+    const state = { width, height, isMaximized: !!s.isMaximized };
+    // Only restore an explicit position when it's still visible somewhere, so a
+    // window saved on a since-removed monitor doesn't open off-screen.
+    if (
+      Number.isFinite(s.x) &&
+      Number.isFinite(s.y) &&
+      isVisibleOnSomeDisplay(s.x, s.y, width, height)
+    ) {
+      state.x = Math.round(s.x);
+      state.y = Math.round(s.y);
+    }
+    return state;
+  } catch {
+    return fallback;
+  }
+}
+
+// Persist the window's geometry + maximized flag to userData/window-state.json.
+// Saves the NORMAL (restored) bounds even while maximized so un-maximizing after
+// a restart returns to a sane size. Best-effort: a failed write just means the
+// next launch uses the last good state (or the default). Never throws.
+function saveWindowState(win) {
+  try {
+    if (!win || win.isDestroyed()) return;
+    const b = win.getNormalBounds();
+    const state = {
+      x: b.x,
+      y: b.y,
+      width: b.width,
+      height: b.height,
+      isMaximized: win.isMaximized()
+    };
+    const file = path.join(app.getPath('userData'), 'window-state.json');
+    fs.writeFileSync(file, JSON.stringify(state));
+  } catch {
+    /* best-effort: keep the previous saved state */
+  }
+}
+
 function createWindow() {
+  const ws = readWindowState();
   mainWindow = new BrowserWindow({
-    width: 1480,
-    height: 920,
-    minWidth: 900,
-    minHeight: 600,
+    width: ws.width,
+    height: ws.height,
+    // Restore the saved position when present; otherwise let Electron center it.
+    ...(ws.x != null && ws.y != null ? { x: ws.x, y: ws.y } : {}),
+    minWidth: MIN_WINDOW_WIDTH,
+    minHeight: MIN_WINDOW_HEIGHT,
     // Paint the last-known theme color on the first frame (from the renderer's
     // cache) instead of a fixed dark value, so the window shows the right
     // backdrop the instant it appears.
@@ -107,11 +186,32 @@ function createWindow() {
     }
   });
 
+  // Restore the maximized state after construction; the bounds above hold the
+  // normal size so a later un-maximize returns to it.
+  if (ws.isMaximized) mainWindow.maximize();
+
   // The bundled page ships its own <title>; keep the versioned window title by
   // overriding the page-driven update.
   mainWindow.on('page-title-updated', (e) => {
     e.preventDefault();
     if (mainWindow) mainWindow.setTitle(APP_TITLE);
+  });
+
+  // Persist the window geometry so the next launch reopens where the user left
+  // it. resize/move fire rapidly while dragging, so the disk write is debounced;
+  // a final synchronous save on `close` captures the very last state.
+  let saveTimer = null;
+  const scheduleSave = () => {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => saveWindowState(mainWindow), 400);
+  };
+  mainWindow.on('resize', scheduleSave);
+  mainWindow.on('move', scheduleSave);
+  mainWindow.on('maximize', scheduleSave);
+  mainWindow.on('unmaximize', scheduleSave);
+  mainWindow.on('close', () => {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveWindowState(mainWindow);
   });
 
   if (isDev) {
