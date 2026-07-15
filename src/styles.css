@@ -2954,6 +2954,13 @@ mark {
   opacity: 0.35;
   cursor: default;
 }
+/* The ".git" folder shortcut on the main repo row reads as a small code label
+   rather than an emoji, so give it a monospace face. */
+.bmp-wt-gitdir {
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 11px;
+  font-weight: 600;
+}
 .bmp-wt-sync,
 .bmp-wt-merge {
   flex: none;
