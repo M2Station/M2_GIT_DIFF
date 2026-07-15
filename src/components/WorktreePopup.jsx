@@ -576,7 +576,9 @@ export default function WorktreePopup({ side, repoName, data, worktrees = [], bu
                               : t('branchMap.mergeMainTitle', { source: w.linkSource })
                           }
                         >
-                          {t('branchMap.mergeMainShort', { source: w.linkSource })}
+                          {w.detached
+                            ? t('branchMap.detached')
+                            : t('branchMap.mergeMainShort', { source: w.linkSource })}
                         </button>
                       )}
                       {!w.isMain && (

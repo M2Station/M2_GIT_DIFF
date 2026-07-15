@@ -210,7 +210,7 @@
     "submodulesDone": "Submodules: {mirror} mirror · {cache} cache · {network} network ({total} total)",
     "submodulesFailed": "Submodule update failed",
     "mergeMainShort": "\uD83D\uDD00 Merge {source}",
-    "mergeMainDetachedTitle": "This worktree is on a detached HEAD, so there is no branch to merge into. Check out a branch here first.",
+    "mergeMainDetachedTitle": "This worktree is on a detached HEAD, so there's no branch to merge into. Switch to or create a branch here first (e.g. 'git switch -c <name>'), then Merge becomes available.",
     "mergeMainTitle": "Fetch {source} from origin then merge it into this worktree's branch, bringing its new commits here \u2014 if the worktree already has everything it reports 'already same as {source}'. On conflicts git stops so you can resolve them and commit (or run 'git merge --abort').",
     "mergeMainDone": "Updated from {source}.",
     "mergeMainSame": "Already same as {source}; nothing to update.",
