@@ -164,6 +164,8 @@ export default function WorktreePopup({ side, repoName, data, worktrees = [], bu
       : '';
 
   const [copied, setCopied] = useState(false);
+  // Collapse the transcript pane without losing it — toggles the <pre> below.
+  const [logHidden, setLogHidden] = useState(false);
   const copyLog = useCallback((text) => {
     try {
       navigator.clipboard?.writeText(text || '');
@@ -724,6 +726,17 @@ export default function WorktreePopup({ side, repoName, data, worktrees = [], bu
                 <button
                   type="button"
                   className="bmp-copy"
+                  onClick={() => setLogHidden((h) => !h)}
+                  title={t('branchMap.toggleConsoleTitle')}
+                  aria-pressed={logHidden}
+                >
+                  {logHidden ? t('branchMap.showConsole') : t('branchMap.hideConsole')}
+                </button>
+              )}
+              {logText && (
+                <button
+                  type="button"
+                  className="bmp-copy"
                   onClick={() => copyLog(logText)}
                   title={t('branchMap.copyTitle')}
                 >
@@ -731,7 +744,7 @@ export default function WorktreePopup({ side, repoName, data, worktrees = [], bu
                 </button>
               )}
             </div>
-            {logText && (
+            {logText && !logHidden && (
               <pre className="bmp-result-out bmp-log" ref={progressRef}>{logText}</pre>
             )}
             {!busy && result?.kind === 'remove' && result?.ok === false && (
