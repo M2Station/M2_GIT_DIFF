@@ -340,18 +340,19 @@ ipcMain.handle('dialog:pickFolder', async (_evt, opts) => {
 
 const LAST_DIR_KEY = 'lastPickerDir';
 
-// Pick a smart default start folder for the picker's first open: the folder
-// where the user opens repos most (and most recently), then one level up from
-// the last-used location, finally the home directory.
+// Pick a smart default start folder for the picker's first open. Prefer the
+// exact folder the user was last browsing (saved via rememberDir) so "Open
+// repo" reopens where they left off — this is what the user expects and matches
+// the documented purpose of lastPickerDir. Only when there is no usable last
+// location do we fall back to the folder where repos are opened most, then the
+// home directory. Frequent-folder and recent-repo shortcuts are still pinned to
+// the top of the picker list regardless of where the listing starts.
 function smartStartDir() {
+  const last = db.getSetting(LAST_DIR_KEY);
+  if (last && last !== fsdialog.DRIVES && existsSafe(last)) return last;
   const tops = db.getTopRepoParents(5);
   const best = tops.find((t) => t.path && existsSafe(t.path));
   if (best) return best.path;
-  const last = db.getSetting(LAST_DIR_KEY);
-  if (last && last !== fsdialog.DRIVES && existsSafe(last)) {
-    const up = path.dirname(last);
-    return up && up !== last ? up : last;
-  }
   return os.homedir();
 }
 
