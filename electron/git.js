@@ -684,6 +684,79 @@ async function getMirrorCacheInfo(cwd) {
   return { cacheRoot, exists, mirrorCount };
 }
 
+// Estimate the deepest submodule git-dir path a NEW worktree would need, so the
+// Create-Worktree dialog can warn before `git worktree add` when a long name
+// would overflow Git's GIT_DIR limit (Windows: PATH_MAX-40 = 220). A worktree
+// stores each submodule's git dir at
+//   <commonGitDir>/worktrees/<name>/modules/<nested .../modules/<leaf>>
+// The <name> is the only part the dialog controls, so we return the fixed
+// pieces — the common-dir length, the '/worktrees/' segment, and the repo's
+// deepest '/modules/.../<leaf>' reserve — plus the hard/safe limits; the renderer
+// adds the typed name length for the projected total. The reserve is skip-aware
+// (m2gitdiff.submoduleSkip) so it reflects only what will actually be cloned.
+async function estimateWorktreePathBudget(repoPath) {
+  const root = path.resolve(String(repoPath || '').trim());
+  if (!isGitRepo(root)) throw new Error(`Not a git repository: ${root}`);
+
+  // The common git dir holds worktrees/ and modules/ (a linked worktree's .git
+  // is a file pointing back into the main repo's .git).
+  let commonDir = path.join(root, '.git');
+  try {
+    const r = await runRaw(['rev-parse', '--git-common-dir'], root);
+    if (r.ok && r.stdout.trim()) commonDir = path.resolve(root, r.stdout.trim());
+  } catch { /* fall back to <root>/.git */ }
+
+  const skip = makeSubmoduleSkipper(await getSubmoduleSkip(root).catch(() => []));
+
+  // Walk .gitmodules recursively for the deepest nested modules path, ignoring
+  // skipped submodules (they are never cloned, so never overflow).
+  let reserveLen = 0;
+  const seen = new Set();
+  const walk = async (dir, modPrefix, fullPrefix) => {
+    const gm = path.join(dir, '.gitmodules');
+    if (!fs.existsSync(gm)) return;
+    let subs = [];
+    try { subs = await gcParseGitmodules(gm); } catch { return; }
+    for (const s of subs) {
+      if (!s.path) continue;
+      const full = fullPrefix ? `${fullPrefix}/${s.path}` : s.path;
+      const leaf = full.split('/').pop();
+      if (skip && skip(full, leaf)) continue;
+      const modPath = `${modPrefix}/modules/${s.path}`;
+      if (modPath.length > reserveLen) reserveLen = modPath.length;
+      const child = path.join(dir, s.path);
+      const key = child.toLowerCase();
+      if (!seen.has(key) && fs.existsSync(path.join(child, '.gitmodules'))) {
+        seen.add(key);
+        await walk(child, modPath, full);
+      }
+    }
+  };
+  await walk(root, '', '');
+
+  // Optional build-output path budget: deep build trees (e.g. EDK2/NMAKE) create
+  // paths like <worktree>/Build/<pkg>/<TARGET>/<ARCH>/.../<module>/OUTPUT/<file>
+  // that overflow Windows MAX_PATH (260) even when the worktree name is short and
+  // the git-dir fits. Set m2gitdiff.worktreeBuildReserve to the deepest build
+  // suffix you see (0 = check off); the renderer adds parentDir + name to it.
+  let buildReserve = 0;
+  try {
+    const c = await runCombined(['config', '--get', 'm2gitdiff.worktreeBuildReserve'], root);
+    if (c.ok) { const n = parseInt(c.output.trim(), 10); if (Number.isFinite(n) && n > 0) buildReserve = n; }
+  } catch { /* off */ }
+
+  return {
+    commonDirLen: commonDir.length,
+    worktreesSegLen: '/worktrees/'.length,
+    reserveLen,
+    limit: 220,      // git dies when GIT_DIR length > PATH_MAX - 40
+    safeLimit: 210,  // block below the hard limit for headroom
+    buildReserve,    // deepest expected build-output suffix (0 = check off)
+    buildLimit: 260, // Windows MAX_PATH; most build tools are not long-path aware
+    buildSafeLimit: 250
+  };
+}
+
 /**
  * Create a new git worktree checked out from a branch or commit. The target
  * folder is `<parentDir>/<name>` (git creates it; it must not already exist).
@@ -763,6 +836,102 @@ async function createMirror(cwd, parentDir, onData) {
   return { ...res, target };
 }
 
+// Read the configured per-submodule skip patterns for a repo (the multi-valued
+// m2gitdiff.submoduleSkip). Each value is matched against a submodule's full
+// path and its leaf folder name, letting worktree submodule updates skip
+// unwanted or problematic entries — e.g. deep openssl/mbedtls test submodules
+// whose git-dir path overflows the Windows GIT_DIR limit. Empty when unset.
+async function getSubmoduleSkip(cwd) {
+  try {
+    const c = await runCombined(['config', '--get-all', 'm2gitdiff.submoduleSkip'], cwd);
+    if (c.ok && c.output.trim()) {
+      return c.output.split('\n').map((s) => s.trim()).filter(Boolean);
+    }
+  } catch { /* unset */ }
+  return [];
+}
+
+// Compile simple glob skip patterns into a case-insensitive tester. A bare word
+// (no '/' or '*') matches a submodule's leaf folder name exactly; patterns with
+// '*'/'**' or '/' are globbed against the full submodule path (and the leaf).
+// '*' matches within one path segment, '**' across segments. Returns a
+// predicate (full, leaf) => boolean, or null when there are no patterns.
+function makeSubmoduleSkipper(patterns) {
+  const tests = (patterns || [])
+    .map((p) => {
+      const pat = String(p || '').trim().replace(/\\/g, '/').replace(/\/+$/, '');
+      if (!pat) return null;
+      const plain = !/[*/]/.test(pat);
+      const body = pat
+        .replace(/[.+^${}()|[\]]/g, '\\$&')
+        .replace(/\*\*/g, '\u0000')
+        .replace(/\*/g, '[^/]*')
+        .replace(/\u0000/g, '.*');
+      return { plain, rx: new RegExp('^' + body + '$', 'i') };
+    })
+    .filter(Boolean);
+  if (!tests.length) return null;
+  return (full, leaf) => tests.some((t) => (t.plain ? t.rx.test(leaf) : t.rx.test(full) || t.rx.test(leaf)));
+}
+
+// List every submodule in a repo (recursively, from the checked-out .gitmodules
+// tree) with its current skip state, for the Submodule-skip picker. Each entry
+// carries the full path, leaf name, url and nesting depth; `skipped` reflects
+// the repo's current m2gitdiff.submoduleSkip. Any configured pattern that does
+// not match a present submodule is appended as a `custom` row so nothing hides.
+async function listRepoSubmodules(repoPath) {
+  const root = path.resolve(String(repoPath || '').trim());
+  if (!isGitRepo(root)) throw new Error(`Not a git repository: ${root}`);
+  const patterns = await getSubmoduleSkip(root).catch(() => []);
+  const perPat = patterns.map((p) => ({ p, test: makeSubmoduleSkipper([p]) }));
+  const matched = new Set();
+  const out = [];
+  const seen = new Set();
+  const walk = async (dir, relBase, depth) => {
+    const gm = path.join(dir, '.gitmodules');
+    if (!fs.existsSync(gm)) return;
+    let subs = [];
+    try { subs = await gcParseGitmodules(gm); } catch { return; }
+    for (const s of subs) {
+      if (!s.path) continue;
+      const full = relBase ? `${relBase}/${s.path}` : s.path;
+      const leaf = full.split('/').pop();
+      let isSkipped = false;
+      for (const x of perPat) { if (x.test && x.test(full, leaf)) { isSkipped = true; matched.add(x.p); } }
+      out.push({ path: full, name: leaf, url: s.url || '', depth, skipped: isSkipped, custom: false });
+      const child = path.join(dir, s.path);
+      const key = child.toLowerCase();
+      if (!seen.has(key) && fs.existsSync(path.join(child, '.gitmodules'))) {
+        seen.add(key);
+        await walk(child, full, depth + 1);
+      }
+    }
+  };
+  await walk(root, '', 0);
+  for (const { p } of perPat) {
+    if (!matched.has(p)) out.push({ path: p, name: p, url: '', depth: 0, skipped: true, custom: true });
+  }
+  return { ok: true, submodules: out };
+}
+
+// Replace the repo's m2gitdiff.submoduleSkip with the given patterns (submodule
+// paths / names / globs). Writes to the repo-local config (the shared common
+// config for worktrees, so it applies everywhere). Values starting with '-' are
+// dropped so they can never be read as git options.
+async function setSubmoduleSkip(repoPath, patterns) {
+  const root = path.resolve(String(repoPath || '').trim());
+  if (!isGitRepo(root)) throw new Error(`Not a git repository: ${root}`);
+  const list = (Array.isArray(patterns) ? patterns : [])
+    .map((p) => String(p || '').trim())
+    .filter((p) => p && !p.startsWith('-'));
+  // Clear then re-add (multi-valued). --unset-all is a harmless no-op when unset.
+  await runCombined(['config', '--unset-all', 'm2gitdiff.submoduleSkip'], root);
+  for (const p of list) {
+    await runCombined(['config', '--add', 'm2gitdiff.submoduleSkip', p], root);
+  }
+  return { ok: true, count: list.length };
+}
+
 /**
  * Update a worktree's submodules using the parent (main) repo as a local cache.
  * Walks submodules recursively. For each one, if the main repo already holds
@@ -788,21 +957,41 @@ async function updateWorktreeSubmodules(worktreePath, mainRepoPath, onData) {
     if (c.ok && c.output.trim()) cacheRoot = c.output.trim();
   } catch { /* ignore */ }
 
+  // Optional per-submodule skip list (m2gitdiff.submoduleSkip, multi-valued):
+  // paths/names to leave uninitialised (and not recurse into). Useful on Windows
+  // where a few deep test submodules overflow the GIT_DIR path limit.
+  let skipPatterns = [];
+  try { skipPatterns = await getSubmoduleSkip(main); } catch { /* none */ }
+  const skip = makeSubmoduleSkipper(skipPatterns);
+
+  // Self-healing cache: when a submodule falls back to the network (no mirror),
+  // seed a mirror from the fresh clone so next time it's borrowed. On whenever a
+  // cache is configured; opt out with `m2gitdiff.autoSeedMirror=false`.
+  let autoSeed = true;
+  try {
+    const c = await runCombined(['config', '--get', 'm2gitdiff.autoSeedMirror'], main);
+    if (c.ok && ['false', '0', 'no', 'off'].includes(c.output.trim().toLowerCase())) autoSeed = false;
+  } catch { /* default on */ }
+
   const items = [];
   let allText = '';
   const emit = (s) => { allText += s; try { if (onData) onData(s); } catch { /* ignore */ } };
 
   emit(`Updating submodules in ${worktreePath}\n`);
   emit(`Parent repo cache: ${main}\n`);
-  if (cacheRoot) emit(`Mirror cache: ${cacheRoot}\n`);
-  await gcUpdateSubsRec(worktreePath, main, cacheRoot, '', emit, items, 0);
+  if (cacheRoot) emit(`Mirror cache: ${cacheRoot}${autoSeed ? ' (auto-seed on)' : ''}\n`);
+  if (skipPatterns.length) emit(`Skipping submodules matching: ${skipPatterns.join(', ')}\n`);
+  await gcUpdateSubsRec(worktreePath, main, cacheRoot, '', emit, items, 0, skip, autoSeed);
 
   const failed = items.filter((i) => i.ok === false).length;
+  const skipped = items.filter((i) => i.skipped).length;
+  const seeded = items.filter((i) => i.seeded).length;
   const fromMirror = items.filter((i) => i.source === 'mirror').length;
   const fromCache = items.filter((i) => i.source === 'local-cache').length;
   const fromNet = items.filter((i) => i.source === 'network').length;
   emit(`\n${'-'.repeat(52)}\n`);
-  emit(`Done - ${items.length} submodule(s): ${fromMirror} from mirror, ${fromCache} from repo cache, ${fromNet} from network, ${failed} failed.\n`);
+  emit(`Done - ${items.length} submodule(s): ${fromMirror} from mirror, ${fromCache} from repo cache, ${fromNet} from network, ${skipped} skipped, ${failed} failed.\n`);
+  if (seeded) emit(`Seeded ${seeded} new mirror(s) into the cache for next time.\n`);
   return {
     ok: failed === 0,
     command: 'git submodule update --init --recursive (cache-aware)',
@@ -1033,15 +1222,51 @@ async function gcParseGitmodules(gmPath) {
     .sort((a, b) => a.path.localeCompare(b.path));
 }
 
+// Seed a bare mirror of a freshly-cloned submodule into the cache, so the next
+// worktree update borrows objects from it instead of hitting the network. Clones
+// `--mirror` from the submodule's local working dir (fast, no re-download) then
+// points origin at the real URL, matching buildSubmoduleMirrorCache's layout.
+// Best-effort: returns true on success, false otherwise, and never throws.
+async function gcSeedMirrorFromWorktree(cacheRoot, url, submoduleDir, emit, indent) {
+  try {
+    const mp = mirrorPathForUrl(cacheRoot, url);
+    if (fs.existsSync(path.join(mp, 'HEAD'))) return false; // already cached
+    // Clear any stray half-built dir from a prior aborted attempt.
+    if (fs.existsSync(mp)) { try { fs.rmSync(mp, { recursive: true, force: true }); } catch { /* ignore */ } }
+    emit(`${indent}   + seeding mirror cache -> ${mp}\n`);
+    const r = await runStreaming(['clone', '--mirror', submoduleDir, mp], cacheRoot, emit);
+    if (r.exitCode === 0) {
+      try { await runCombined(['remote', 'set-url', 'origin', url], mp); } catch { /* ignore */ }
+      emit(`${indent}   + mirror cached for next time\n`);
+      return true;
+    }
+    emit(`${indent}   + mirror seed failed (ignored)\n`);
+    try { if (fs.existsSync(mp)) fs.rmSync(mp, { recursive: true, force: true }); } catch { /* ignore */ }
+    return false;
+  } catch (e) {
+    try { emit(`${indent}   + mirror seed error: ${String(e?.message || e)} (ignored)\n`); } catch { /* ignore */ }
+    return false;
+  }
+}
+
 // Recursively init/update one submodule level. Reference-source preference:
-// mirror cache -> main repo module store -> network.
-async function gcUpdateSubsRec(repoRoot, mainRoot, cacheRoot, relBase, emit, items, depth) {
+// mirror cache -> main repo module store -> network. When a level falls back to
+// the network, `autoSeed` (default on) seeds a mirror from the fresh clone.
+async function gcUpdateSubsRec(repoRoot, mainRoot, cacheRoot, relBase, emit, items, depth, skip, autoSeed) {
   const gm = path.join(repoRoot, '.gitmodules');
   if (!fs.existsSync(gm)) return;
   const subs = await gcParseGitmodules(gm);
   const indent = '  '.repeat(depth);
   for (const s of subs) {
     const full = relBase ? `${relBase}/${s.path}` : s.path;
+    const leaf = full.split('/').pop();
+    // Honour the configured skip list: don't initialise or recurse into a match.
+    if (skip && skip(full, leaf)) {
+      emit(`\n${indent}[skipped] ${full}\n`);
+      emit(`${indent}   (matched m2gitdiff.submoduleSkip)\n`);
+      items.push({ path: full, url: s.url || '', source: 'skipped', ok: true, skipped: true });
+      continue;
+    }
     let ref = null;
     let source = 'network';
     if (cacheRoot && s.url) {
@@ -1068,11 +1293,18 @@ async function gcUpdateSubsRec(repoRoot, mainRoot, cacheRoot, relBase, emit, ite
     const res = await runStreaming(args, repoRoot, emit);
     const ok = res.exitCode === 0;
     if (!ok) emit(`${indent}   FAILED (exit ${res.exitCode})\n`);
-    items.push({ path: full, url: s.url || '', source, ok });
-
     const childRoot = path.join(repoRoot, s.path);
+    const item = { path: full, url: s.url || '', source, ok };
+    // Self-healing cache: a network fallback means there was no mirror for this
+    // URL. Seed one now from the fresh local clone so the next worktree update
+    // borrows from it. Best-effort; never fails the update.
+    if (ok && autoSeed && source === 'network' && cacheRoot && s.url) {
+      if (await gcSeedMirrorFromWorktree(cacheRoot, s.url, childRoot, emit, indent)) item.seeded = true;
+    }
+    items.push(item);
+
     if (fs.existsSync(path.join(childRoot, '.gitmodules'))) {
-      await gcUpdateSubsRec(childRoot, mainRoot, cacheRoot, full, emit, items, depth + 1);
+      await gcUpdateSubsRec(childRoot, mainRoot, cacheRoot, full, emit, items, depth + 1, skip, autoSeed);
     }
   }
 }
@@ -1538,8 +1770,12 @@ module.exports = {
   switchBranch,
   updateAllBranches,
   addWorktree,
+  estimateWorktreePathBudget,
   createMirror,
   updateWorktreeSubmodules,
+  getSubmoduleSkip,
+  listRepoSubmodules,
+  setSubmoduleSkip,
   mergeMainIntoWorktree,
   setWorktreeBranch,
   exportCommitPatch,

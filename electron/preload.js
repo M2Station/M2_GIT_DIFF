@@ -27,6 +27,7 @@ contextBridge.exposeInMainWorld('api', {
   switchBranch: (opts) => ipcRenderer.invoke('repo:switchBranch', opts),
   updateAllBranches: (opts) => ipcRenderer.invoke('repo:updateAllBranches', opts),
   addWorktree: (opts) => ipcRenderer.invoke('repo:addWorktree', opts),
+  estimateWorktreePathBudget: (opts) => ipcRenderer.invoke('repo:estimateWorktreePathBudget', opts),
   createMirror: (opts) => ipcRenderer.invoke('repo:createMirror', opts),
   updateWorktreeSubmodules: (opts) => ipcRenderer.invoke('repo:updateWorktreeSubmodules', opts),
   mergeWorktreeMain: (opts) => ipcRenderer.invoke('repo:mergeWorktreeMain', opts),
@@ -40,6 +41,8 @@ contextBridge.exposeInMainWorld('api', {
   getMirrorCacheInfo: (opts) => ipcRenderer.invoke('repo:getMirrorCacheInfo', opts),
   updateMirrorCache: (opts) => ipcRenderer.invoke('repo:updateMirrorCache', opts),
   setMirrorCache: (opts) => ipcRenderer.invoke('repo:setMirrorCache', opts),
+  listSubmodules: (opts) => ipcRenderer.invoke('repo:listSubmodules', opts),
+  setSubmoduleSkip: (opts) => ipcRenderer.invoke('repo:setSubmoduleSkip', opts),
   onGitProgress: (cb) => {
     const listener = (_e, payload) => { try { cb(payload); } catch { /* ignore */ } };
     ipcRenderer.on('repo:gitProgress', listener);
