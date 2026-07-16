@@ -252,7 +252,7 @@
     "copyCmdHint": "Copy this command to the clipboard",
     "cmd": {
       "subUpdate": "Update submodules (parallel)",
-      "subUpdateShallow": "Update submodules (shallow, fastest)",
+      "subUpdateForce": "Update submodules (force re-checkout)",
       "subSync": "Sync submodule URLs",
       "subStatus": "Check submodule status",
       "status": "Working tree status",
@@ -266,7 +266,7 @@
     },
     "cmdTip": {
       "subUpdate": "Init and update ALL submodules recursively, 8 in parallel with a progress bar. Use for the first checkout or after a big submodule bump.",
-      "subUpdateShallow": "Same as above but fetches only the latest commit per submodule (--depth 1): smallest, fastest download. No full history; if a pinned commit isn't at a branch tip it can fail \u2014 then drop --depth 1.",
+      "subUpdateForce": "Init and update ALL submodules recursively with a progress bar, forcing a re-checkout (--force): any local changes inside submodules are discarded and the superproject's recorded commit is checked out even if it already looks up to date. Use when a normal update is blocked by a dirty or wrong-branch submodule.",
       "subSync": "Re-copy submodule URLs from .gitmodules into .git/config, recursively. Run this first when a submodule's remote URL has changed.",
       "subStatus": "List every submodule's checked-out commit, recursively. Leading '-' = not initialized, '+' = commit differs from the superproject record, blank = in sync.",
       "status": "Show the current branch plus staged, unstaged and untracked changes. The safe thing to check before you do anything.",

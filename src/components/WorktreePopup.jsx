@@ -120,7 +120,7 @@ function MapNode({ node, depth, expanded, toggle, currentRef, selected, onSelect
 // branchMap.cmd.<id>; the commands themselves are literal and never translated.
 const GIT_SNIPPETS = [
   { id: 'subUpdate', cmd: 'git submodule update --init --recursive --progress --jobs 8' },
-  { id: 'subUpdateShallow', cmd: 'git submodule update --init --recursive --progress --jobs 8 --depth 1' },
+  { id: 'subUpdateForce', cmd: 'git submodule update --init --recursive --force --progress' },
   { id: 'subSync', cmd: 'git submodule sync --recursive' },
   { id: 'subStatus', cmd: 'git submodule status --recursive' },
   { id: 'status', cmd: 'git status' },

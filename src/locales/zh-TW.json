@@ -252,7 +252,7 @@
     "copyCmdHint": "複製此指令到剪貼簿",
     "cmd": {
       "subUpdate": "更新 submodule（平行）",
-      "subUpdateShallow": "更新 submodule（淺層，最快）",
+      "subUpdateForce": "更新 submodule（強制重新檢出）",
       "subSync": "同步 submodule URL",
       "subStatus": "檢查 submodule 狀態",
       "status": "工作區狀態",
@@ -266,7 +266,7 @@
     },
     "cmdTip": {
       "subUpdate": "初始化並遞迴更新「所有」submodule，8 條平行、顯示進度。第一次抓齊或 submodule 指標大幅更新後使用。",
-      "subUpdateShallow": "同上，但每個 submodule 只抓最新一個 commit（--depth 1）：下載量最小、最快。沒有完整歷史；若被 pin 的 commit 不在分支頂端可能失敗，失敗就把 --depth 1 拿掉。",
+      "subUpdateForce": "初始化並遞迴更新「所有」submodule、顯示進度，並強制重新檢出（--force）：會捨棄 submodule 內的任何本機變更，即使看起來已是最新，也會重新 checkout 到父專案記錄的 commit。當一般更新因 submodule 有未提交變更或停在錯誤分支而卡住時使用。",
       "subSync": "把 .gitmodules 裡的 submodule URL 重新寫進 .git/config（遞迴）。當 submodule 的遠端網址有變更時，先跑這個再更新。",
       "subStatus": "遞迴列出每個 submodule 目前 checkout 的 commit。行首 '-' = 未初始化、'+' = commit 與父專案記錄不符、空白 = 同步中。",
       "status": "顯示目前分支，以及已暫存 / 未暫存 / 未追蹤的變更。動手前先看它最安全。",
