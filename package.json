@@ -34,16 +34,16 @@
     "@electron/rebuild": "^4.2.0",
     "@napi-rs/canvas": "^1.0.2",
     "@vitejs/plugin-react": "^6.0.3",
+    "@vitest/coverage-v8": "^4.1.10",
     "concurrently": "^10.0.3",
     "cross-env": "^10.1.0",
     "electron": "^43.1.1",
-    "electron-builder": "25.1.8",
+    "electron-builder": "26.14.0",
     "gifenc": "^1.0.3",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "vite": "^8.1.4",
     "vitest": "^4.1.10",
-    "@vitest/coverage-v8": "^4.1.10",
     "wait-on": "^9.0.10"
   },
   "build": {
