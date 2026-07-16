@@ -399,7 +399,17 @@ Get-MpThreatDetection | Sort-Object InitialDetectionTime -Descending |
 Add-MpPreference -ExclusionPath "$env:LOCALAPPDATA\Programs\M2_GIT_DIFF"
 ```
 
-或開啟 **Windows 安全性 → 病毒與威脅防護 → 保護歷程記錄**，找到被隔離的 `M2_GIT_DIFF.exe` 按**還原 (Restore)**。也可以到 <https://www.microsoft.com/en-us/wdsi/filesubmission> 提報這個誤判，讓之後的版本不再被標記。根本解法是對安裝檔做 Authenticode **程式碼簽章**（本專案尚未設定）。
+或開啟 **Windows 安全性 → 病毒與威脅防護 → 保護歷程記錄**，找到被隔離的 `M2_GIT_DIFF.exe` 按**還原 (Restore)**。也可以到 <https://www.microsoft.com/en-us/wdsi/filesubmission> 提報這個誤判，讓之後的版本不再被標記。根本解法是對安裝檔做 Authenticode **程式碼簽章**；本專案正透過 SignPath Foundation 的開源簽章計畫設定中 —— 詳見下方的**程式碼簽章政策（Code signing policy）**。
+
+### 程式碼簽章政策（Code signing policy）
+
+M2_GIT_DIFF 的 Windows 版本正透過 [SignPath Foundation](https://signpath.org/) 的開源專案免費程式碼簽章計畫進行 Authenticode **程式碼簽章**。
+
+- **免費程式碼簽章由 [SignPath.io](https://about.signpath.io/) 提供，憑證由 [SignPath Foundation](https://signpath.org/) 簽發。**（Free code signing provided by SignPath.io, certificate by SignPath Foundation.）
+- **團隊角色（Team roles）**
+  - *Authors & reviewers（作者與審查者）* —— M2Station 維護者（[組織成員](https://github.com/orgs/M2Station/people)）。
+  - *Approvers（簽章核准者）* —— M2Station 擁有者（[組織 Owners](https://github.com/orgs/M2Station/people?query=role%3Aowner)）；每一次簽章請求都由 Owner 手動核准。
+- **隱私權政策（Privacy policy）** —— M2_GIT_DIFF 完全在你的電腦本機執行，不蒐集任何個人資料、分析或遙測。它只會對外連線到：（1）本專案的公開 **GitHub Releases** API 以檢查與下載應用程式更新（啟動時與在設定中手動檢查；是否安裝由你決定），以及（2）你主動點擊的 commit / PR / 工作項目頁面（以外部瀏覽器開啟）。不會將任何儲存庫內容或個人資訊傳送到任何伺服器。
 
 ### 啟動與自動開啟 repro（-L / -R）
 
