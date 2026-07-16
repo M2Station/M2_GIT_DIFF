@@ -725,7 +725,6 @@ export default function WorktreePopup({ side, repoName, data, worktrees = [], mi
                           type="button"
                           className="bmp-wt-open"
                           onClick={() => onOpenMirrorFolder(mirrorCache)}
-                          disabled={busy}
                           title={t('branchMap.openMirrorFolderTitle', { path: mirrorCache })}
                           aria-label={t('branchMap.openMirrorFolderTitle', { path: mirrorCache })}
                         >
@@ -740,7 +739,6 @@ export default function WorktreePopup({ side, repoName, data, worktrees = [], mi
                           type="button"
                           className="bmp-wt-open bmp-wt-gitdir"
                           onClick={() => onOpenGitDir(w.gitDir)}
-                          disabled={busy}
                           title={t('branchMap.openGitDirTitle')}
                           aria-label={t('branchMap.openGitDirTitle')}
                         >
@@ -751,7 +749,7 @@ export default function WorktreePopup({ side, repoName, data, worktrees = [], mi
                         type="button"
                         className="bmp-wt-open"
                         onClick={() => onOpenFolder(w.path)}
-                        disabled={busy || w.prunable}
+                        disabled={w.prunable}
                         title={t('branchMap.openFolderTitle')}
                         aria-label={t('branchMap.openFolderTitle')}
                       >
