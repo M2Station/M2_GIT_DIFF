@@ -522,6 +522,12 @@ ipcMain.handle('repo:addWorktree', async (_evt, payload) => {
   return git.addWorktree(repoPath, { parentDir, name, ref, newBranch });
 });
 
+ipcMain.handle('repo:estimateWorktreePathBudget', async (_evt, payload) => {
+  const { repoPath } = payload || {};
+  if (!repoPath) throw new Error('repoPath is required');
+  return git.estimateWorktreePathBudget(repoPath);
+});
+
 ipcMain.handle('repo:createMirror', async (evt, payload) => {
   const { repoPath, parentDir, streamId } = payload || {};
   if (!repoPath) throw new Error('repoPath is required');
@@ -604,6 +610,18 @@ ipcMain.handle('repo:setMirrorCache', async (_evt, payload) => {
   if (!mainRepoPath) throw new Error('mainRepoPath is required');
   if (!cacheRoot) throw new Error('cacheRoot is required');
   return git.setMirrorCache(mainRepoPath, cacheRoot);
+});
+
+ipcMain.handle('repo:listSubmodules', async (_evt, payload) => {
+  const { repoPath } = payload || {};
+  if (!repoPath) throw new Error('repoPath is required');
+  return git.listRepoSubmodules(repoPath);
+});
+
+ipcMain.handle('repo:setSubmoduleSkip', async (_evt, payload) => {
+  const { repoPath, patterns } = payload || {};
+  if (!repoPath) throw new Error('repoPath is required');
+  return git.setSubmoduleSkip(repoPath, patterns || []);
 });
 
 ipcMain.handle('repo:listWorktrees', async (_evt, payload) => {

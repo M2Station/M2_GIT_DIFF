@@ -16,7 +16,7 @@ import { useT } from '../lib/i18n.js';
 // inline so the window stays put. Closes on the ✕, the backdrop, Cancel, or
 // Escape. `source` = { kind:'branch'|'commit', ref, isRemote, label,
 // defaultName, defaultBranch }.
-export default function CreateWorktreePopup({ side, repoName, source, busy, result, branchInUse = false, inUseAt = '', onPickDir, onSubmit, onClose }) {
+export default function CreateWorktreePopup({ side, repoName, source, busy, result, branchInUse = false, inUseAt = '', pathBudget = null, onPickDir, onSubmit, onClose }) {
   const t = useT();
   const [parentDir, setParentDir] = useState('');
   const [name, setName] = useState(source?.defaultName || '');
@@ -56,7 +56,35 @@ export default function CreateWorktreePopup({ side, repoName, source, busy, resu
   const sideLabel = side === 'L' ? t('common.left') : side === 'R' ? t('common.right') : '';
   const sep = parentDir.includes('\\') ? '\\' : '/';
   const preview = parentDir && name.trim() ? `${parentDir}${sep}${name.trim()}` : '';
-  const canCreate = !busy && !created && !!parentDir && !!name.trim() && !requireNewBranch;
+
+  // Guard against a worktree name that would push the deepest submodule git-dir
+  // path past Git's GIT_DIR limit (Windows PATH_MAX-40 = 220). `pathBudget` holds
+  // the fixed pieces from the main repo (skip-aware); we add the typed name
+  // length. Over the safe limit we block creation and say how short to go.
+  const trimmedName = name.trim();
+  let pathWarn = null;
+  if (pathBudget && pathBudget.reserveLen > 0) {
+    const base = pathBudget.commonDirLen + pathBudget.worktreesSegLen + pathBudget.reserveLen;
+    const projected = base + trimmedName.length;
+    const maxName = pathBudget.safeLimit - base;
+    if (projected > pathBudget.safeLimit) {
+      pathWarn = { projected, maxName, limit: pathBudget.limit, impossible: maxName < 1 };
+    }
+  }
+
+  // Guard 2: the build-output path under the worktree. Deep build trees (EDK2/
+  // NMAKE etc.) overflow Windows MAX_PATH (260) even when the git-dir fits. Uses
+  // the working-tree parent + name + a configured build reserve (off when 0).
+  let buildWarn = null;
+  if (pathBudget && pathBudget.buildReserve > 0 && parentDir) {
+    const base = parentDir.length + 1 + pathBudget.buildReserve; // +1 path separator
+    const projected = base + trimmedName.length;
+    const maxName = pathBudget.buildSafeLimit - base;
+    if (projected > pathBudget.buildSafeLimit) {
+      buildWarn = { projected, maxName, limit: pathBudget.buildLimit, impossible: maxName < 1 };
+    }
+  }
+  const canCreate = !busy && !created && !!parentDir && !!trimmedName && !requireNewBranch && !pathWarn && !buildWarn;
 
   const isCommit = source?.kind === 'commit';
   const branchFieldLabel = isCommit
@@ -143,6 +171,32 @@ export default function CreateWorktreePopup({ side, repoName, source, busy, resu
           {preview && (
             <div className="wtp-preview">
               {t('worktree.pathPreview')}: <code>{preview}</code>
+            </div>
+          )}
+
+          {pathWarn && (
+            <div className="wtp-req wtp-pathwarn">
+              {pathWarn.impossible
+                ? t('worktree.pathTooLongHard', { limit: pathWarn.limit })
+                : t('worktree.pathTooLong', {
+                    max: pathWarn.maxName,
+                    cur: trimmedName.length,
+                    projected: pathWarn.projected,
+                    limit: pathWarn.limit
+                  })}
+            </div>
+          )}
+
+          {buildWarn && (
+            <div className="wtp-req wtp-pathwarn">
+              {buildWarn.impossible
+                ? t('worktree.buildPathTooLongHard', { limit: buildWarn.limit })
+                : t('worktree.buildPathTooLong', {
+                    max: buildWarn.maxName,
+                    cur: trimmedName.length,
+                    projected: buildWarn.projected,
+                    limit: buildWarn.limit
+                  })}
             </div>
           )}
 

@@ -137,3 +137,40 @@ export function setAutoFillRange(value) {
   }
   return next;
 }
+
+// ---------------------------------------------------------------------------
+// Default submodule-skip list (app-wide template)
+// ---------------------------------------------------------------------------
+// A user-defined default set of submodule names to skip, stored in the app
+// (localStorage) rather than any repo. The Submodule-skip picker saves the
+// current selection here ("Set default") and applies it back later ("Apply
+// default") across repos. Defaults to an empty list — nothing is skipped until
+// the user configures it. Stored as a JSON array of submodule leaf names.
+const DEFAULT_SKIP_KEY = 'defaultSubmoduleSkip';
+
+// Read the saved default skip list (array of names). Empty when unset/invalid.
+export function getDefaultSubmoduleSkip() {
+  try {
+    const saved = localStorage.getItem(DEFAULT_SKIP_KEY);
+    if (saved) {
+      const arr = JSON.parse(saved);
+      if (Array.isArray(arr)) return arr.map((s) => String(s || '').trim()).filter(Boolean);
+    }
+  } catch {
+    /* unset or corrupt */
+  }
+  return [];
+}
+
+// Persist a new default skip list (array of names) and return the stored value.
+export function setDefaultSubmoduleSkip(list) {
+  const uniq = Array.from(
+    new Set((Array.isArray(list) ? list : []).map((s) => String(s || '').trim()).filter(Boolean))
+  );
+  try {
+    localStorage.setItem(DEFAULT_SKIP_KEY, JSON.stringify(uniq));
+  } catch {
+    /* ignore persistence failure */
+  }
+  return uniq;
+}

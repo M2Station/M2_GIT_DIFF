@@ -22,6 +22,7 @@ import GitTerminalPopup from './components/GitTerminalPopup.jsx';
 import BranchSwitchPopup from './components/BranchSwitchPopup.jsx';
 import WorktreePopup from './components/WorktreePopup.jsx';
 import MirrorPopup from './components/MirrorPopup.jsx';
+import SubmoduleSkipPopup from './components/SubmoduleSkipPopup.jsx';
 import PatchImportPopup from './components/PatchImportPopup.jsx';
 import CreateWorktreePopup from './components/CreateWorktreePopup.jsx';
 import ExportPrompt from './components/ExportPrompt.jsx';
@@ -108,6 +109,10 @@ export default function App() {
   // guards the popup while a build/update streams.
   const [mirrorMgr, setMirrorMgr] = useState(null);
   const [mirrorMgrBusy, setMirrorMgrBusy] = useState(false);
+  // Submodule-skip picker launched from the Mirror manager: { repoPath, repoName,
+  // side, submodules, loading } | null. Writes m2gitdiff.submoduleSkip on save.
+  const [skipPicker, setSkipPicker] = useState(null);
+  const [skipPickerBusy, setSkipPickerBusy] = useState(false);
 
   // Import-patch modal: { side, repoPath, repoName, patchPath } | null. Previews
   // a chosen .patch against the side's repo and applies it to the working tree.
@@ -843,6 +848,18 @@ export default function App() {
     });
   }, []);
 
+  // Best-effort: estimate the deepest submodule git-dir path a new worktree
+  // would need (<main>/.git/worktrees/<name>/modules/...), so the Create-Worktree
+  // dialog can warn before a long name overflows Git's GIT_DIR limit. Skip-list
+  // aware, so it reflects what will actually be cloned. Patches the open modal
+  // when it resolves; failures just leave the guard off.
+  const loadWorktreePathBudget = useCallback((repoPath) => {
+    if (!repoPath) return;
+    window.api.estimateWorktreePathBudget?.({ repoPath })
+      .then((b) => setWorktree((w) => (w ? { ...w, pathBudget: b } : w)))
+      .catch(() => { /* guard is best-effort */ });
+  }, []);
+
   // Open the worktree modal for the branch selected in the Branch Map. The map
   // closes so only one modal is up at a time. For a remote branch we prefill a
   // local branch name (creating a tracking branch); a local branch checks out
@@ -850,6 +867,7 @@ export default function App() {
   const openWorktreeForBranch = useCallback((selected) => {
     if (!branchMap || !selected) return;
     const { side, repoName, worktrees = [] } = branchMap;
+    const repo = side === 'L' ? left : right;
     const isRemote = !!selected.isRemote;
     const stripped = isRemote ? selected.ref.replace(/^[^/]+\//, '') : selected.ref;
     // A local branch already checked out in another worktree can't be checked
@@ -861,6 +879,7 @@ export default function App() {
       repoName,
       branchInUse: !!inUse,
       inUseAt: inUse?.path || '',
+      pathBudget: null,
       source: {
         kind: 'branch',
         ref: selected.ref,
@@ -871,7 +890,8 @@ export default function App() {
       },
       result: null
     });
-  }, [branchMap]);
+    loadWorktreePathBudget(repo?.path);
+  }, [branchMap, left, right, loadWorktreePathBudget]);
 
   // Open the worktree modal for a right-clicked commit. Defaults to a detached
   // worktree named after the short sha; the user can name a new branch instead.
@@ -884,6 +904,7 @@ export default function App() {
     setWorktree({
       side,
       repoName: repo.name || repo.path,
+      pathBudget: null,
       source: {
         kind: 'commit',
         ref: sha,
@@ -894,7 +915,8 @@ export default function App() {
       },
       result: null
     });
-  }, [left, right]);
+    loadWorktreePathBudget(repo.path);
+  }, [left, right, loadWorktreePathBudget]);
 
   // Native folder picker for the worktree's parent directory. Opens at the
   // source repo's own folder so the user browses next to the main repo. Returns
@@ -1000,6 +1022,38 @@ export default function App() {
     try { info = await window.api.getMirrorCacheInfo({ repoPath: repo.path }); } catch { /* defaults */ }
     setMirrorMgr({ side, repoName: repo.name || repoName || repo.path, repoPath: repo.path, info, progress: '', result: null });
   }, [branchMap, left, right]);
+
+  // Open the submodule-skip picker for the Mirror manager's repo and load its
+  // submodule list (recursive, with current skip state).
+  const openSubmoduleSkipPicker = useCallback(async () => {
+    if (!mirrorMgr) return;
+    const { repoPath, repoName, side } = mirrorMgr;
+    if (!repoPath) return;
+    setSkipPicker({ repoPath, repoName, side, submodules: [], loading: true });
+    try {
+      const res = await window.api.listSubmodules({ repoPath });
+      setSkipPicker((p) => (p ? { ...p, submodules: res?.submodules || [], loading: false } : p));
+    } catch (e) {
+      logError('git', `${repoName}: list submodules failed`, String(e?.message || e));
+      setSkipPicker((p) => (p ? { ...p, submodules: [], loading: false } : p));
+    }
+  }, [mirrorMgr]);
+
+  // Persist the picked skip list to m2gitdiff.submoduleSkip, then close.
+  const saveSubmoduleSkip = useCallback(async (patterns) => {
+    if (!skipPicker) return;
+    const { repoPath, repoName } = skipPicker;
+    setSkipPickerBusy(true);
+    try {
+      const res = await window.api.setSubmoduleSkip({ repoPath, patterns });
+      logInfo('git', `${repoName}: submoduleSkip updated`, `${res?.count ?? (patterns || []).length} pattern(s)`);
+      setSkipPicker(null);
+    } catch (e) {
+      logError('git', `${repoName}: set submoduleSkip failed`, String(e?.message || e));
+    } finally {
+      setSkipPickerBusy(false);
+    }
+  }, [skipPicker]);
 
   // Native folder picker for the mirror cache. Defaults the cache into a
   // `Mirror` subfolder of the chosen directory so the picked folder isn't
@@ -3038,8 +3092,20 @@ export default function App() {
           onBuild={buildMirror}
           onUpdate={updateMirrorInManager}
           onSetCache={setMirrorFolder}
+          onConfigureSkip={openSubmoduleSkipPicker}
           onOpenFolder={openFolderPath}
           onClose={() => !mirrorMgrBusy && setMirrorMgr(null)}
+        />
+      )}
+
+      {skipPicker && (
+        <SubmoduleSkipPopup
+          repoName={skipPicker.repoName}
+          submodules={skipPicker.submodules}
+          loading={skipPicker.loading}
+          saving={skipPickerBusy}
+          onSave={saveSubmoduleSkip}
+          onClose={() => !skipPickerBusy && setSkipPicker(null)}
         />
       )}
 
@@ -3065,6 +3131,7 @@ export default function App() {
           source={worktree.source}
           branchInUse={worktree.branchInUse}
           inUseAt={worktree.inUseAt}
+          pathBudget={worktree.pathBudget}
           busy={worktreeBusy}
           result={worktree.result}
           onPickDir={pickWorktreeDir}

@@ -28,11 +28,14 @@ function normalizeProgress(raw) {
 // folder and build it, and — when the cache already holds data — refresh every
 // mirror in place. The git transcript streams inline. Closes on the ✕, the
 // backdrop, Close, or Escape. `info` = { cacheRoot, exists, mirrorCount }.
-export default function MirrorPopup({ side, repoName, repoPath, info, busy, progress, result, onPickFolder, onBuild, onUpdate, onSetCache, onOpenFolder, onClose }) {
+export default function MirrorPopup({ side, repoName, repoPath, info, busy, progress, result, onPickFolder, onBuild, onUpdate, onSetCache, onConfigureSkip, onOpenFolder, onClose }) {
   const t = useT();
   const cacheRoot = info?.cacheRoot || '';
   const hasData = !!(info?.exists && info?.mirrorCount > 0);
   const [folder, setFolder] = useState(cacheRoot);
+  const [pos, setPos] = useState(null); // {x,y}; null until first-render centring
+  const dragRef = useRef(null);
+  const winRef = useRef(null);
 
   // Keep the field in sync when the configured cache changes (e.g. after a build
   // sets it), unless the user is mid-edit to a different value.
@@ -58,6 +61,43 @@ export default function MirrorPopup({ side, repoName, repoPath, info, busy, prog
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
   }, [onClose, busy]);
+
+  // Centre the window on first mount (measure, then place).
+  useEffect(() => {
+    if (pos || !winRef.current) return;
+    const r = winRef.current.getBoundingClientRect();
+    setPos({
+      x: Math.max(8, Math.round((window.innerWidth - r.width) / 2)),
+      y: Math.max(8, Math.round((window.innerHeight - r.height) / 3))
+    });
+  }, [pos]);
+
+  // Drag the window by its header.
+  const onDragStart = useCallback(
+    (e) => {
+      if (e.button !== 0) return;
+      dragRef.current = { mx: e.clientX, my: e.clientY, x: pos?.x || 0, y: pos?.y || 0 };
+      const move = (ev) => {
+        const d = dragRef.current;
+        if (!d) return;
+        const w = winRef.current?.offsetWidth || 520;
+        const nx = d.x + (ev.clientX - d.mx);
+        const ny = d.y + (ev.clientY - d.my);
+        setPos({
+          x: Math.min(Math.max(-(w - 90), nx), window.innerWidth - 90),
+          y: Math.min(Math.max(0, ny), window.innerHeight - 32)
+        });
+      };
+      const up = () => {
+        dragRef.current = null;
+        window.removeEventListener('mousemove', move);
+        window.removeEventListener('mouseup', up);
+      };
+      window.addEventListener('mousemove', move);
+      window.addEventListener('mouseup', up);
+    },
+    [pos]
+  );
 
   const browse = useCallback(async () => {
     const picked = await onPickFolder(folder || cacheRoot || repoPath);
@@ -107,10 +147,12 @@ export default function MirrorPopup({ side, repoName, repoPath, info, busy, prog
 
   const canBuild = !busy && !!(folder || '').trim();
 
+  const style = pos ? { left: `${pos.x}px`, top: `${pos.y}px` } : { left: '-9999px', top: '-9999px' };
+
   return (
     <div className="wtp-backdrop mirror-backdrop" onMouseDown={() => !busy && onClose()}>
-      <div className="wtp mirror-pop" onMouseDown={(e) => e.stopPropagation()}>
-        <div className="wtp-head">
+      <div className="wtp mirror-pop" ref={winRef} style={style} onMouseDown={(e) => e.stopPropagation()}>
+        <div className="wtp-head" onMouseDown={onDragStart}>
           <span className="wtp-title">{t('mirrorManager.title')}</span>
           <span className="wtp-meta">
             {sideLabel}
@@ -169,6 +211,16 @@ export default function MirrorPopup({ side, repoName, repoPath, info, busy, prog
               </button>
             </div>
             <div className="wtp-hint">{t('mirrorManager.folderHint')}</div>
+          </div>
+
+          <div className="wtp-field">
+            <label>{t('mirrorManager.submoduleSkipLabel')}</label>
+            <div className="wtp-dir-row">
+              <button type="button" className="btn" onClick={onConfigureSkip} disabled={busy}>
+                {t('mirrorManager.submoduleSkipBtn')}
+              </button>
+            </div>
+            <div className="wtp-hint">{t('mirrorManager.submoduleSkipHint')}</div>
           </div>
 
           {(busy || result) && (
