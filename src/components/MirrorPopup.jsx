@@ -28,7 +28,7 @@ function normalizeProgress(raw) {
 // folder and build it, and — when the cache already holds data — refresh every
 // mirror in place. The git transcript streams inline. Closes on the ✕, the
 // backdrop, Close, or Escape. `info` = { cacheRoot, exists, mirrorCount }.
-export default function MirrorPopup({ side, repoName, repoPath, info, busy, progress, result, onPickFolder, onBuild, onUpdate, onOpenFolder, onClose }) {
+export default function MirrorPopup({ side, repoName, repoPath, info, busy, progress, result, onPickFolder, onBuild, onUpdate, onSetCache, onOpenFolder, onClose }) {
   const t = useT();
   const cacheRoot = info?.cacheRoot || '';
   const hasData = !!(info?.exists && info?.mirrorCount > 0);
@@ -70,6 +70,14 @@ export default function MirrorPopup({ side, repoName, repoPath, info, busy, prog
     onBuild(f);
   }, [busy, folder, onBuild]);
 
+  // Point the repo at the chosen folder as its mirror cache without building or
+  // fetching anything — for a folder that already holds bare mirrors.
+  const setCache = useCallback(() => {
+    const f = (folder || '').trim();
+    if (busy || !f) return;
+    onSetCache(f);
+  }, [busy, folder, onSetCache]);
+
   const sideLabel = side === 'L' ? t('common.left') : side === 'R' ? t('common.right') : '';
 
   const logText = busy
@@ -91,7 +99,11 @@ export default function MirrorPopup({ side, repoName, repoPath, info, busy, prog
               updated: (result.items || []).filter((i) => i.ok !== false).length,
               total: (result.items || []).length
             })
-        : '';
+        : result?.kind === 'set'
+          ? result.ok === false
+            ? t('mirrorManager.setFailed')
+            : t('mirrorManager.setDone', { count: result?.mirrorCount ?? 0, path: result?.cacheRoot || '' })
+          : '';
 
   const canBuild = !busy && !!(folder || '').trim();
 
@@ -203,6 +215,15 @@ export default function MirrorPopup({ side, repoName, repoPath, info, busy, prog
                 {t('mirrorManager.update')}
               </button>
             )}
+            <button
+              type="button"
+              className="btn"
+              onClick={setCache}
+              disabled={!canBuild}
+              title={t('mirrorManager.setCacheTitle')}
+            >
+              {t('mirrorManager.setCache')}
+            </button>
             <button
               type="button"
               className="btn primary"
