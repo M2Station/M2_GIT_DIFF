@@ -423,8 +423,31 @@ Alternatively open **Windows Security → Virus & threat protection → Protecti
 history**, find the quarantined `M2_GIT_DIFF.exe`, and click **Restore**. You can
 also report the false positive at
 <https://www.microsoft.com/en-us/wdsi/filesubmission> so future builds stop being
-flagged. The durable fix is Authenticode **code signing** of the installer (not
-yet configured for this project).
+flagged. The durable fix is Authenticode **code signing** of the installer, which
+is being set up through the SignPath Foundation OSS program — see **Code signing
+policy** below.
+
+### Code signing policy
+
+Windows builds of M2_GIT_DIFF are being Authenticode **code signed** through the
+[SignPath Foundation](https://signpath.org/) free code-signing program for
+open-source projects.
+
+- **Free code signing provided by [SignPath.io](https://about.signpath.io/),
+  certificate by [SignPath Foundation](https://signpath.org/).**
+- **Team roles**
+  - *Authors & reviewers* — the M2Station maintainers
+    ([organization members](https://github.com/orgs/M2Station/people)).
+  - *Approvers* — the M2Station owners
+    ([organization owners](https://github.com/orgs/M2Station/people?query=role%3Aowner));
+    every signing request is approved manually by an owner.
+- **Privacy policy** — M2_GIT_DIFF runs entirely on your machine and collects no
+  personal data, analytics, or telemetry. It makes outbound network connections
+  only to (1) this project's public **GitHub Releases** API to check for and
+  download application updates (checked on launch and on demand from Settings;
+  you decide whether to install), and (2) any commit / pull-request / work-item
+  page you explicitly click, which opens in your external browser. No repository
+  content or personal information is ever transmitted to any server.
 
 ### Launch and auto-open repros (-L / -R)
 
