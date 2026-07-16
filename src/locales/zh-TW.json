@@ -340,13 +340,17 @@
     "buildTitle": "為每個 submodule 在快取資料夾建立（或刷新）bare mirror，並記住此路徑供日後 worktree 更新 submodule 使用。",
     "update": "\uD83D\uDD04 更新 mirror",
     "updateTitle": "把快取中每個既有 bare mirror 從其遠端更新到最新（git remote update --prune）。",
+    "setCache": "\uD83D\uDD17 指定資料夾（不抓取）",
+    "setCacheTitle": "把此 repo 的 mirror 快取指向所選資料夾，但不建立也不抓取任何內容。適用於資料夾已有 bare mirror、不想重新下載的情況。",
     "openFolder": "\uD83D\uDCC2 開啟資料夾",
     "openFolderTitle": "在檔案總管開啟 mirror 快取資料夾",
     "working": "處理中…",
     "buildDone": "已建立 mirror 快取：{count} 個 submodule mirror，位於 {path}",
     "buildFailed": "建立 mirror 快取失敗",
     "updateDone": "已更新 mirror 快取：{total} 個中 {updated} 個成功。",
-    "updateFailed": "更新 mirror 快取失敗"
+    "updateFailed": "更新 mirror 快取失敗",
+    "setDone": "已指定 mirror 快取：{count} 個 mirror，位於 {path}",
+    "setFailed": "無法指定 mirror 快取"
   },
   "export": {
     "head": "⬇ 匯出 / Export",

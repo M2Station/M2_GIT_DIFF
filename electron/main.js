@@ -599,6 +599,13 @@ ipcMain.handle('repo:updateMirrorCache', async (evt, payload) => {
   return git.updateMirrorCache(mainRepoPath, onData);
 });
 
+ipcMain.handle('repo:setMirrorCache', async (_evt, payload) => {
+  const { mainRepoPath, cacheRoot } = payload || {};
+  if (!mainRepoPath) throw new Error('mainRepoPath is required');
+  if (!cacheRoot) throw new Error('cacheRoot is required');
+  return git.setMirrorCache(mainRepoPath, cacheRoot);
+});
+
 ipcMain.handle('repo:listWorktrees', async (_evt, payload) => {
   const { repoPath } = payload || {};
   if (!repoPath) throw new Error('repoPath is required');

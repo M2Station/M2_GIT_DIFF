@@ -1053,6 +1053,41 @@ export default function App() {
     }
   }, [mirrorMgr, subscribeMirrorProgress]);
 
+  // Point the repo at an EXISTING mirror-cache folder without building or
+  // fetching anything — just writes the m2gitdiff.mirrorCache pointer so future
+  // worktree submodule updates prefer the bare mirrors already sitting there.
+  // Use when Build/Rebuild would needlessly re-clone a folder that already holds
+  // data. Instant, so no progress stream is needed.
+  const setMirrorFolder = useCallback(async (cacheRoot) => {
+    if (!mirrorMgr) return;
+    const { repoName, repoPath } = mirrorMgr;
+    const folder = String(cacheRoot || '').trim();
+    if (!repoPath || !folder) return;
+
+    setMirrorMgrBusy(true);
+    setMirrorMgr((m) => (m ? { ...m, progress: '', result: null } : m));
+    try {
+      const res = await window.api.setMirrorCache({ mainRepoPath: repoPath, cacheRoot: folder });
+      const cmd = res?.command || 'git config m2gitdiff.mirrorCache';
+      if (res?.ok === false) {
+        logError('git', `${repoName}: ${cmd}`, res?.output || '');
+      } else {
+        logInfo('git', `${repoName}: ${cmd}`, res?.output || '');
+      }
+      let info = mirrorMgr.info;
+      try { info = await window.api.getMirrorCacheInfo({ repoPath }); } catch { /* keep previous */ }
+      setMirrorMgr((m) => (m ? { ...m, info, result: { ...res, kind: 'set' } } : m));
+      // Reflect the new cache in the open Branch Map so its main-row buttons show.
+      if (res?.ok !== false) setBranchMap((bm) => (bm ? { ...bm, mirrorCache: res?.cacheRoot || bm.mirrorCache } : bm));
+    } catch (e) {
+      const msg = String(e?.message || e);
+      logError('git', `${repoName}: set mirror cache failed`, msg);
+      setMirrorMgr((m) => (m ? { ...m, result: { ok: false, kind: 'set', output: msg } } : m));
+    } finally {
+      setMirrorMgrBusy(false);
+    }
+  }, [mirrorMgr]);
+
   // Refresh every bare mirror in the configured cache (git remote update
   // --prune per mirror) from inside the Mirror manager modal.
   const updateMirrorInManager = useCallback(async () => {
@@ -3002,6 +3037,7 @@ export default function App() {
           onPickFolder={pickMirrorFolder}
           onBuild={buildMirror}
           onUpdate={updateMirrorInManager}
+          onSetCache={setMirrorFolder}
           onOpenFolder={openFolderPath}
           onClose={() => !mirrorMgrBusy && setMirrorMgr(null)}
         />

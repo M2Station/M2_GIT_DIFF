@@ -340,13 +340,17 @@
     "buildTitle": "Build (or refresh) a bare mirror for every submodule into the cache folder, and remember it for future worktree submodule updates.",
     "update": "\uD83D\uDD04 Update mirrors",
     "updateTitle": "Refresh every existing bare mirror in the cache to the latest from its remote (git remote update --prune).",
+    "setCache": "\uD83D\uDD17 Use folder (no fetch)",
+    "setCacheTitle": "Point this repo at the chosen folder as its mirror cache without building or fetching anything. Use when the folder already holds bare mirrors and you don't want to re-download.",
     "openFolder": "\uD83D\uDCC2 Open folder",
     "openFolderTitle": "Open the mirror-cache folder in File Explorer",
     "working": "Working…",
     "buildDone": "Mirror cache built: {count} submodule mirror(s) at {path}",
     "buildFailed": "Mirror cache build failed",
     "updateDone": "Mirror cache updated: {updated} of {total} mirror(s).",
-    "updateFailed": "Mirror cache update failed"
+    "updateFailed": "Mirror cache update failed",
+    "setDone": "Mirror cache set: {count} mirror(s) at {path}",
+    "setFailed": "Could not set mirror cache"
   },
   "export": {
     "head": "⬇ Export",

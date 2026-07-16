@@ -1240,6 +1240,48 @@ async function updateMirrorCache(mainRepoPath, onData) {
 }
 
 /**
+ * Point the repo at an EXISTING submodule mirror cache without building or
+ * fetching anything. Use when the chosen folder already holds bare mirrors
+ * (prepared earlier or shared from elsewhere) and you only want future worktree
+ * submodule updates to prefer it. Only writes the `m2gitdiff.mirrorCache`
+ * config; the folder must already exist. The bare mirrors it holds are counted
+ * for the summary. To (re)create mirrors use buildSubmoduleMirrorCache; to
+ * refresh them use updateMirrorCache.
+ * @param {string} mainRepoPath repo whose mirror-cache pointer to set
+ * @param {string} cacheRoot existing folder that holds the bare mirrors
+ * @returns {Promise<{ok:boolean, command:string, output:string, exitCode:number, cacheRoot:string, mirrorCount:number}>}
+ */
+async function setMirrorCache(mainRepoPath, cacheRoot) {
+  const main = path.resolve(String(mainRepoPath || '').trim());
+  if (!isGitRepo(main)) throw new Error(`Not a git repository: ${main}`);
+  const root = path.resolve(String(cacheRoot || '').trim());
+  if (!root) throw new Error('A cache folder is required');
+  if (!fs.existsSync(root)) throw new Error(`Mirror cache folder not found: ${root}`);
+
+  // Count the bare mirrors already sitting in the folder (direct children with a
+  // HEAD file) so the summary can report what was linked.
+  let mirrorCount = 0;
+  try {
+    const dirents = fs.readdirSync(root, { withFileTypes: true }).filter((d) => d.isDirectory());
+    for (const d of dirents) {
+      if (fs.existsSync(path.join(root, d.name, 'HEAD'))) mirrorCount++;
+    }
+  } catch { /* unreadable -> report zero */ }
+
+  const cmd = `git config m2gitdiff.mirrorCache ${root}`;
+  const res = await runCombined(['config', 'm2gitdiff.mirrorCache', root], main);
+  if (res.ok === false) return { ...res, command: cmd, cacheRoot: root, mirrorCount };
+  return {
+    ok: true,
+    command: cmd,
+    output: `Mirror cache set to ${root}\n${mirrorCount} bare mirror(s) found in the folder.`,
+    exitCode: 0,
+    cacheRoot: root,
+    mirrorCount
+  };
+}
+
+/**
  * List every worktree attached to the repo via `git worktree list --porcelain`.
  * The main worktree is always listed first. Each entry carries its path, HEAD
  * sha, the checked-out branch (short) or a detached flag, plus isMain /
@@ -1505,6 +1547,7 @@ module.exports = {
   applyPatch,
   buildSubmoduleMirrorCache,
   updateMirrorCache,
+  setMirrorCache,
   getMirrorCache,
   getMirrorCacheInfo,
   listWorktrees,
