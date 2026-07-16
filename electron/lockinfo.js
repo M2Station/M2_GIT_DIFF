@@ -24,6 +24,9 @@
 // removal flow degrades gracefully instead of throwing.
 
 const { execFile } = require('node:child_process');
+const fs = require('node:fs');
+const path = require('node:path');
+const os = require('node:os');
 
 // PowerShell (Windows PowerShell 5.1, always present) script that P/Invokes the
 // Restart Manager and prints a compact JSON array of { pid, name }. The target
@@ -66,6 +69,13 @@ try {
   $item=Get-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
   if($item){
     if($item.PSIsContainer){
+      # Register the directory itself and its subdirectories too, not only files:
+      # editors' file-watchers, sync clients (OneDrive/Dropbox) and Explorer hold
+      # *directory* handles that a files-only registration can't see. The caps keep
+      # the probe fast on a huge worktree (Select -First stops the pipeline early).
+      $files.Add($item.FullName)
+      Get-ChildItem -LiteralPath $target -Directory -Force -ErrorAction SilentlyContinue |
+        Select-Object -First 500 | ForEach-Object { $files.Add($_.FullName) }
       Get-ChildItem -LiteralPath $target -Recurse -File -Force -ErrorAction SilentlyContinue |
         Select-Object -First 1000 | ForEach-Object { $files.Add($_.FullName) }
     } else { $files.Add($item.FullName) }
@@ -237,24 +247,87 @@ function parseHandleOutput(stdout) {
   return out;
 }
 
-// Try handle64.exe then handle.exe; resolve [] when neither is installed.
+// Locate a Sysinternals handle.exe / handle64.exe so directory-handle detection
+// works even when it isn't on PATH — the one tool that reliably names a process
+// holding a *directory* handle (a file-watcher, Explorer, a sync client), which
+// the Restart Manager can't see. Checks an explicit M2_HANDLE_EXE override first,
+// then the usual install spots (Sysinternals folder, Chocolatey, WinGet Links).
+// Returns an absolute path, or null to let the PATH fallback try bare names.
+function resolveHandleExe() {
+  const candidates = [];
+  if (process.env.M2_HANDLE_EXE) candidates.push(process.env.M2_HANDLE_EXE);
+  // Beside the app executable / in its resources folder, so a user can just drop
+  // handle.exe next to the app instead of installing it. (We can't ship it
+  // ourselves — the Sysinternals licence forbids redistribution — but the user
+  // placing their own copy here is fine.)
+  try {
+    const exeDir = process.execPath ? path.dirname(process.execPath) : '';
+    if (exeDir) { candidates.push(path.join(exeDir, 'handle64.exe'), path.join(exeDir, 'handle.exe')); }
+  } catch { /* ignore */ }
+  if (process.resourcesPath) {
+    candidates.push(path.join(process.resourcesPath, 'handle64.exe'), path.join(process.resourcesPath, 'handle.exe'));
+  }
+  const home = os.homedir();
+  const localAppData = process.env.LOCALAPPDATA || (home ? path.join(home, 'AppData', 'Local') : '');
+  const dirs = [
+    'C:\\Sysinternals',
+    'C:\\Tools\\Sysinternals',
+    'C:\\ProgramData\\chocolatey\\bin',
+    localAppData ? path.join(localAppData, 'Microsoft', 'WinGet', 'Links') : '',
+    home ? path.join(home, 'Sysinternals') : '',
+    home ? path.join(home, 'Downloads', 'SysinternalsSuite') : ''
+  ].filter(Boolean);
+  for (const d of dirs) {
+    candidates.push(path.join(d, 'handle64.exe'));
+    candidates.push(path.join(d, 'handle.exe'));
+  }
+  // WinGet installs to a versioned package folder; the Links shim above usually
+  // covers it, but fall back to globbing the package dir in case the shim is
+  // absent: ...\WinGet\Packages\Microsoft.Sysinternals.Handle_*\handle*.exe
+  if (localAppData) {
+    try {
+      const pkgRoot = path.join(localAppData, 'Microsoft', 'WinGet', 'Packages');
+      for (const name of fs.readdirSync(pkgRoot)) {
+        if (/Sysinternals\.Handle/i.test(name)) {
+          candidates.push(path.join(pkgRoot, name, 'handle64.exe'));
+          candidates.push(path.join(pkgRoot, name, 'handle.exe'));
+        }
+      }
+    } catch { /* Packages dir may not exist */ }
+  }
+  for (const c of candidates) {
+    try { if (c && fs.existsSync(c)) return c; } catch { /* ignore */ }
+  }
+  return null;
+}
+
+// True when a handle.exe can be located on this machine (absolute path). Used to
+// tell the user whether automatic directory-handle detection is available.
+function hasHandleExe() {
+  return resolveHandleExe() !== null;
+}
+
+// Run handle.exe against the target: an absolute copy first (resolveHandleExe),
+// then bare handle64.exe / handle.exe from PATH. Resolves [] when none exist.
 function fromHandleExe(targetPath) {
   return new Promise((resolve) => {
-    const attempt = (exe, next) => {
+    const tryList = [];
+    const abs = resolveHandleExe();
+    if (abs) tryList.push(abs);
+    tryList.push('handle64.exe', 'handle.exe');
+    const attempt = (i) => {
+      if (i >= tryList.length) { resolve([]); return; }
       execFile(
-        exe,
+        tryList[i],
         ['-accepteula', '-nobanner', targetPath],
-        { windowsHide: true, timeout: 15000, maxBuffer: 1024 * 1024 },
+        { windowsHide: true, timeout: 30000, maxBuffer: 1024 * 1024 },
         (err, stdout) => {
-          if (err && err.code === 'ENOENT') {
-            next();
-            return;
-          }
+          if (err && err.code === 'ENOENT') { attempt(i + 1); return; }
           resolve(parseHandleOutput(stdout));
         }
       );
     };
-    attempt('handle64.exe', () => attempt('handle.exe', () => resolve([])));
+    attempt(0);
   });
 }
 
@@ -307,4 +380,39 @@ async function findLockingProcesses(targetPath) {
   return normalize(posix);
 }
 
-module.exports = { findLockingProcesses };
+/**
+ * One-shot self-diagnostic for when findLockingProcesses turns up nothing: says
+ * whether handle.exe was located and what a direct run against `targetPath`
+ * returned (handle-line count, or the error). Surfaced in the move transcript so
+ * a user can see *why* detection came up empty in their environment. Never throws.
+ * @param {string} targetPath
+ * @returns {Promise<string>}
+ */
+async function diagnoseLock(targetPath) {
+  if (process.platform !== 'win32') return 'non-windows';
+  const exe = resolveHandleExe();
+  if (!exe) return 'handle.exe = NOT FOUND (install it, or drop handle.exe next to the app)';
+  const p = String(targetPath || '');
+  const res = await new Promise((resolve) => {
+    try {
+      execFile(
+        exe,
+        ['-accepteula', '-nobanner', p],
+        { windowsHide: true, timeout: 30000, maxBuffer: 1024 * 1024 },
+        (err, stdout) => {
+          if (err) {
+            resolve(`probe ERROR: ${err.code || (err.killed ? 'timeout' : String(err.message || err))}`);
+            return;
+          }
+          const n = String(stdout || '').split(/\r?\n/).filter((l) => /\spid:\s/i.test(l)).length;
+          resolve(`probe OK: ${n} handle line(s)`);
+        }
+      );
+    } catch (e) {
+      resolve(`spawn ERROR: ${String(e && e.message || e)}`);
+    }
+  });
+  return `handle.exe = ${exe}; ${res}`;
+}
+
+module.exports = { findLockingProcesses, hasHandleExe, diagnoseLock };

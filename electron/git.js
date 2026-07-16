@@ -11,8 +11,7 @@
 const { execFile, spawn } = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
-const { findLockingProcesses } = require('./lockinfo');
-
+const { findLockingProcesses, diagnoseLock } = require('./lockinfo');
 // Unit/record separators chosen to be extremely unlikely in commit messages.
 const FIELD = '\x1f';
 const RECORD = '\x1e';
@@ -1704,6 +1703,182 @@ async function removeWorktree(cwd, worktreePath, force = true) {
 }
 
 /**
+ * Rename (move) a linked worktree's folder via `git worktree move`, which moves
+ * the directory on disk AND rewrites git's admin records so the worktree keeps
+ * working — a plain folder rename would break it. Only the leaf folder name
+ * changes; the new folder is created next to the old one in the same parent
+ * directory. Safety mirrors removeWorktree: the path must be a real linked
+ * worktree of THIS repo and never the main / current one, verified against
+ * `git worktree list` before anything on disk is touched. Worktrees that contain
+ * submodules can't be relocated by `git worktree move` (git refuses with "working
+ * trees containing submodules cannot be moved or removed"), so those fall back to
+ * a manual folder rename + `git worktree repair`, the supported recovery path for
+ * a worktree moved by hand. The fork-source record (used for the "merge source"
+ * action) is re-keyed to the new folder name.
+ * @param {string} cwd repo path
+ * @param {string} worktreePath path of the worktree to rename
+ * @param {string} newName new leaf folder name
+ * @returns {Promise<{ok:boolean, command:string, output:string, exitCode:number, target:string}>}
+ */
+async function moveWorktree(cwd, worktreePath, newName) {
+  if (!isGitRepo(cwd)) throw new Error(`Not a git repository: ${cwd}`);
+  const p = String(worktreePath || '').trim();
+  if (!p || p.startsWith('-')) throw new Error(`Invalid worktree path: ${p || '(empty)'}`);
+  const name = String(newName || '').trim();
+  // The folder name becomes a single path segment, so reject separators,
+  // traversal and Windows-reserved characters (matches addWorktree).
+  if (!name || name === '.' || name === '..' || /[\\/:*?"<>|]/.test(name)) {
+    throw new Error(`Invalid worktree folder name: ${name || '(empty)'}`);
+  }
+
+  const norm = (x) => {
+    try {
+      return path.resolve(x).replace(/\\/g, '/').toLowerCase();
+    } catch {
+      return String(x || '').replace(/\\/g, '/').toLowerCase();
+    }
+  };
+  const targetNorm = norm(p);
+  if (targetNorm === norm(cwd)) throw new Error('Refusing to rename the current worktree');
+
+  // Hard guard before touching disk: the path must be a real linked worktree of
+  // this repo, and not the main one.
+  const wts = await listWorktrees(cwd);
+  const entry = wts.find((w) => norm(w.path) === targetNorm);
+  if (!entry) throw new Error(`Not a worktree of this repository: ${p}`);
+  if (entry.isMain) throw new Error('Refusing to rename the main worktree');
+
+  const parentDir = path.dirname(path.resolve(p));
+  const target = path.join(parentDir, name);
+  if (norm(target) === targetNorm) throw new Error('The new name is the same as the current one');
+  if (fs.existsSync(target)) throw new Error(`Target already exists: ${target}`);
+
+  // Capture the fork-source record before the move so it can be re-keyed to the
+  // new folder name afterwards (best-effort convenience record).
+  let rec = null;
+  try {
+    const map = await readWorktreeConfigMap(cwd);
+    const oldBase = path.basename(path.resolve(p).replace(/[\\/]+$/, ''));
+    for (const [, r] of map) {
+      if (r.path && norm(r.path) === targetNorm) { rec = r; break; }
+    }
+    if (!rec && map.has(oldBase)) rec = map.get(oldBase);
+  } catch { /* record is optional */ }
+
+  const res = await runCombined(['worktree', 'move', p, target], cwd);
+
+  // Native move first — it rewrites git's admin records atomically. It refuses,
+  // though, when the worktree contains submodules ("fatal: working trees
+  // containing submodules cannot be moved or removed"). In that case fall back to
+  // a manual folder rename + `git worktree repair`: repair, run from inside the
+  // moved folder, locates the (unmoved) main repo via the worktree's own .git
+  // pointer and rewrites the now-stale gitdir record to the new location.
+  let moved = res.ok !== false;
+  let finalRes = res;
+  if (!moved && /cannot be moved or removed/i.test(res.output || '')) {
+    const lines = ['$ ' + res.command];
+    if (res.output) lines.push(res.output);
+    lines.push('# worktree contains submodules; moving the folder manually and repairing links');
+    const src = path.resolve(p);
+    let renamed = false;
+    let lockedBy = [];
+    let renameLocked = false;
+    // Windows often throws EBUSY/EPERM when an editor's file-watcher, a terminal
+    // CWD'd inside, or an AV/indexer is touching the folder. Retry a few times for
+    // transient locks; a persistent lock (open editor/watcher) is reported below.
+    let renameErr = null;
+    for (let attempt = 0; attempt < 6 && !renamed; attempt++) {
+      if (attempt > 0) await new Promise((r) => setTimeout(r, 300));
+      try {
+        fs.renameSync(src, target);
+        renamed = true;
+        lines.push(`# moved: ${src} -> ${target}`);
+      } catch (e) {
+        renameErr = e;
+      }
+    }
+    if (!renamed) {
+      renameLocked = ['EBUSY', 'EPERM', 'EACCES', 'ENOTEMPTY'].includes(renameErr?.code);
+      lines.push(`# manual move failed: ${String(renameErr?.message || renameErr)}`);
+      // Name the process(es) holding the folder so the user can close them and
+      // retry — the same locked-folder guidance the Remove action gives.
+      try { lockedBy = await findLockingProcesses(src); } catch { lockedBy = []; }
+      if (lockedBy.length) {
+        lines.push('# directory is still in use by:');
+        for (const proc of lockedBy) lines.push(`#   - ${proc.name} (PID ${proc.pid})`);
+        lines.push('# close the process(es) above, then rename the worktree again.');
+      } else {
+        lines.push('# the folder is locked, but the holding process could not be identified.');
+        lines.push('# it is usually a background handle, e.g.:');
+        lines.push('#   - a second VS Code / editor window open on this folder (its file-watcher)');
+        lines.push('#   - a file-sync client: OneDrive, Dropbox, Google Drive');
+        lines.push('#   - Windows Search indexing, or antivirus real-time scanning');
+        lines.push('#   - a terminal whose current directory is inside the folder');
+        lines.push(`# tip: open Resource Monitor > CPU > "Associated Handles" and search "${path.basename(src)}"`);
+        lines.push('#   to find the exact process, close it, then rename again.');
+        lines.push('# for automatic detection of directory handles, install Sysinternals handle.exe');
+        lines.push('#   (winget install Microsoft.Sysinternals.Handle, or put it on PATH / in C:\\\\Sysinternals).');
+        try {
+          const diag = await diagnoseLock(src);
+          lines.push(`# [diag] ${diag}`);
+        } catch (e) {
+          lines.push(`# [diag] failed: ${String(e?.message || e)}`);
+        }
+      }
+    }
+    if (renamed) {
+      const repair = await runCombined(['worktree', 'repair'], target);
+      lines.push('$ ' + repair.command);
+      if (repair.output) lines.push(repair.output);
+      moved = repair.ok !== false;
+      if (moved) {
+        // Top-level repair reconnects the worktree, but each submodule's
+        // core.worktree still points at the OLD folder ("cannot chdir to
+        // ../old/<sub>"). Re-link them: git rewrites the pointers while keeping
+        // the already-checked-out content (uncommitted edits are preserved).
+        // Best-effort — the worktree itself is already moved and connected, so a
+        // hiccup here is surfaced in the transcript but does not fail the move.
+        const subRepair = await runCombined(['submodule', 'update', '--init', '--recursive'], target);
+        lines.push('$ ' + subRepair.command);
+        if (subRepair.output) lines.push(subRepair.output);
+      } else {
+        // Repair failed: put the folder back so the repo is left as it was.
+        try {
+          fs.renameSync(target, src);
+          lines.push(`# repair failed; rolled back: ${target} -> ${src}`);
+        } catch (e) {
+          lines.push(`# repair failed and rollback failed: ${String(e?.message || e)}`);
+        }
+      }
+    }
+    finalRes = {
+      ok: moved,
+      command: `git worktree move ${p} ${target} (manual + repair)`,
+      output: lines.join('\n').trim(),
+      exitCode: moved ? 0 : (res.exitCode || 1),
+      lockedBy,
+      locked: renameLocked
+    };
+  }
+
+  // Re-key the fork-source record to the new folder name on success. Best-effort:
+  // the record only powers a convenience action, so failures here are ignored.
+  if (moved) {
+    try {
+      await removeWorktreeConfig(cwd, p);
+      if (rec && rec.source) {
+        const key = (k) => `${WT_CONFIG_SECTION}.${name}.${k}`;
+        await runCombined(['config', key('source'), rec.source], cwd);
+        await runCombined(['config', key('path'), path.resolve(target).replace(/\\/g, '/')], cwd);
+        await runCombined(['config', key('createdAt'), rec.createdAt || new Date().toISOString()], cwd);
+      }
+    } catch { /* the record is a convenience, not critical */ }
+  }
+
+  return { ...finalRes, target };
+}
+
+/**
  * Prune worktree admin entries whose working directory no longer exists — the
  * fix-up for worktrees the user deleted from disk by hand. `-v` echoes what was
  * pruned. Returns the transcript in the git-terminal shape.
@@ -1788,6 +1963,7 @@ module.exports = {
   getMirrorCacheInfo,
   listWorktrees,
   removeWorktree,
+  moveWorktree,
   pruneWorktrees,
   parseTags
 };

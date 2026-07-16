@@ -637,6 +637,14 @@ ipcMain.handle('repo:removeWorktree', async (_evt, payload) => {
   return git.removeWorktree(repoPath, worktreePath, force !== false);
 });
 
+ipcMain.handle('repo:moveWorktree', async (_evt, payload) => {
+  const { repoPath, worktreePath, newName } = payload || {};
+  if (!repoPath) throw new Error('repoPath is required');
+  if (!worktreePath) throw new Error('worktreePath is required');
+  if (!newName) throw new Error('newName is required');
+  return git.moveWorktree(repoPath, worktreePath, newName);
+});
+
 ipcMain.handle('repo:pruneWorktrees', async (_evt, payload) => {
   const { repoPath } = payload || {};
   if (!repoPath) throw new Error('repoPath is required');
@@ -783,6 +791,86 @@ ipcMain.handle('shell:openTaskManager', async () => {
   } catch (e) {
     return { ok: false, error: String(e?.message || e) };
   }
+});
+
+// Bring a process's main window to the foreground so the user can jump straight
+// to the app that's holding a worktree folder and close it. Restores the window
+// if minimized. Windows only. Returns a state the UI can act on:
+//   'ok'       - window brought to the front
+//   'nowindow' - process has no top-level window (a background service)
+//   'noproc'   - the process is already gone
+ipcMain.handle('system:activateProcess', async (_evt, payload) => {
+  if (process.platform !== 'win32') return { ok: false, state: 'unsupported' };
+  const pid = Number(payload && payload.pid);
+  if (!Number.isInteger(pid) || pid <= 0) return { ok: false, state: 'badpid' };
+  const script = [
+    "$ErrorActionPreference='SilentlyContinue'",
+    '$id=[int]$env:M2_PID',
+    "if(-not $id){ 'noproc'; return }",
+    '$p=Get-Process -Id $id -ErrorAction SilentlyContinue',
+    "if(-not $p){ 'noproc'; return }",
+    '$sig=@"',
+    'using System;',
+    'using System.Runtime.InteropServices;',
+    'public static class M2Win {',
+    '  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);',
+    '  [DllImport("user32.dll")] public static extern bool ShowWindowAsync(IntPtr h, int n);',
+    '  [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);',
+    '}',
+    '"@',
+    'try { Add-Type -TypeDefinition $sig } catch {}',
+    '$h=$p.MainWindowHandle',
+    "if($h -eq [IntPtr]::Zero){ 'nowindow'; return }",
+    'if([M2Win]::IsIconic($h)){ [void][M2Win]::ShowWindowAsync($h,9) } else { [void][M2Win]::ShowWindowAsync($h,5) }',
+    '[void][M2Win]::SetForegroundWindow($h)',
+    "'ok'"
+  ].join('\n');
+  return new Promise((resolve) => {
+    let b64;
+    try {
+      b64 = Buffer.from(script, 'utf16le').toString('base64');
+    } catch {
+      resolve({ ok: false, state: 'error' });
+      return;
+    }
+    const { execFile } = require('node:child_process');
+    execFile(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', b64],
+      { windowsHide: true, timeout: 10000, maxBuffer: 65536, env: { ...process.env, M2_PID: String(pid) } },
+      (err, stdout) => {
+        if (err) { resolve({ ok: false, state: 'error' }); return; }
+        const out = String(stdout || '').trim().toLowerCase();
+        const state = ['ok', 'nowindow', 'noproc'].includes(out) ? out : 'error';
+        resolve({ ok: state === 'ok', state });
+      }
+    );
+  });
+});
+
+// Force-end a process that's holding a worktree folder (e.g. a background cache
+// like TGitCache/SearchIndexer with no window to close). The renderer confirms
+// first — this is a hard kill. Kills only the given PID (no /T tree kill) so
+// unrelated children aren't taken down. Windows only.
+ipcMain.handle('system:endProcess', async (_evt, payload) => {
+  if (process.platform !== 'win32') return { ok: false, state: 'unsupported' };
+  const pid = Number(payload && payload.pid);
+  if (!Number.isInteger(pid) || pid <= 0) return { ok: false, state: 'badpid' };
+  return new Promise((resolve) => {
+    const { execFile } = require('node:child_process');
+    execFile(
+      'taskkill.exe',
+      ['/PID', String(pid), '/F'],
+      { windowsHide: true, timeout: 10000 },
+      (err, stdout, stderr) => {
+        const out = (String(stdout || '') + String(stderr || '')).trim();
+        if (!err) { resolve({ ok: true, state: 'ended' }); return; }
+        const denied = /access is denied|denied/i.test(out);
+        const gone = /not found|no running instance|128/i.test(out);
+        resolve({ ok: false, state: denied ? 'denied' : gone ? 'noproc' : 'error', output: out });
+      }
+    );
+  });
 });
 
 // Resolve the VS Code launcher once. On Windows the `code` shim is `code.cmd`;

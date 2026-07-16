@@ -201,7 +201,7 @@ export default function CreateWorktreePopup({ side, repoName, source, busy, resu
           )}
 
           {(busy || result) && (
-            <div className={'bmp-result' + (result && result.ok === false ? ' fail' : '')}>
+            <div className={'bmp-result' + (!busy && result && result.ok === false ? ' fail' : '')}>
               <div className="bmp-result-sum">
                 {busy
                   ? t('worktree.creating')
