@@ -822,6 +822,44 @@ export default function App() {
     }
   }, [branchMap, left, right]);
 
+  // Rename an existing worktree's folder via git worktree move, which moves the
+  // directory on disk and rewrites git's admin records so the worktree keeps
+  // working. Refreshes the worktree list and shows the transcript inline.
+  const renameWorktreeFromMap = useCallback(async (worktreePath, newName) => {
+    if (!branchMap || !worktreePath || !newName) return;
+    const { side, repoName } = branchMap;
+    const repo = side === 'L' ? left : right;
+    if (!repo.path) return;
+    setBranchMapBusy(true);
+    setBranchMap((m) => (m ? { ...m, progress: '', result: null } : m));
+    try {
+      const res = await window.api.moveWorktree({
+        repoPath: repo.path,
+        worktreePath,
+        newName
+      });
+      const cmd = res?.command || 'git worktree move';
+      if (res?.ok === false) {
+        logError('git', `${repoName}: ${cmd} (exit ${res?.exitCode ?? 1})`, res?.output || '');
+      } else {
+        logInfo('git', `${repoName}: ${cmd}`, res?.output || '');
+      }
+      let worktrees = branchMap.worktrees;
+      try {
+        worktrees = await window.api.listWorktrees({ repoPath: repo.path });
+      } catch {
+        /* keep the previous list if the re-read fails */
+      }
+      setBranchMap((m) => (m ? { ...m, worktrees, result: { ...res, kind: 'rename' } } : m));
+    } catch (e) {
+      const msg = String(e?.message || e);
+      logError('git', `${repoName}: git worktree move failed`, msg);
+      setBranchMap((m) => (m ? { ...m, result: { ok: false, output: msg, kind: 'rename' } } : m));
+    } finally {
+      setBranchMapBusy(false);
+    }
+  }, [branchMap, left, right]);
+
   // Open a worktree's folder in the OS file manager (directories only, enforced
   // in the main process).
   const openWorktreeFolder = useCallback((worktreePath) => {
@@ -845,6 +883,49 @@ export default function App() {
   const openTaskManager = useCallback(() => {
     window.api.openTaskManager?.().catch((e) => {
       logError('git', 'open task manager failed', String(e?.message || e));
+    });
+  }, []);
+
+  // Jump to the app that's holding a worktree folder: bring its window to the
+  // front so the user can close it themselves (safe — no forced kill, so unsaved
+  // work is preserved). A background service has no window; say so and point at
+  // Task Manager instead.
+  const focusLockingProcess = useCallback((pid, name) => {
+    if (!pid || !window.api.activateProcess) return;
+    const who = `${name || 'process'} (PID ${pid})`;
+    window.api.activateProcess({ pid }).then((res) => {
+      if (res?.state === 'nowindow') {
+        logInfo('git', `${who} has no window`, 'It is a background service (e.g. indexing/sync/antivirus). End it in Task Manager to free the folder.');
+      } else if (res?.state === 'noproc') {
+        logInfo('git', `${who} is already gone`, 'Try the rename/remove again.');
+      } else if (res?.ok) {
+        logInfo('git', `Brought ${who} to the front`, 'Close it there, then try the rename/remove again.');
+      } else {
+        logError('git', `Could not bring ${who} to the front`, String(res?.state || 'error'));
+      }
+    }).catch((e) => {
+      logError('git', 'activate process failed', String(e?.message || e));
+    });
+  }, []);
+
+  // Force-end a process holding a worktree folder (for windowless background
+  // holders like TGitCache/SearchIndexer where "jump to app" can't help). The
+  // popup already confirmed. After it's gone, the user retries the rename/remove.
+  const endLockingProcess = useCallback((pid, name) => {
+    if (!pid || !window.api.endProcess) return;
+    const who = `${name || 'process'} (PID ${pid})`;
+    window.api.endProcess({ pid }).then((res) => {
+      if (res?.ok) {
+        logInfo('git', `Ended ${who}`, 'Now retry the rename/remove.');
+      } else if (res?.state === 'denied') {
+        logError('git', `Couldn't end ${who}: access denied`, 'It may be a protected/system service — end it from an elevated Task Manager.');
+      } else if (res?.state === 'noproc') {
+        logInfo('git', `${who} was already gone`, 'Retry the rename/remove.');
+      } else {
+        logError('git', `Couldn't end ${who}`, String(res?.output || res?.state || 'error'));
+      }
+    }).catch((e) => {
+      logError('git', 'end process failed', String(e?.message || e));
     });
   }, []);
 
@@ -3065,11 +3146,14 @@ export default function App() {
           onSwitch={switchBranchFromMap}
           onWorktree={openWorktreeForBranch}
           onRemoveWorktree={removeWorktreeFromMap}
+          onRenameWorktree={renameWorktreeFromMap}
           onOpenFolder={openWorktreeFolder}
           onOpenGitDir={openFolderPath}
           onOpenMirrorFolder={openFolderPath}
           onUpdateMirror={updateMirrorFromMap}
           onOpenTaskManager={openTaskManager}
+          onFocusProcess={focusLockingProcess}
+          onEndProcess={endLockingProcess}
           onOpenMirror={openMirrorManager}
           onUpdateSubmodules={updateSubmodulesFromMap}
           onMergeMain={mergeMainFromMap}

@@ -138,7 +138,7 @@ const GIT_SNIPPETS = [
 // button fetches from origin and fast-forwards every tracking branch; the result
 // transcript is shown inline so the tree can refresh in place. Closes on the ✕,
 // the backdrop, the Close button, or Escape.
-export default function WorktreePopup({ side, repoName, data, worktrees = [], mirrorCache = '', busy, result, progress, onUpdate, onRefresh, onSwitch, onWorktree, onRemoveWorktree, onOpenFolder, onOpenGitDir, onOpenMirrorFolder, onUpdateMirror, onOpenTaskManager, onOpenMirror, onUpdateSubmodules, onMergeMain, onSwitchWorktreeBranch, onClose }) {
+export default function WorktreePopup({ side, repoName, data, worktrees = [], mirrorCache = '', busy, result, progress, onUpdate, onRefresh, onSwitch, onWorktree, onRemoveWorktree, onRenameWorktree, onOpenFolder, onOpenGitDir, onOpenMirrorFolder, onUpdateMirror, onOpenTaskManager, onFocusProcess, onEndProcess, onOpenMirror, onUpdateSubmodules, onMergeMain, onSwitchWorktreeBranch, onClose }) {
   const t = useT();
   const { current, local = [], remote = [] } = data || {};
   const [expanded, setExpanded] = useState(() => new Set());
@@ -162,6 +162,28 @@ export default function WorktreePopup({ side, repoName, data, worktrees = [], mi
     setBranchEditPath(null);
     setBranchName('');
   }, []);
+  // Inline "rename this worktree's folder" editor (git worktree move). Holds the
+  // path of the row being renamed and the new leaf name typed into the input.
+  const [renamePath, setRenamePath] = useState(null);
+  const [renameName, setRenameName] = useState('');
+  const startRename = useCallback((wtPath) => {
+    const leaf = String(wtPath || '').replace(/[\\/]+$/, '').split(/[\\/]/).pop() || '';
+    setRenamePath(wtPath);
+    setRenameName(leaf);
+  }, []);
+  const confirmRename = useCallback((wtPath) => {
+    const nm = renameName.trim();
+    if (!nm) return;
+    onRenameWorktree(wtPath, nm);
+    setRenamePath(null);
+    setRenameName('');
+  }, [renameName, onRenameWorktree]);
+  const cancelRename = useCallback(() => {
+    setRenamePath(null);
+    setRenameName('');
+  }, []);
+  // PID of the locking process awaiting an "end task" confirmation (null = none).
+  const [endConfirmPid, setEndConfirmPid] = useState(null);
   const searchRef = useRef(null);
   // Keep the live progress pane pinned to the newest output.
   const progressRef = useRef(null);
@@ -545,6 +567,7 @@ export default function WorktreePopup({ side, repoName, data, worktrees = [], mi
               const locked = w.isMain || w.isCurrent;
               const confirming = confirmPath === w.path;
               const removing = removingPath === w.path;
+              const renaming = renamePath === w.path;
               return (
                 <div className={'bmp-wt-row' + (locked ? ' locked' : '') + (w.prunable ? ' missing' : '')} key={w.path}>
                   <span className="bmp-wt-icon">{w.isMain ? '\uD83C\uDF34' : '\uD83C\uDF3F'}</span>
@@ -574,6 +597,42 @@ export default function WorktreePopup({ side, repoName, data, worktrees = [], mi
                         title={t('branchMap.removeTitle')}
                       >
                         {t('branchMap.remove')}
+                      </button>
+                    </span>
+                  ) : renaming ? (
+                    <span className="bmp-wt-rename">
+                      <input
+                        type="text"
+                        className="bmp-wt-branch-input"
+                        value={renameName}
+                        onChange={(e) => setRenameName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') { e.preventDefault(); confirmRename(w.path); }
+                          else if (e.key === 'Escape') { e.preventDefault(); cancelRename(); }
+                        }}
+                        placeholder={t('branchMap.renamePlaceholder')}
+                        spellCheck={false}
+                        autoFocus
+                        disabled={busy}
+                      />
+                      <button
+                        type="button"
+                        className="bmp-wt-merge"
+                        onClick={() => confirmRename(w.path)}
+                        disabled={busy || !renameName.trim()}
+                        title={t('branchMap.renameConfirmTitle')}
+                      >
+                        {t('branchMap.renameConfirm')}
+                      </button>
+                      <button
+                        type="button"
+                        className="bmp-wt-cancel"
+                        onClick={cancelRename}
+                        disabled={busy}
+                        title={t('common.cancel')}
+                        aria-label={t('common.cancel')}
+                      >
+                        ✕
                       </button>
                     </span>
                   ) : (
@@ -698,6 +757,18 @@ export default function WorktreePopup({ side, repoName, data, worktrees = [], mi
                       >
                         📂
                       </button>
+                      {!w.isMain && (
+                        <button
+                          type="button"
+                          className="bmp-wt-rename-btn"
+                          onClick={() => startRename(w.path)}
+                          disabled={busy || locked || w.prunable}
+                          title={t('branchMap.renameTitle')}
+                          aria-label={t('branchMap.renameTitle')}
+                        >
+                          ✏️
+                        </button>
+                      )}
                       <button
                         type="button"
                         className="bmp-wt-del"
@@ -785,7 +856,7 @@ export default function WorktreePopup({ side, repoName, data, worktrees = [], mi
         </div>
 
         {(busy || result) && (
-          <div className={'bmp-result' + (result && result.ok === false ? ' fail' : '')}>
+          <div className={'bmp-result' + (!busy && result && result.ok === false ? ' fail' : '')}>
             <div className="bmp-result-sum">
               <span className="bmp-result-msg">
                 {busy && <span className="bmp-spin" />}
@@ -825,6 +896,10 @@ export default function WorktreePopup({ side, repoName, data, worktrees = [], mi
                             ? result.ok === false
                               ? t('branchMap.setBranchFailed')
                               : t('branchMap.setBranchDone', { branch: result.branch || '' })
+                          : result?.kind === 'rename'
+                            ? result.ok === false
+                              ? t('branchMap.renameFailed')
+                              : t('branchMap.renameDone')
                           : t('branchMap.updateDone', {
                               updated: result?.updated ?? 0,
                               skipped: result?.skipped ?? 0,
@@ -856,16 +931,53 @@ export default function WorktreePopup({ side, repoName, data, worktrees = [], mi
             {logText && !logHidden && (
               <pre className="bmp-result-out bmp-log" ref={progressRef}>{logText}</pre>
             )}
-            {!busy && result?.kind === 'remove' && result?.ok === false && (
+            {!busy && result?.ok === false &&
+              (result?.kind === 'remove' ||
+                (result?.kind === 'rename' && (result?.locked || (Array.isArray(result.lockedBy) && result.lockedBy.length > 0)))) && (
               <div className="bmp-locked">
                 {Array.isArray(result.lockedBy) && result.lockedBy.length ? (
                   <>
                     <div className="bmp-locked-head">{t('branchMap.lockedByHead')}</div>
                     <ul className="bmp-locked-list">
                       {result.lockedBy.map((p) => (
-                        <li key={p.pid}>
-                          <span className="bmp-locked-name">{p.name}</span>
-                          <span className="bmp-locked-pid">PID {p.pid}</span>
+                        <li key={p.pid} className="bmp-locked-row">
+                          <button
+                            type="button"
+                            className="bmp-locked-proc"
+                            onClick={() => onFocusProcess?.(p.pid, p.name)}
+                            disabled={!onFocusProcess}
+                            title={t('branchMap.focusProcessTitle')}
+                          >
+                            <span className="bmp-locked-name">{p.name}</span>
+                            <span className="bmp-locked-pid">PID {p.pid}</span>
+                            <span className="bmp-locked-go" aria-hidden="true">↗</span>
+                          </button>
+                          {onEndProcess && (
+                            endConfirmPid === p.pid ? (
+                              <span className="bmp-locked-end-confirm">
+                                <button type="button" className="btn ghost" onClick={() => setEndConfirmPid(null)}>
+                                  {t('common.cancel')}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn danger"
+                                  onClick={() => { setEndConfirmPid(null); onEndProcess(p.pid, p.name); }}
+                                  title={t('branchMap.endProcessConfirmTitle')}
+                                >
+                                  {t('branchMap.endProcessConfirm')}
+                                </button>
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                className="bmp-locked-end"
+                                onClick={() => setEndConfirmPid(p.pid)}
+                                title={t('branchMap.endProcessTitle')}
+                              >
+                                {t('branchMap.endProcess')}
+                              </button>
+                            )
+                          )}
                         </li>
                       ))}
                     </ul>

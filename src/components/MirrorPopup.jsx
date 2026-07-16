@@ -224,7 +224,7 @@ export default function MirrorPopup({ side, repoName, repoPath, info, busy, prog
           </div>
 
           {(busy || result) && (
-            <div className={'bmp-result' + (result && result.ok === false ? ' fail' : '')}>
+            <div className={'bmp-result' + (!busy && result && result.ok === false ? ' fail' : '')}>
               <div className="bmp-result-sum">
                 <span className="bmp-result-msg">
                   {busy && <span className="bmp-spin" />}
