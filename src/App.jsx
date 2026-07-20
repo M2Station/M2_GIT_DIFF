@@ -1137,8 +1137,8 @@ export default function App() {
   }, [skipPicker]);
 
   // Native folder picker for the mirror cache. Defaults the cache into a
-  // `Mirror` subfolder of the chosen directory so the picked folder isn't
-  // polluted with bare mirror repos. Returns the cache-root path, or null.
+  // `Mirror_Cache_Repro` subfolder of the chosen directory so the picked folder
+  // isn't polluted with bare mirror repos. Returns the cache-root path, or null.
   const pickMirrorFolder = useCallback(async (defaultPath) => {
     const start = defaultPath || mirrorMgr?.repoPath || '';
     let picked = null;
@@ -1148,7 +1148,7 @@ export default function App() {
     const sep = picked.indexOf(BS) >= 0 ? BS : '/';
     let base = picked;
     while (base.endsWith('/') || base.endsWith(BS)) base = base.slice(0, -1);
-    return base.toLowerCase().endsWith('mirror') ? base : `${base}${sep}Mirror`;
+    return base.toLowerCase().endsWith('mirror_cache_repro') ? base : `${base}${sep}Mirror_Cache_Repro`;
   }, [mirrorMgr]);
 
   // Build a golden cache of per-submodule bare mirrors of the MAIN repo into the
