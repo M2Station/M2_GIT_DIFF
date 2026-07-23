@@ -1,0 +1,187 @@
+name: Sync M2 Common AI
+
+# 從中央 repo 同步 Copilot 設定到本 repo；同步範圍由中央的 .github/sync-manifest.txt 定義。
+# 放置路徑：.github/workflows/sync-m2-common-ai.yml
+#
+# ── 需要的設定：無 ────────────────────────────────────────────────────
+#   中央 repo 為 public，因此不需要 token、secret 或 variable。
+#   唯一需要開的權限（org 或 repo 層級皆可）：
+#     Settings → Actions → General → Workflow permissions
+#     → 勾選 Allow GitHub Actions to create and approve pull requests
+#
+#   注意：本 repo 可以是 private，不受影響 ——
+#   讀取「公開的」中央 repo 不需要任何認證。
+# ─────────────────────────────────────────────────────────────────────
+
+on:
+  schedule:
+    # 台灣時間 (UTC+8) 每天 05:00 與 17:00 各檢查一次；GitHub cron 以 UTC 計算，
+    # 換算：05:00 UTC+8 = 21:00 UTC（前一日）、17:00 UTC+8 = 09:00 UTC。
+    - cron: '0 9,21 * * *'
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: '中央 repo 的 branch / tag（預設 main）'
+        required: false
+        default: 'main'
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write             # 「Open issue on failure」步驟建立 issue 時需要
+
+# 同一時間只允許一個同步在跑，避免排程與手動觸發並發操作 chore/sync-m2-common-ai 分支而衝突。
+# cancel-in-progress: false — 讓進行中的同步跑完，不中途取消留下半完成狀態。
+concurrency:
+  group: sync-m2-common-ai
+  cancel-in-progress: false
+
+env:
+  # 可用 repo/org variable CENTRAL_AI_REPO 覆寫，未設定時使用預設值
+  CENTRAL_AI_REPO: ${{ vars.CENTRAL_AI_REPO || 'M2Station/M2_COMMON_AI' }}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10       # 安全網：避免卡住的 job 空耗 runner
+    steps:
+      - name: Checkout this repo
+        uses: actions/checkout@v4
+
+      # 公開 repo，無需 token
+      - name: Checkout central AI config
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.CENTRAL_AI_REPO }}
+          ref: ${{ inputs.ref || 'main' }}
+          path: .central
+
+      - name: Sync files
+        id: sync
+        env:
+          # 透過環境變數傳入使用者可控的 ref，避免 ${{ }} 直接內插進 shell 造成 script injection
+          SOURCE_REF: ${{ inputs.ref || 'main' }}
+        run: |
+          set -euo pipefail
+
+          # 同步範圍由中央 repo 的 .github/sync-manifest.txt 定義（single source of truth）。
+          # 之後要新增同步範圍，只改中央 manifest，下游這支 workflow 完全不用動。
+          MANIFEST='.central/.github/sync-manifest.txt'
+          if [[ ! -f "$MANIFEST" ]]; then
+            echo "::error::找不到中央 manifest：.github/sync-manifest.txt（請確認中央 repo 有此檔）"
+            exit 1
+          fi
+
+          # manifest 每行一個路徑，相對於 .github/：
+          #   行尾為 / → 資料夾，用 rsync --delete（中央沒有的檔案，下游會被刪）
+          #   否則     → 單檔，用 cp 覆寫
+          #   # 開頭與空行略過
+          synced=()
+          while IFS= read -r line || [[ -n "$line" ]]; do
+            path="$(printf '%s' "$line" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+            [[ -z "$path" || "$path" == '#'* ]] && continue
+
+            # 安全防護：只允許 .github/ 底下的乾淨相對路徑。
+            #   - 擋絕對路徑
+            #   - 擋 . / .. 單獨作為路徑區段：會被檔案系統/rsync 正規化，
+            #     例如 ./workflows/ 會落到 .github/workflows/，繞過下方 workflows/ 守衛
+            #   - 擋 workflows/（GITHUB_TOKEN 無法寫 .github/workflows/）
+            case "$path" in
+              /*)
+                echo "::error::manifest 不允許絕對路徑：$path"; exit 1 ;;
+              . | .. | ./* | ../* | */./* | */../* | */. | */..)
+                echo "::error::manifest 路徑不得含 . 或 .. 區段：$path"; exit 1 ;;
+              workflows | workflows/ | workflows/*)
+                echo "::error::manifest 不允許同步 workflows/：$path"; exit 1 ;;
+            esac
+
+            src=".central/.github/$path"
+            dst=".github/$path"
+            if [[ "$path" == */ ]]; then
+              [[ -d "$src" ]] || { echo "::error::中央缺少資料夾：.github/$path"; exit 1; }
+              mkdir -p "$dst"
+              rsync -av --delete "$src" "$dst"
+            else
+              [[ -f "$src" ]] || { echo "::error::中央缺少檔案：.github/$path"; exit 1; }
+              mkdir -p "$(dirname "$dst")"
+              cp "$src" "$dst"
+            fi
+            synced+=(".github/${path%/}")
+          done < "$MANIFEST"
+
+          [[ ${#synced[@]} -gt 0 ]] || { echo "::error::manifest 沒有任何有效路徑"; exit 1; }
+
+          source_sha="$(git -C .central rev-parse HEAD)"
+          rm -rf .central
+
+          # 舊版寫的是 .github/AI_CONFIG_VERSION；改名後順手清掉遺留檔（不存在則無事）。
+          rm -f .github/AI_CONFIG_VERSION
+
+          # 只在「manifest 列出的路徑」實際有變化時才寫 version 檔並開 PR。
+          # M2_COMMON_AI_VERSION 內含 synced_at 時戳，若每跑都寫會製造假 diff、每次都開空 PR；
+          # 故先比對內容，相同就 changed=false，下一步略過開 PR。
+          changes="$(git status --porcelain -- "${synced[@]}")"
+          if [[ -n "$changes" ]]; then
+            # 記錄來源版本與本次實際變更的檔案，便於追溯
+            {
+              echo "source_repo: ${CENTRAL_AI_REPO}"
+              echo "source_ref:  ${SOURCE_REF}"
+              echo "source_sha:  ${source_sha}"
+              echo "synced_at:   $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+              echo "changed_files:"
+              echo "$changes" | cut -c4- | sed 's/^/  - /'
+            } > .github/M2_COMMON_AI_VERSION
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "AI config 內容無變化，略過開 PR。"
+          fi
+
+      - name: Create pull request
+        if: steps.sync.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          # 省略 token → 沿用 action 預設的 GITHUB_TOKEN，只用來「在本 repo 建立 PR」
+          # （權限由上方 permissions 控制），與讀取公開中央 repo 無關（上方 Checkout 那步不帶 token）。
+          # caveat：GITHUB_TOKEN 開的 PR 不會觸發 consumer 端 on: pull_request 檢查（GitHub 防遞迴）；
+          #         若該 check 被設為 required，此 PR 會卡住 —— 需要時改用 PAT / GitHub App token
+          #         （peter-evans FAQ；可複用 docs/adr-001-visibility.md 的 App token snippet）。
+          branch: chore/sync-m2-common-ai
+          delete-branch: true
+          commit-message: 'chore(ai): sync Copilot config from central repo'
+          title: 'chore(ai): sync Copilot config from central repo'
+          body: |
+            由 `sync-m2-common-ai` workflow 自動產生。
+
+            ## What
+            從中央 repo `${{ env.CENTRAL_AI_REPO }}` 同步 Copilot 設定檔。
+
+            ## 同步範圍
+            依中央 repo 的 `.github/sync-manifest.txt` 定義；實際變更的檔案見本 PR diff。
+            （新增同步範圍只需改中央 manifest，下游 workflow 不用動。）
+
+            ## Why
+            集中維護通用規範與 prompt files，避免各 repo 各自分歧。
+
+            ## Verification
+            - [ ] diff 僅包含上述路徑
+            - [ ] 本 repo 專屬的規範未被覆蓋（專案特定內容不應放在這些檔案中）
+
+            來源版本見 `.github/M2_COMMON_AI_VERSION`。
+          labels: |
+            chore
+            automated
+
+      # 排程失敗通常沒人看 —— 明確開 issue 通知
+      - name: Open issue on failure
+        if: failure() && github.event_name == 'schedule'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: 'AI config 同步失敗',
+              body: `排程同步失敗。\n\n[查看執行紀錄](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`,
+              labels: ['chore', 'automated']
+            });
