@@ -15,6 +15,7 @@
 - Keep technical terms in their original English (e.g. firmware, schedule, dependency, build); do not force-translate them.
 - Answers should be concise and give the conclusion and runnable code directly; no pleasantries or restating the question.
 - State "not sure" explicitly where uncertain; do not guess APIs, parameter names, or file structure.
+- When the user must **choose or confirm** anything, present the options as a **clickable button list** (an interactive choice prompt), never as free text they must type; typing stays available only as a fallback. This applies to every decision point, confirmations included.
 
 ---
 
@@ -151,7 +152,7 @@ Use Conventional Commits:
 - Reference the project's existing style and naming before editing; prioritize consistency over personal preference.
 - Produced code must be directly runnable; do not leave placeholders like `...` or `// other logic`.
 - For multi-file changes, list the plan before starting.
-- Before large refactors, deleting files, or changing data structures, **ask for confirmation first**.
+- Before large refactors, deleting files, or changing data structures, **ask for confirmation first** — presented as a **clickable button choice** (e.g. **[Proceed] / [Cancel]**), not as text the user must type.
 
 **Do not:**
 
@@ -171,15 +172,16 @@ When the user's message matches the semantics below, **read the corresponding pr
 |---|---|---|
 | `review` / `code review` / self review / "check this" / "take a look at these changes" | `.github/prompts/m2_review.prompt.md` | Self code review, **do not modify code** |
 | `pr` / `PR` / "open PR" / "submit for review" / `open pull request` | `.github/prompts/m2_pr.prompt.md` | Open PR -> monitor CI every 3 seconds -> remind the user to confirm the merge |
+| `next` / `cleanup` / "wrap up" / "clean up branches" / "back to main" / "ready for next" / "收尾" / "準備下一輪" | `.github/prompts/m2_next.prompt.md` | Post-merge cleanup -> delete merged branch, sync main, verify clean tree, ready for next |
 | `release` / "ship a version" / "publish a new version" / "cut a release" / `bump version` | `.github/prompts/m2_release.prompt.md` | Version bump -> PR -> merge -> tag -> CI publish |
 
 ### Routing Rules
 
-- Standard flow order: `/m2_review` -> fix -> `/m2_pr` -> user confirms merge -> `/m2_release`.
+- Standard flow order: `/m2_review` -> fix -> `/m2_pr` -> user confirms merge -> `/m2_next` (cleanup) -> `/m2_release` when cutting a version.
 - If the user only says "release" without specifying a version -> compute the next version per the prompt file rules, report it, then execute.
 - When no prompt file matches, **do not invent a release or PR flow** - ask first.
 - When a prompt file's rules conflict with this file, **the prompt file takes precedence** (it is the dedicated spec for that task).
-- All three flows have a "stop and wait for user confirmation" node; do not skip it for the sake of a smooth flow.
+- All four flows have a "stop and wait for user confirmation" node; do not skip it for the sake of a smooth flow.
 
 ## 10. Single-File HTML Tool Conventions (conditional)
 
