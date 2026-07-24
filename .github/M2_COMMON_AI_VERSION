@@ -1,8 +1,10 @@
 source_repo: M2Station/M2_COMMON_AI
 source_ref:  main
-source_sha:  bd1aefab2151af040bf8e18b7056dba7769f4945
-synced_at:   2026-07-23T22:09:34Z
+source_sha:  56120f13b7983117a197e6fcc4643cab69d01f90
+synced_at:   2026-07-24T11:06:58Z
 changed_files:
   - .github/copilot-instructions.md
-  - .github/instructions/
-  - .github/prompts/
+  - .github/prompts/m2_pr.prompt.md
+  - .github/prompts/m2_release.prompt.md
+  - .github/prompts/m2_review.prompt.md
+  - .github/prompts/m2_next.prompt.md

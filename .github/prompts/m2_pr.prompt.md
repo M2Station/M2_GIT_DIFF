@@ -178,14 +178,15 @@ done
 - Reviewer：<user 或「未指定」>
 - 待人工確認：<截圖 / 手動驗證項目 / 無>
 
-👉 **請按下 GitHub 上的 Confirm merge 按鈕**，或回覆 `confirm merge` 由我代為執行：
-`gh pr merge <N> --squash --delete-branch`
+👉 **請點下方按鈕確認合併**（會以可點選清單呈現，不用打字）：
+**[Confirm merge]**　／　**[尚未，先不要]**
 ```
 
 ### 合併規則（重要）
 
-- **agent 不主動合併。** 一律等到使用者按下 GitHub 的 Confirm merge 按鈕，或在對話中明確回覆 `confirm merge` / `合併`。
-- 使用者回覆「OK」、「好」、「可以」等模糊字眼**不視為合併授權** → 再確認一次。
+- **確認一律以可點選按鈕呈現，不要求使用者打字**（打字僅作備援）。CI 通過後彈出 **[Confirm merge] / [尚未，先不要]**。
+- **agent 不主動合併。** 一律等到使用者**點下 [Confirm merge] 按鈕**、按下 GitHub 的 Confirm merge 按鈕，或明確打 `confirm merge` / `合併`。點下 [Confirm merge] 即由我執行 `gh pr merge <N> --squash --delete-branch`。
+- 使用者回覆「OK」、「好」、「可以」等模糊字眼、或未點按鈕**不視為合併授權** → 再以按鈕請他確認一次。
 - 代為合併時，merge 策略（`--squash` / `--rebase` / `--merge`）依 repo 歷史慣例判斷，不自行選擇。
 - 合併後回報：merge commit SHA、分支是否已刪除、後續建議（例如是否要跑 `/m2_release`）。
 
@@ -198,7 +199,7 @@ done
 ## 硬性規則
 
 - 不直接 push 到 `main`。
-- **不自行 merge PR。** 必須等使用者按下 Confirm merge 按鈕，或在對話中明確回覆 `confirm merge`；模糊回覆不算授權。
+- **不自行 merge PR。** 必須等使用者**點下 [Confirm merge] 按鈕**、按下 GitHub 的 Confirm merge 按鈕，或明確打 `confirm merge`；模糊回覆不算授權。確認一律以按鈕呈現，不要使用者打字。
 - PR 建立後**必須持續監控至有明確結論**（全過 / 有失敗 / 逾時），不可只查一次就結束回合。
 - 不在開 PR 的過程中順手修改程式碼；發現問題先回報，由使用者決定。
 - 不 force push 已被 review 過的分支（必要時改用新 commit）。
